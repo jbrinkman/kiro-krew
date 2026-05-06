@@ -699,11 +699,13 @@ If your agent config includes these tools, they'll be silently unavailable when 
 
 ## Requirements
 
-- Kiro CLI 1.23+ (subagents support)
+- Kiro CLI >= 1.23, < 2.0.0 (subagents support)
 - Optional — enable TODO list for team-lead task tracking:
   ```bash
   kiro-cli settings chat.enableTodoList true
   ```
+
+> **Kiro CLI 2.x users:** This version is not compatible with Kiro CLI 2.0+. A v2-compatible release is in progress.
 
 ## License
 
