@@ -140,6 +140,10 @@ func (m *Manager) HandleExit(id string, exitCode int) {
 	if exitCode == 0 {
 		agent.Status = StatusCompleted
 		log.Printf("[agent] %s completed successfully (issue #%d)", id, agent.IssueNumber)
+		doneLabel := m.config.Label + "-done"
+		if err := github.AddLabel(m.config.Repo, agent.IssueNumber, doneLabel); err != nil {
+			log.Printf("[agent] failed to add %s label to issue #%d: %v", doneLabel, agent.IssueNumber, err)
+		}
 	} else {
 		agent.Status = StatusFailed
 		log.Printf("[agent] %s exited with code %d (issue #%d, retry %d/%d)", id, exitCode, agent.IssueNumber, agent.RetryCount, m.config.MaxRetries)
@@ -148,8 +152,9 @@ func (m *Manager) HandleExit(id string, exitCode int) {
 			log.Printf("[agent] retrying %s (issue #%d, attempt %d)", id, agent.IssueNumber, agent.RetryCount)
 			go m.retryAgent(agent)
 		} else {
-			log.Printf("[agent] %s exhausted retries, labeling issue #%d as failed", id, agent.IssueNumber)
-			github.AddLabel(m.config.Repo, agent.IssueNumber, "kiro-krew-failed")
+			failedLabel := m.config.Label + "-failed"
+			log.Printf("[agent] %s exhausted retries, labeling issue #%d as %s", id, agent.IssueNumber, failedLabel)
+			github.AddLabel(m.config.Repo, agent.IssueNumber, failedLabel)
 		}
 	}
 }

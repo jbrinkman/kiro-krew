@@ -38,11 +38,14 @@ func ListIssues(repo, label string) ([]Issue, error) {
 		return nil, fmt.Errorf("failed to parse gh output: %w", err)
 	}
 
+	doneLabel := label + "-done"
+	failedLabel := label + "-failed"
+
 	var filtered []Issue
 	for _, issue := range issues {
 		hasExcluded := false
 		for _, l := range issue.Labels {
-			if l.Name == "kiro-krew-done" || l.Name == "kiro-krew-failed" {
+			if l.Name == doneLabel || l.Name == failedLabel {
 				hasExcluded = true
 				break
 			}
