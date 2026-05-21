@@ -32,9 +32,8 @@ func main() {
 
 	manager := agent.NewManager(cfg)
 	w := watcher.New(cfg, manager)
-	r := repl.New()
+	r := repl.New(w, manager)
 
-	w.Start()
 	defer w.Stop()
 	defer manager.StopAll()
 

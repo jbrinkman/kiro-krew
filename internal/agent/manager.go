@@ -50,7 +50,11 @@ func (m *Manager) Spawn(issueNumber int, repo string) (*Agent, error) {
 
 	id := fmt.Sprintf("agent-%d-%d", issueNumber, time.Now().Unix())
 
-	cmd := exec.Command("kiro-cli", "chat", "--headless")
+	cmd := exec.Command("kiro-cli", "chat",
+		"--agent", "krew-lead",
+		"--no-interactive",
+		"--trust-all-tools",
+		fmt.Sprintf("Process issue #%d from repo %s", issueNumber, repo))
 	cmd.Env = append(os.Environ(),
 		fmt.Sprintf("ISSUE_NUMBER=%d", issueNumber),
 		fmt.Sprintf("REPO=%s", repo),
@@ -168,8 +172,15 @@ func (m *Manager) retryAgent(agent *Agent) {
 	log.Printf("[agent] waiting %s before retry for issue #%d", delay, agent.IssueNumber)
 	time.Sleep(delay)
 
-	cmd := exec.Command("kiro-cli", "chat", "--headless")
-	cmd.Env = append(os.Environ(), fmt.Sprintf("ISSUE_NUMBER=%d", agent.IssueNumber))
+	cmd := exec.Command("kiro-cli", "chat",
+		"--agent", "krew-lead",
+		"--no-interactive",
+		"--trust-all-tools",
+		fmt.Sprintf("Process issue #%d", agent.IssueNumber))
+	cmd.Env = append(os.Environ(),
+		fmt.Sprintf("ISSUE_NUMBER=%d", agent.IssueNumber),
+		fmt.Sprintf("REPO=%s", m.config.Repo),
+		fmt.Sprintf("KIRO_KREW_WATCHER_PID=%d", os.Getpid()))
 
 	if err := cmd.Start(); err != nil {
 		log.Printf("[agent] retry failed for issue #%d: %v", agent.IssueNumber, err)
