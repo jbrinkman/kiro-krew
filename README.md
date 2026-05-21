@@ -1,402 +1,224 @@
-# Kiro Krew: GitHub Issue-Driven AI Orchestration
+# Kiro Krew
 
-A GitHub issue-driven orchestration system that transforms issues into working code through AI agent collaboration.
+A GitHub issue-driven AI orchestration system that transforms labeled issues into working code through coordinated AI agent collaboration.
 
-## What is Kiro Krew?
+## How It Works
 
-Kiro Krew is an AI orchestration platform that reads GitHub issues, creates technical specifications, and coordinates specialized AI agents to implement solutions. Issues become requirements, agents create designs, builders implement code, and the system generates pull requests automatically.
+Kiro Krew watches a GitHub repository for issues with a configured label, then spawns AI agents to implement solutions automatically:
 
 ```
-GitHub Issue ──→ Architect ──→ Builders ──→ Pull Request
-     │              │            │             │
-Requirements    Design      Implementation   Review
+GitHub Issue (labeled) → Watcher detects → Krew-Lead orchestrates
+    → Architect designs → Builder implements → Validator verifies → PR created
+```
+
+The system uses `kiro-cli` agents working in isolated git worktrees. Each issue gets its own branch, and on success a pull request is created automatically.
+
+## Prerequisites
+
+- [Go 1.21+](https://go.dev/dl/)
+- [GitHub CLI (`gh`)](https://cli.github.com/) — authenticated via `gh auth login`
+- [Kiro CLI (`kiro-cli`)](https://kiro.dev) — for running AI agents
+
+## Installation
+
+```bash
+go install github.com/jbrinkman/kiro-krew@latest
+```
+
+Or build from source:
+
+```bash
+git clone https://github.com/jbrinkman/kiro-krew.git
+cd kiro-krew
+go build ./cmd/kiro-krew
 ```
 
 ## Quick Start
 
-### Installation
-
-**Via Homebrew:**
-```bash
-brew install kiro-krew
-```
-
-**Via Go:**
-```bash
-go install github.com/kiro-dev/kiro-krew@latest
-```
-
-### Initialize Project
+### 1. Initialize a project
 
 ```bash
 cd your-project
 kiro-krew init
 ```
 
-This creates `.kiro-krew/config.yaml` and agent configurations.
+This creates:
+- `.kiro-krew/config.yaml` — watcher configuration
+- `.kiro/agents/` — agent configurations (krew-lead, architect, builder, validator, documenter)
+- `.kiro/skills/plan-with-krew/` — issue planning skill
+- `scripts/` — worktree management scripts
 
-### Configure
+### 2. Configure
 
 Edit `.kiro-krew/config.yaml`:
 
 ```yaml
-github:
-  token: ghp_your_token_here
-  owner: your-username
-  repo: your-repo
-
-agents:
-  architect: claude-sonnet-4
-  builder: claude-sonnet-4
-  validator: claude-sonnet-4
-  documenter: claude-haiku-3
-
-orchestration:
-  max_parallel_builders: 4
-  auto_create_pr: true
+repo: owner/repo-name
+label: kiro-krew
+poll_interval: 5m
+max_retries: 3
 ```
 
-### Run
+| Field | Description | Default |
+|-------|-------------|---------|
+| `repo` | GitHub repository (owner/name) | *required* |
+| `label` | Issue label to watch for | `kiro-krew` |
+| `poll_interval` | How often to poll GitHub | `5m` |
+| `max_retries` | Max retry attempts per issue | `3` |
+
+### 3. Run
 
 ```bash
-# Process a specific issue
-kiro-krew run --issue 42
-
-# Process all open issues with 'krew' label
-kiro-krew run --label krew
-
-# Interactive mode
-kiro-krew repl
+kiro-krew
 ```
 
-## How It Works
-
-Kiro Krew follows a structured pipeline that transforms GitHub issues into working code:
-
-### 1. Issue Analysis
-The **krew-lead** reads GitHub issues and determines if they're actionable:
-- Extracts requirements and acceptance criteria
-- Identifies dependencies and scope
-- Routes to appropriate workflow
-
-### 2. Architecture Phase
-The **architect** creates technical specifications:
-- Analyzes existing codebase
-- Designs implementation approach
-- Creates detailed task breakdown
-- Defines validation criteria
-
-### 3. Implementation Phase
-**Builders** execute the implementation:
-- Work in parallel on independent tasks
-- Follow architectural specifications
-- Create/modify code files
-- Run tests and validation
-
-### 4. Validation Phase
-The **validator** ensures quality:
-- Verifies implementation matches specs
-- Runs comprehensive tests
-- Checks integration points
-- Validates acceptance criteria
-
-### 5. Documentation Phase
-The **documenter** creates documentation:
-- Updates README and docs
-- Documents API changes
-- Creates usage examples
-- Updates changelog
-
-### 6. Pull Request
-System creates PR with:
-- Implementation code
-- Test coverage
-- Documentation updates
-- Links to original issue
-
-## Architecture
+This starts the interactive REPL. From there, start the watcher:
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    GitHub Integration                        │
-│  Issues ──→ Webhooks ──→ Kiro Krew ──→ Pull Requests       │
-└─────────────────────────┬───────────────────────────────────┘
-                          │
-┌─────────────────────────┴───────────────────────────────────┐
-│                   Kiro Krew Core                            │
-│                                                             │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐     │
-│  │ Krew Lead   │───▶│ Architect   │───▶│ Builders    │     │
-│  │ (Router)    │    │ (Designer)  │    │ (Workers)   │     │
-│  └─────────────┘    └─────────────┘    └──────┬──────┘     │
-│                                               │            │
-│  ┌─────────────┐    ┌─────────────┐          │            │
-│  │ Documenter  │◄───│ Validator   │◄─────────┘            │
-│  │ (Writer)    │    │ (Tester)    │                       │
-│  └─────────────┘    └─────────────┘                       │
-└─────────────────────────────────────────────────────────────┘
+kiro-krew> watch start
+kiro-krew> status
 ```
 
-## Configuration Reference
+## CLI Usage
 
-### .kiro-krew/config.yaml
-
-```yaml
-# GitHub Integration
-github:
-  token: ${GITHUB_TOKEN}           # GitHub personal access token
-  owner: your-org                  # Repository owner
-  repo: your-repo                  # Repository name
-  base_branch: main               # Default branch for PRs
-
-# Agent Configuration
-agents:
-  krew_lead: claude-sonnet-4      # Issue routing and coordination
-  architect: claude-sonnet-4      # Technical design and planning
-  builder: claude-sonnet-4        # Code implementation
-  validator: claude-sonnet-4      # Testing and validation
-  documenter: claude-haiku-3      # Documentation generation
-
-# Orchestration Settings
-orchestration:
-  max_parallel_builders: 4        # Maximum concurrent builders
-  auto_create_pr: true           # Automatically create pull requests
-  require_tests: true            # Require test coverage
-  require_docs: true             # Require documentation updates
-
-# Issue Processing
-issues:
-  labels:
-    - krew                       # Process issues with this label
-    - enhancement               # Also process enhancements
-  ignore_labels:
-    - wontfix                   # Skip issues with these labels
-    - duplicate
-  
-# Validation Rules
-validation:
-  min_test_coverage: 80          # Minimum test coverage percentage
-  required_checks:
-    - lint                      # Code linting
-    - type_check               # Type checking
-    - security_scan            # Security vulnerability scan
-
-# Notification Settings
-notifications:
-  slack_webhook: ${SLACK_WEBHOOK} # Optional Slack notifications
-  email: team@company.com        # Optional email notifications
-```
-
-## Agent Roles
-
-### Krew Lead
-**Purpose:** Issue routing and workflow coordination
-- Analyzes GitHub issues for actionability
-- Routes issues to appropriate workflows
-- Coordinates agent handoffs
-- Manages overall process state
-
-**Capabilities:**
-- Read GitHub issues and comments
-- Create and manage specifications
-- Spawn and coordinate other agents
-- Update issue status and labels
-
-### Architect
-**Purpose:** Technical design and planning
-- Analyzes existing codebase architecture
-- Creates detailed implementation specifications
-- Defines task breakdown and dependencies
-- Establishes validation criteria
-
-**Capabilities:**
-- Read and analyze code repositories
-- Create technical specifications
-- Design system architecture
-- Plan implementation approach
-
-### Builder
-**Purpose:** Code implementation and development
-- Implements features according to specifications
-- Creates and modifies source code files
-- Writes tests and validation code
-- Handles build and deployment tasks
-
-**Capabilities:**
-- Read and write code files
-- Execute build and test commands
-- Install dependencies
-- Run development tools
-
-### Validator
-**Purpose:** Quality assurance and testing
-- Verifies implementation matches specifications
-- Runs comprehensive test suites
-- Validates integration points
-- Ensures acceptance criteria are met
-
-**Capabilities:**
-- Execute test suites
-- Analyze code coverage
-- Run security scans
-- Validate system behavior
-
-### Documenter
-**Purpose:** Documentation and communication
-- Updates project documentation
-- Creates API documentation
-- Writes usage examples
-- Maintains changelog
-
-**Capabilities:**
-- Read implementation code
-- Generate documentation
-- Update README files
-- Create usage examples
-
-## Planning Skill Usage
-
-Use the `@plan-with-krew` skill to create implementation plans from GitHub issues:
+Kiro Krew has two modes:
 
 ```bash
-# In Kiro CLI
-@plan-with-krew https://github.com/owner/repo/issues/42
-
-# Or reference issue number if in project context
-@plan-with-krew #42
-
-# Create plan from issue description
-@plan-with-krew Add user authentication with JWT tokens
-```
-
-The planning skill:
-1. Analyzes the issue or description
-2. Creates technical specifications
-3. Defines task breakdown
-4. Establishes validation criteria
-5. Saves plan for execution
-
-## CLI Commands Reference
-
-### Main Commands
-
-```bash
-# Initialize project
+# Initialize project with agent configs and templates
 kiro-krew init
 
-# Process specific issue
-kiro-krew run --issue 42
-
-# Process issues by label
-kiro-krew run --label enhancement
-
-# Interactive REPL mode
-kiro-krew repl
-
-# Show configuration
-kiro-krew config show
-
-# Validate configuration
-kiro-krew config validate
+# Start interactive REPL (default)
+kiro-krew
 ```
 
 ### REPL Commands
 
-```bash
-# List available issues
-> issues list
+| Command | Description |
+|---------|-------------|
+| `watch start` | Start polling GitHub for labeled issues |
+| `watch stop` | Stop polling |
+| `status` | Show all agents with issue, status, and elapsed time |
+| `stop <issue>` | Stop the agent working on a specific issue number |
+| `exit` | Exit (confirms if agents are still running) |
+| `help` | Show available commands |
 
-# Process an issue
-> process #42
+## Architecture
 
-# Show current status
-> status
+### Agent Pipeline
 
-# List active agents
-> agents list
+When the watcher detects a labeled issue:
 
-# Show agent status
-> agent status builder-1
+1. **Krew-Lead** — Orchestrates the workflow. Creates a git worktree, delegates to other agents, manages the lifecycle from issue to PR.
+2. **Architect** — Reads the issue, explores the codebase, and produces a design specification at `.kiro-krew/specs/issue-<number>-<slug>.md`.
+3. **Builder** — Implements code changes according to the architect's specification. Focused on a single task at a time.
+4. **Validator** — Read-only agent that verifies the implementation meets acceptance criteria. Runs tests and checks.
+5. **Documenter** — Generates documentation in `app_docs/` for completed features.
 
-# Cancel running process
-> cancel
+### Agent Spawning
 
-# Show help
-> help
+The manager spawns agents as `kiro-cli` processes:
+
+```
+kiro-cli chat --agent krew-lead --no-interactive --trust-all-tools "Process issue #N from repo owner/name"
 ```
 
-## Separation of Concerns
+Each agent runs with environment variables: `ISSUE_NUMBER`, `REPO`, and `KIRO_KREW_WATCHER_PID`.
 
-### Issues = Requirements
-GitHub issues serve as the requirements specification:
-- **What** needs to be built
-- **Why** it's needed (business value)
-- **Acceptance criteria** for completion
-- **User stories** and use cases
+### Git Worktree Isolation
 
-### Specs = Design
-Technical specifications define the implementation approach:
-- **How** the solution will be built
-- **Architecture** and design patterns
-- **Task breakdown** and dependencies
-- **Validation approach** and test strategy
+Each issue is processed in an isolated git worktree:
+- `scripts/worktree-create.sh <name>` — creates `.worktrees/<name>/` on branch `spec/<name>`
+- `scripts/worktree-merge.sh <name>` — merges back, removes worktree, deletes branch
+- Orphaned worktrees (from crashed processes) are cleaned up automatically
 
-### Code = Implementation
-Source code implements the designed solution:
-- **Working software** that meets requirements
-- **Tests** that validate functionality
-- **Documentation** that explains usage
-- **Integration** with existing systems
+### Issue Lifecycle
 
-## Troubleshooting
+| State | Label | Description |
+|-------|-------|-------------|
+| Ready | `kiro-krew` | Watcher will pick up this issue |
+| Processing | — | Agent spawned and working |
+| Done | `kiro-krew-done` | PR created successfully |
+| Failed | `kiro-krew-failed` | Exhausted retries |
 
-### Common Issues
+Issues with `kiro-krew-done` or `kiro-krew-failed` labels are excluded from polling.
 
-**"GitHub token invalid"**
-- Verify token has required permissions: `repo`, `issues`, `pull_requests`
-- Check token is not expired
-- Ensure token is correctly set in config or environment
+### Retry Logic
 
-**"Issue not found"**
-- Verify issue number exists in specified repository
-- Check repository owner/name in configuration
-- Ensure issue is not private (if using public token)
+The system retries failed agents with exponential backoff:
+1. **Attempt 1** — Standard execution
+2. **Attempt 2** — Retry with failure context
+3. **Attempt 3** — Retry with diagnostic analysis from validator
 
-**"Agent spawn failed"**
-- Check agent model availability and API keys
-- Verify agent configuration in `.kiro-krew/config.yaml`
-- Review agent-specific error logs
+After exhausting retries, the issue is labeled `kiro-krew-failed`.
 
-**"Build validation failed"**
-- Check test coverage meets minimum requirements
-- Verify all required checks pass (lint, type check, security)
-- Review validation logs for specific failures
+Global retry counts are persisted in `.kiro-krew/retries/issue-<number>.count` to survive process restarts.
 
-**"PR creation failed"**
-- Verify GitHub token has `pull_requests` permission
-- Check base branch exists and is accessible
-- Ensure no conflicting PR exists for same issue
+## Agent Configuration
 
-### Debug Mode
+Agent configs live in `.kiro/agents/`. Each agent has a JSON config and a prompt markdown file.
 
-Enable debug logging:
-
-```bash
-export KIRO_KREW_DEBUG=true
-kiro-krew run --issue 42
+**krew-lead.json** (orchestrator):
+```json
+{
+  "name": "krew-lead",
+  "tools": ["read", "subagent", "todo"],
+  "trustedAgents": ["architect", "builder", "validator", "documenter"],
+  "model": "claude-sonnet-4"
+}
 ```
 
-### Log Files
+**builder.json** (worker):
+```json
+{
+  "name": "builder",
+  "description": "Focused engineering agent that executes ONE task at a time.",
+  "prompt": "file://./builder-prompt.md",
+  "tools": ["read", "write", "shell"],
+  "allowedTools": ["read", "write", "shell"],
+  "model": "claude-sonnet-4"
+}
+```
 
-Logs are written to:
-- `~/.kiro-krew/logs/krew-lead.log`
-- `~/.kiro-krew/logs/architect.log`
-- `~/.kiro-krew/logs/builder-{id}.log`
-- `~/.kiro-krew/logs/validator.log`
-- `~/.kiro-krew/logs/documenter.log`
+**validator.json** (read-only verifier):
+```json
+{
+  "name": "validator",
+  "description": "Read-only validation agent that verifies task completion.",
+  "prompt": "file://./validator-prompt.md",
+  "tools": ["read", "shell"],
+  "allowedTools": ["read", "shell"],
+  "toolsSettings": {
+    "shell": { "autoAllowReadonly": true }
+  },
+  "model": "claude-sonnet-4"
+}
+```
 
-### Support
+## Planning Skill
 
-- Documentation: https://docs.kiro-krew.dev
-- Issues: https://github.com/kiro-dev/kiro-krew/issues
-- Discussions: https://github.com/kiro-dev/kiro-krew/discussions
+The `@plan-with-krew` skill helps create well-structured GitHub issues:
+
+```
+@plan-with-krew Add user authentication with JWT tokens
+```
+
+It collaborates with you to refine requirements, then creates a GitHub issue with problem statement, user story, acceptance criteria, and constraints. Optionally applies the `kiro-krew` label for immediate automated processing.
+
+## GitHub Integration
+
+Kiro Krew uses the `gh` CLI for all GitHub operations — no API tokens to configure. Ensure you're authenticated:
+
+```bash
+gh auth login
+gh auth status
+```
+
+The system calls:
+- `gh issue list` — poll for labeled issues
+- `gh issue view` — read issue details
+- `gh issue edit` — add labels (`kiro-krew-done`, `kiro-krew-failed`)
+- `gh pr create` — create pull requests
+
+## License
+
+See [LICENSE](LICENSE).
