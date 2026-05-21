@@ -1,0 +1,6 @@
+{
+  "name": "krew-lead",
+  "tools": ["read", "subagent", "todo"],
+  "trustedAgents": ["architect", "builder", "validator", "documenter"],
+  "model": "claude-sonnet-4"
+}
