@@ -3,13 +3,9 @@ node_modules/
 *.log
 logs/
 .worktrees/
-.claude/backups/
-.claude/projects/
-.claude/shell-snapshots/
-.claude/plugins/
-.claude/settings.json
-.claude/commands/
 /agents/
 app_docs/
-specs/
 test-results/
+kiro-krew
+kiro-krew-test
+/specs/
