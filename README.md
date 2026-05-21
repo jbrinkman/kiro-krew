@@ -1,703 +1,402 @@
-# Kiro Team: Multi-Agent Orchestration for Kiro CLI
+# Kiro Krew: GitHub Issue-Driven AI Orchestration
 
-A team orchestration system that enables multiple AI agents to collaborate on complex tasks inside [Kiro CLI](https://kiro.dev).
+A GitHub issue-driven orchestration system that transforms issues into working code through AI agent collaboration.
 
-## How It Works
+## What is Kiro Krew?
 
-A team-lead agent reads a plan, delegates tasks to specialized subagents (builders, validators, and a documenter), and tracks progress. The team-lead is the central coordinator — subagents execute their assigned work and report results back.
-
-```
-You ──→ @plan-with-team Build a REST API...
-                │
-                ▼
-          ┌────────────┐
-          │ Plan saved │  specs/rest-api.md
-          └─────┬──────┘
-                │
-                ▼
-        ┌───────────────┐
-        │   Team Lead   │  reads plan, delegates, tracks progress
-        └───────┬───────┘
-                │
-          ┌─────┴─────┐
-          ▼           ▼
-    ┌──────────┐ ┌──────────┐
-    │  Builder │ │  Builder │  write code (up to 4 in parallel)
-    └─────┬────┘ └─────┬────┘
-          │            │
-          ▼            ▼
-   ┌───────────┐ ┌───────────┐
-   │ Validator │ │ Validator │  verify each task immediately
-   └────┬──────┘ └─────┬─────┘
-        └──────┬───────┘
-               ▼
-         ┌────────────┐
-         │ Validator  │  final end-to-end verification
-         └─────┬──────┘
-               │
-               ▼
-         ┌────────────┐
-         │ Documenter │  generate documentation (non-blocking)
-         └────────────┘
-```
-
-Four agent roles, clear separation of concerns:
-
-| Agent | Can Do | Cannot Do |
-|-------|--------|-----------|
-| **Team Lead** | Read code, delegate tasks, track TODO list | Write code |
-| **Builder** | Write code, create files, run commands | Spawn other agents |
-| **Validator** | Read files, run tests, inspect output | Modify anything |
-| **Documenter** | Read files, generate documentation | Modify implementation code, spawn agents, run commands |
-
-## How Task Coordination Works
-
-The team-lead manages all task tracking. Subagents (builders, validators, documenter) do not have access to the TODO list — they receive instructions from the team-lead, do their work, and return results. The team-lead then updates task status based on those results.
+Kiro Krew is an AI orchestration platform that reads GitHub issues, creates technical specifications, and coordinates specialized AI agents to implement solutions. Issues become requirements, agents create designs, builders implement code, and the system generates pull requests automatically.
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                                                             │
-│  Team Lead (sole access to TODO list)                       │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │ 1. Reads plan from specs/                           │    │
-│  │ 2. Creates TODO items for each task                 │    │
-│  │ 3. Dispatches subagents with task instructions      │    │
-│  │ 4. Receives results back from subagents             │    │
-│  │ 5. Updates TODO list based on results               │    │
-│  └──────────────────────┬──────────────────────────────┘    │
-│                         │                                   │
-│              dispatches tasks via subagent tool             │
-│                         │                                   │
-│             ┌───────────┴───────────┐                       │
-│             ▼                       ▼                       │
-│  ┌──────────────────┐   ┌───────────────────┐               │
-│  │ Builder          │   │ Validator         │               │
-│  │ • receives task  │   │ • receives task   │               │
-│  │ • writes code    │   │ • reads files     │               │
-│  │ • reports back   │   │ • runs checks     │               │
-│  │                  │   │ • reports back    │               │
-│  └──────────────────┘   └───────────────────┘               │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+GitHub Issue ──→ Architect ──→ Builders ──→ Pull Request
+     │              │            │             │
+Requirements    Design      Implementation   Review
 ```
-
-> **Why can't subagents access the TODO list?** The `todo` tool is [not available in the subagent runtime](https://kiro.dev/docs/cli/chat/subagents#tool-availability). This is a Kiro CLI platform limitation, not a configuration choice. The team-lead acts as the single source of truth for task status.
 
 ## Quick Start
 
+### Installation
+
+**Via Homebrew:**
 ```bash
-# 1. Copy .kiro folder and scripts into your project
-cp -r .kiro /path/to/your/project/
-cp -r scripts /path/to/your/project/scripts
-
-# 2. Enable the TODO list (experimental)
-kiro-cli settings chat.enableTodoList true
-
-# 3. Start Kiro CLI in your project
-cd /path/to/your/project
-kiro-cli chat
-
-# 4. Invoke the planning skill with your task description
-@plan-with-team Build a CLI tool that converts CSV to JSON
-
-# 5. Switch to team-lead and execute
-/agent swap        # select: team-lead
-Execute the plan in specs/csv-to-json.md
+brew install kiro-krew
 ```
 
-> **Note:** `plan-with-team` is implemented as an [Agent Skill](https://kiro.dev/docs/cli/chat/skills/) (`.kiro/skills/plan-with-team/SKILL.md`), not a prompt. Skills preserve the user's full message as input while loading the skill content as context — this means inline arguments work reliably in all modes (TUI, classic, and headless). If you invoke `@plan-with-team` without additional text, the agent infers a task from the repository context.
-
-## Phases
-
-### Phase 1: Planning
-
-The `@plan-with-team` skill activates the planning agent. It only creates a plan — no code is written.
-
+**Via Go:**
 ```bash
-# Single-message workflow (recommended)
-@plan-with-team Add user authentication with JWT tokens
-
-# Without arguments — agent infers task from repo context and plans immediately
-@plan-with-team
+go install github.com/kiro-dev/kiro-krew@latest
 ```
 
-You can also invoke `@plan-with-team` without arguments — the agent will infer a task from the repository context (README, open issues, recent git history) and proceed to plan immediately.
-
-This creates `specs/user-auth-jwt.md` containing:
-- Task breakdown with dependencies
-- Agent assignments (which builder does what)
-- Acceptance criteria for each task
-- Validation commands to verify the work
-
-### Phase 2: Execution
-
-Switch to the team-lead agent and point it at the plan:
+### Initialize Project
 
 ```bash
-/agent swap  # select: team-lead
-Execute the plan in specs/user-auth-jwt.md
+cd your-project
+kiro-krew init
 ```
 
-The team lead:
-1. Reads the plan
-2. Creates a TODO list from the tasks
-3. Spawns builder subagent for a task
-4. Immediately spawns validator subagent to verify that task
-5. If validation passes, marks task complete and proceeds to next task
-6. If validation fails, spawns builder again to fix issues
-7. After all tasks complete, spawns validator for final end-to-end verification
-8. Spawns documenter to generate documentation (non-blocking)
-9. Reports results
+This creates `.kiro-krew/config.yaml` and agent configurations.
 
-### Phase 3: Validation
+### Configure
 
-The validator agent runs after each builder task AND at the end:
+Edit `.kiro-krew/config.yaml`:
 
-**Incremental validation (after each task):**
-- Verifies the specific task output
-- Runs relevant checks for that component
-- Reports pass/fail immediately
-- Enables fast feedback and early bug detection
+```yaml
+github:
+  token: ghp_your_token_here
+  owner: your-username
+  repo: your-repo
 
-**Final validation (after all tasks):**
-- Verifies integration between all components
-- Runs end-to-end tests
-- Checks overall acceptance criteria
-- Reports comprehensive pass/fail
+agents:
+  architect: claude-sonnet-4
+  builder: claude-sonnet-4
+  validator: claude-sonnet-4
+  documenter: claude-haiku-3
 
-If any validation fails, the team lead re-deploys a builder to fix issues, then re-validates.
+orchestration:
+  max_parallel_builders: 4
+  auto_create_pr: true
+```
 
-### Phase 4: Documentation
+### Run
 
-After final validation passes, the team lead spawns the documenter agent:
+```bash
+# Process a specific issue
+kiro-krew run --issue 42
 
-- Reads the plan and implementation files
-- Generates a markdown documentation file in `app_docs/`
-- Documents what was actually built (file paths, functions, APIs)
-- This step is non-blocking — if the documenter fails, the workflow still succeeds
+# Process all open issues with 'krew' label
+kiro-krew run --label krew
+
+# Interactive mode
+kiro-krew repl
+```
+
+## How It Works
+
+Kiro Krew follows a structured pipeline that transforms GitHub issues into working code:
+
+### 1. Issue Analysis
+The **krew-lead** reads GitHub issues and determines if they're actionable:
+- Extracts requirements and acceptance criteria
+- Identifies dependencies and scope
+- Routes to appropriate workflow
+
+### 2. Architecture Phase
+The **architect** creates technical specifications:
+- Analyzes existing codebase
+- Designs implementation approach
+- Creates detailed task breakdown
+- Defines validation criteria
+
+### 3. Implementation Phase
+**Builders** execute the implementation:
+- Work in parallel on independent tasks
+- Follow architectural specifications
+- Create/modify code files
+- Run tests and validation
+
+### 4. Validation Phase
+The **validator** ensures quality:
+- Verifies implementation matches specs
+- Runs comprehensive tests
+- Checks integration points
+- Validates acceptance criteria
+
+### 5. Documentation Phase
+The **documenter** creates documentation:
+- Updates README and docs
+- Documents API changes
+- Creates usage examples
+- Updates changelog
+
+### 6. Pull Request
+System creates PR with:
+- Implementation code
+- Test coverage
+- Documentation updates
+- Links to original issue
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     Kiro CLI Process                        │
+│                    GitHub Integration                        │
+│  Issues ──→ Webhooks ──→ Kiro Krew ──→ Pull Requests       │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+┌─────────────────────────┴───────────────────────────────────┐
+│                   Kiro Krew Core                            │
 │                                                             │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │                   Agent Layer                         │  │
-│  │                                                       │  │
-│  │  ┌─────────────┐                                      │  │
-│  │  │ Default     │  @plan-with-team skill               │  │
-│  │  │ Agent       │──────────────────────┐               │  │
-│  │  └─────────────┘                      │               │  │
-│  │                                       ▼               │  │
-│  │  ┌─────────────┐              ┌──────────────┐        │  │
-│  │  │ Team Lead   │◄──────────── │ specs/*.md   │        │  │
-│  │  │ Agent       │              └──────────────┘        │  │
-│  │  └──────┬──────┘                                      │  │
-│  │         │ subagent tool                               │  │
-│  │         │                                             │  │
-│  │  ┌──────┴──────────────────────────────────────┐      │  │
-│  │  │    TODO List (team-lead only)               │      │  │
-│  │  │    Tracks task status, not shared           │      │  │
-│  │  └──────┬──────────────────────┬───────────────┘      │  │
-│  │         │                      │                      │  │
-│  │    ┌────┴────┐                 │                      │  │
-│  │    ▼         ▼                 ▼                      │  │
-│  │  ┌───────┐ ┌───────┐     ┌───────────┐                │  │
-│  │  │Builder│ │Builder│     │ Validator │                │  │
-│  │  │Agent  │ │Agent  │     │ Agent     │                │  │
-│  │  └───────┘ └───────┘     └───────────┘                │  │
-│  └───────────────────────────────────────────────────────┘  │
-│                                                             │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │              Subagent Tool Availability               │  │
-│  │  ✅ read │ ✅ write │ ✅ shell │ ✅ MCP tools        │  │
-│  └───────────────────────────────────────────────────────┘  │
-│                                                             │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │                  File System                          │  │
-│  │  .kiro/agents/*.json  │  specs/*.md  │  src/**/*      │  │
-│  └───────────────────────────────────────────────────────┘  │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐     │
+│  │ Krew Lead   │───▶│ Architect   │───▶│ Builders    │     │
+│  │ (Router)    │    │ (Designer)  │    │ (Workers)   │     │
+│  └─────────────┘    └─────────────┘    └──────┬──────┘     │
+│                                               │            │
+│  ┌─────────────┐    ┌─────────────┐          │            │
+│  │ Documenter  │◄───│ Validator   │◄─────────┘            │
+│  │ (Writer)    │    │ (Tester)    │                       │
+│  └─────────────┘    └─────────────┘                       │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### File Structure
+## Configuration Reference
 
-```
-.kiro/
-├── agents/
-│   ├── team-lead.json          ← Orchestrator config
-│   ├── team-lead-prompt.md     ← Orchestrator behavior
-│   ├── builder.json            ← Builder config
-│   ├── builder-prompt.md       ← Builder behavior
-│   ├── validator.json          ← Validator config
-│   ├── validator-prompt.md     ← Validator behavior
-│   ├── documenter.json         ← Documenter config
-│   └── documenter-prompt.md    ← Documenter behavior
-├── prompts/
-│   └── (deprecated - migrated to skills)
-└── skills/
-    └── plan-with-team/
-        └── SKILL.md            ← Planning skill (invoked with @)
+### .kiro-krew/config.yaml
 
-scripts/
-├── worktree-create.sh          ← Creates isolated worktree for builder
-└── worktree-merge.sh           ← Merges builder worktree and cleans up
-```
+```yaml
+# GitHub Integration
+github:
+  token: ${GITHUB_TOKEN}           # GitHub personal access token
+  owner: your-org                  # Repository owner
+  repo: your-repo                  # Repository name
+  base_branch: main               # Default branch for PRs
 
-> **Note:** All agent configs must be directly in `.kiro/agents/` — subdirectories are not supported for subagent resolution.
+# Agent Configuration
+agents:
+  krew_lead: claude-sonnet-4      # Issue routing and coordination
+  architect: claude-sonnet-4      # Technical design and planning
+  builder: claude-sonnet-4        # Code implementation
+  validator: claude-sonnet-4      # Testing and validation
+  documenter: claude-haiku-3      # Documentation generation
 
-### Agent Configuration
+# Orchestration Settings
+orchestration:
+  max_parallel_builders: 4        # Maximum concurrent builders
+  auto_create_pr: true           # Automatically create pull requests
+  require_tests: true            # Require test coverage
+  require_docs: true             # Require documentation updates
 
-Each agent is defined by a JSON config + a markdown prompt:
+# Issue Processing
+issues:
+  labels:
+    - krew                       # Process issues with this label
+    - enhancement               # Also process enhancements
+  ignore_labels:
+    - wontfix                   # Skip issues with these labels
+    - duplicate
+  
+# Validation Rules
+validation:
+  min_test_coverage: 80          # Minimum test coverage percentage
+  required_checks:
+    - lint                      # Code linting
+    - type_check               # Type checking
+    - security_scan            # Security vulnerability scan
 
-**team-lead.json** — the orchestrator:
-```json
-{
-  "name": "team-lead",
-  "tools": ["read", "subagent", "todo"],
-  "allowedTools": ["read", "subagent", "todo"],
-  "toolsSettings": {
-    "subagent": {
-      "trustedAgents": ["builder", "validator", "documenter"]
-    }
-  },
-  "model": "claude-sonnet-4"
-}
-```
-
-Key points:
-- Has `subagent` tool to spawn builders, validators, and documenter
-- Does NOT have `write` or `shell` — cannot modify files directly
-- Can use `todo` tool for task tracking (experimental, enable separately)
-- `trustedAgents` allows spawning without permission prompts each time
-
-
-**builder.json** — the implementer:
-```json
-{
-  "name": "builder",
-  "tools": ["read", "write", "shell"],
-  "allowedTools": ["read", "write", "shell"],
-  "model": "claude-sonnet-4"
-}
+# Notification Settings
+notifications:
+  slack_webhook: ${SLACK_WEBHOOK} # Optional Slack notifications
+  email: team@company.com        # Optional email notifications
 ```
 
-Key points:
-- Has `read`,`write` and `shell` — can create/modify files and run commands
-- Does NOT have `subagent` — cannot spawn other agents
+## Agent Roles
 
-**validator.json** — the verifier:
-```json
-{
-  "name": "validator",
-  "tools": ["read", "shell"],
-  "toolsSettings": {
-    "shell": { "autoAllowReadonly": true }
-  },
-  "model": "claude-sonnet-4"
-}
-```
+### Krew Lead
+**Purpose:** Issue routing and workflow coordination
+- Analyzes GitHub issues for actionability
+- Routes issues to appropriate workflows
+- Coordinates agent handoffs
+- Manages overall process state
 
-Key points:
-- Has `read` and `shell` (read-only) — can inspect but not modify
-- Does NOT have `write` — cannot change files
-- Shell is auto-allowed for read-only commands
+**Capabilities:**
+- Read GitHub issues and comments
+- Create and manage specifications
+- Spawn and coordinate other agents
+- Update issue status and labels
 
-**documenter.json** — the documentation generator:
-```json
-{
-  "name": "documenter",
-  "tools": ["read", "write"],
-  "allowedTools": ["read", "write"],
-  "model": "claude-sonnet-4"
-}
-```
+### Architect
+**Purpose:** Technical design and planning
+- Analyzes existing codebase architecture
+- Creates detailed implementation specifications
+- Defines task breakdown and dependencies
+- Establishes validation criteria
 
-Key points:
-- Has `read` and `write` — can inspect files and create documentation
-- Does NOT have `shell` — documentation generation is purely file-based
-- Does NOT have `subagent` — cannot spawn other agents
+**Capabilities:**
+- Read and analyze code repositories
+- Create technical specifications
+- Design system architecture
+- Plan implementation approach
 
-### Design Principles
+### Builder
+**Purpose:** Code implementation and development
+- Implements features according to specifications
+- Creates and modifies source code files
+- Writes tests and validation code
+- Handles build and deployment tasks
 
-Each agent gets only the tools it needs (least privilege):
+**Capabilities:**
+- Read and write code files
+- Execute build and test commands
+- Install dependencies
+- Run development tools
 
-```
-Team Lead:  read, subagent (+ todo in main session)
-            ↑ can read and delegate, but CANNOT write files
+### Validator
+**Purpose:** Quality assurance and testing
+- Verifies implementation matches specifications
+- Runs comprehensive test suites
+- Validates integration points
+- Ensures acceptance criteria are met
 
-Builder:    read, write, shell
-            ↑ can modify files, but CANNOT spawn agents
+**Capabilities:**
+- Execute test suites
+- Analyze code coverage
+- Run security scans
+- Validate system behavior
 
-Validator:  read, shell (read-only)
-            ↑ can inspect, but CANNOT modify anything
+### Documenter
+**Purpose:** Documentation and communication
+- Updates project documentation
+- Creates API documentation
+- Writes usage examples
+- Maintains changelog
 
-Documenter: read, write
-            ↑ can read files and generate docs, but CANNOT run commands or spawn agents
-```
+**Capabilities:**
+- Read implementation code
+- Generate documentation
+- Update README files
+- Create usage examples
 
-## Kiro CLI Features Used
+## Planning Skill Usage
 
-| Feature | What It Does Here |
-|---------|-------------------|
-| [Custom Agents](https://kiro.dev/docs/cli/custom-agents) | Define team-lead, builder, validator, documenter with specific tools |
-| [Subagents](https://kiro.dev/docs/cli/chat/subagents) | Team lead spawns builders/validators/documenter as child agents |
-| [Prompts](https://kiro.dev/docs/cli/chat/manage-prompts) | `@plan-with-team` reusable planning template |
-| [TODO Lists](https://kiro.dev/docs/cli/experimental/todo-lists) | Team-lead tracks task progress (not accessible to subagents) |
-
-## Walkthrough: Building a Calculator API
-
-### Step 1: Create the Plan
+Use the `@plan-with-krew` skill to create implementation plans from GitHub issues:
 
 ```bash
-$ cd my-project
-$ kiro-cli chat
+# In Kiro CLI
+@plan-with-krew https://github.com/owner/repo/issues/42
+
+# Or reference issue number if in project context
+@plan-with-krew #42
+
+# Create plan from issue description
+@plan-with-krew Add user authentication with JWT tokens
 ```
 
-```
-> @plan-with-team Build a REST API with endpoints for add, subtract, multiply, divide
-```
+The planning skill:
+1. Analyzes the issue or description
+2. Creates technical specifications
+3. Defines task breakdown
+4. Establishes validation criteria
+5. Saves plan for execution
 
-Kiro generates `specs/calculator-api.md`:
+## CLI Commands Reference
 
-```markdown
-# Plan: Calculator API
-
-## Task Description
-Build a simple REST API with endpoints for basic arithmetic operations.
-
-## Team Orchestration
-### Team Members
-- **Builder**: calc-builder — Implement calculator endpoints
-- **Validator**: calc-validator — Verify implementation
-
-## Step by Step Tasks
-
-### 1. Setup Project
-- Task ID: setup-project
-- Depends On: none
-- Assigned To: calc-builder
-- Actions: Create package.json, install express
-
-### 2. Create Calculator Routes
-- Task ID: create-calc-routes
-- Depends On: setup-project
-- Assigned To: calc-builder
-- Actions: POST /add, /subtract, /multiply, /divide with validation
-
-### 3. Create Server Entry Point
-- Task ID: create-server
-- Depends On: create-calc-routes
-- Assigned To: calc-builder
-- Actions: Express server, mount routes, JSON body parser
-
-### 4. Final Validation
-- Task ID: validate-all
-- Depends On: all above
-- Assigned To: calc-validator
-- Checks: Files exist, server starts, endpoints respond
-```
-
-### Step 2: Execute the plan
+### Main Commands
 
 ```bash
-> /agent swap                      # select: team-lead
-> Execute the plan in specs/calculator-api.md
+# Initialize project
+kiro-krew init
+
+# Process specific issue
+kiro-krew run --issue 42
+
+# Process issues by label
+kiro-krew run --label enhancement
+
+# Interactive REPL mode
+kiro-krew repl
+
+# Show configuration
+kiro-krew config show
+
+# Validate configuration
+kiro-krew config validate
 ```
 
-What happens behind the scenes:
-
-```
-team-lead reads specs/calculator-api.md
-    │
-    ├─→ creates TODO list from plan (team-lead only)
-    │
-    ├─→ subagent(builder): "Setup project — create package.json with express"
-    │       └─→ creates package.json, runs npm install
-    │       └─→ reports back to team-lead
-    │
-    ├─→ subagent(validator): "Verify package.json and dependencies installed"
-    │       └─→ checks files, reports: "✅ PASS"
-    │
-    ├─→ team-lead marks task 1 complete, dispatches next
-    │
-    ├─→ subagent(builder): "Create calculator routes with validation"
-    │       └─→ creates src/routes/calculator.js
-    │       └─→ reports back to team-lead
-    │
-    ├─→ subagent(validator): "Verify routes file structure and exports"
-    │       └─→ checks code, reports: "✅ PASS"
-    │
-    ├─→ subagent(builder): "Create Express server entry point"
-    │       └─→ creates src/index.js
-    │       └─→ reports back to team-lead
-    │
-    ├─→ subagent(validator): "Verify server file and imports"
-    │       └─→ checks code, reports: "✅ PASS"
-    │
-    └─→ subagent(validator): "Final validation — verify server starts and endpoints work"
-            └─→ runs node src/index.js, tests endpoints
-            └─→ reports: "✅ PASS. All checks passed."
-    │
-    └─→ subagent(documenter): "Document the calculator API feature"
-            └─→ reads plan and implementation files
-            └─→ creates app_docs/feature-calculator-api.md
-            └─→ reports: "✅ Documentation generated."
-```
-
-### Step 3: Test the Result
+### REPL Commands
 
 ```bash
-$ cd src && npm start
-# Server running on port 3000
+# List available issues
+> issues list
 
-$ curl -X POST http://localhost:3000/calculator/add \
-    -H "Content-Type: application/json" \
-    -d '{"a": 5, "b": 3}'
-# {"result": 8}
+# Process an issue
+> process #42
+
+# Show current status
+> status
+
+# List active agents
+> agents list
+
+# Show agent status
+> agent status builder-1
+
+# Cancel running process
+> cancel
+
+# Show help
+> help
 ```
 
-## Task Dependency Graph
+## Separation of Concerns
 
-Tasks can run in parallel when they don't depend on each other (up to 4 subagents simultaneously):
+### Issues = Requirements
+GitHub issues serve as the requirements specification:
+- **What** needs to be built
+- **Why** it's needed (business value)
+- **Acceptance criteria** for completion
+- **User stories** and use cases
 
-```
-                    ┌─────────────────┐
-                    │ 1. Setup Project│
-                    │   (builder)     │
-                    └────────┬────────┘
-                             │
-                    ┌────────┴────────┐
-                    ▼                 ▼
-           ┌──────────────┐  ┌──────────────┐
-           │ 2. Module A  │  │ 3. Module B  │   ← parallel
-           │   (builder)  │  │   (builder)  │
-           └──────┬───────┘  └──────┬───────┘
-                  │                 │
-                  └────────┬────────┘
-                           ▼
-                  ┌──────────────┐
-                  │ 4. Integrate │
-                  │   (builder)  │
-                  └──────┬───────┘
-                         │
-                         ▼
-                  ┌──────────────┐
-                  │ 5. Validate  │
-                  │  (validator) │
-                  └──────────────┘
-```
+### Specs = Design
+Technical specifications define the implementation approach:
+- **How** the solution will be built
+- **Architecture** and design patterns
+- **Task breakdown** and dependencies
+- **Validation approach** and test strategy
 
-In the plan spec, this is expressed as:
-
-```markdown
-### 2. Module A
-- Depends On: setup-project
-- Parallel: true
-
-### 3. Module B
-- Depends On: setup-project
-- Parallel: true
-
-### 4. Integrate
-- Depends On: module-a, module-b
-```
-
-## Worktree Isolation for Spec Execution
-
-Every spec execution runs inside an isolated git worktree. The team-lead creates it as its first step, all builders work sequentially inside it, and the worktree merges once at the end. This enables multi-spec parallelism — two specs can run in separate terminals without conflicting.
-
-### How It Works
-
-```
-user requests spec execution
-    │
-    ├─→ worktree-create.sh my-feature  → .worktrees/my-feature/
-    │
-    │   team-lead orchestrates all builders sequentially
-    │   inside .worktrees/my-feature/
-    │
-    ├─→ final validation passes        → ✅
-    ├─→ worktree-merge.sh my-feature   → merged, worktree removed
-    │
-    └─→ .worktrees/ cleaned up
-```
-
-### Scripts
-
-**`scripts/worktree-create.sh <spec-name>`**
-
-Creates an isolated git worktree at `.worktrees/<spec-name>/` on a new branch `spec/<spec-name>`. Prints the absolute worktree path to stdout (the team-lead captures this and passes it to every subagent).
-
-```bash
-WORKTREE_PATH=$(bash scripts/worktree-create.sh add-auth-flow)
-# → /path/to/project/.worktrees/add-auth-flow
-```
-
-Idempotent — if the worktree already exists, prints its path and exits successfully.
-
-**`scripts/worktree-merge.sh <spec-name>`**
-
-Merges the spec's branch back into the current branch, then removes the worktree and cleans up the branch.
-
-```bash
-bash scripts/worktree-merge.sh add-auth-flow
-# → Merges spec/add-auth-flow, removes .worktrees/add-auth-flow/, deletes branch
-```
-
-If a merge conflict occurs, the merge is aborted, the worktree is preserved for manual resolution, and the script exits with code 1.
-
-### Team-Lead Protocol
-
-The team-lead follows this 3-step protocol for every spec execution:
-
-1. **Create** — Run `worktree-create.sh <spec-name>` as the very first action. Capture the path.
-2. **Execute** — All builders and validators work inside this single worktree. Pass the path to every subagent.
-3. **Merge** — After final validation passes, run `worktree-merge.sh <spec-name>`. If conflict, report and preserve.
-
-### File Structure
-
-```
-project/
-├── .worktrees/              ← Created at runtime, gitignored
-│   └── add-auth-flow/       ← Isolated copy for this spec execution
-└── scripts/
-    ├── worktree-create.sh   ← Creates spec worktree
-    └── worktree-merge.sh    ← Merges and cleans up worktree
-```
-
-> **Note:** `.worktrees/` is gitignored. Worktrees are ephemeral — created during spec execution and removed after merging. They should not persist across sessions.
-
-### When to Use Worktree Isolation
-
-Worktree isolation is **always used** for spec execution. It is the default operating mode for the team-lead agent.
-
-This enables **multi-spec parallelism**: run two specs in separate terminals, each with its own worktree, without conflicts. This replaces the previous multi-builder parallelism model which was complex and error-prone.
-
-## Customization
-
-### Adding a New Team Member
-
-Create two files in `.kiro/agents/`:
-
-**tester.json**:
-```json
-{
-  "name": "tester",
-  "description": "Writes and runs tests for completed features.",
-  "prompt": "file://./tester-prompt.md",
-  "tools": ["read", "write", "shell"],
-  "model": "claude-sonnet-4"
-}
-```
-
-**tester-prompt.md**:
-```markdown
-# Tester
-
-## Purpose
-You write tests for completed features. You create test files and run them.
-
-## Instructions
-- Read the implementation files to understand what to test
-- Write test files covering happy path and edge cases
-- Run the tests and report results
-- Do NOT modify implementation code
-```
-
-Then update team-lead.json:
-
-```json
-"toolsSettings": {
-  "subagent": {
-    "trustedAgents": ["builder", "validator", "tester"]
-  }
-}
-```
-
-### Changing the Model
-
-Each agent can use a different model:
-
-```json
-"model": "claude-sonnet-4"
-```
-
-### Modifying the Plan Format
-
-Edit `.kiro/prompts/plan-with-team.md` to change what the planning prompt generates. The team lead reads the plan as plain text, so any structured markdown format works — just keep it consistent.
-
-## Comparison with Claude Code
-
-This project is a port of the [claude-code-hooks-mastery](https://github.com/anthropics/claude-code-hooks-mastery) team orchestration pattern. There are significant differences in how the two systems work:
-
-| Capability | Claude Code | Kiro CLI |
-|---|---|---|
-| Task list | `TaskCreate/Update/List/Get` — shared, all agents read/write | `todo` — team-lead only, subagents cannot access |
-| Spawn child agent | `Task` tool with `run_in_background`, `resume`, per-task `model` | `subagent` tool, up to 4 parallel, no resume |
-| Agent definitions | `.claude/agents/*.md` (YAML frontmatter, subdirs work) | `.kiro/agents/*.json` + `*-prompt.md` (flat directory only) |
-| Slash commands | `.claude/commands/*.md` with arguments | `.kiro/prompts/*.md` (no native inline arguments, but `plan-with-team` detects trailing text as a workaround) |
-| Post-tool hooks | Python scripts in `.claude/hooks/` | `hooks` field in agent JSON config |
-| Subagent tools | Full tool access | Limited: read, write, shell, MCP only |
-
-The biggest difference is task coordination. In Claude Code, builders call `TaskGet` to read their assignment and `TaskUpdate` to mark it complete — it's a truly shared board. In Kiro CLI, the team-lead is the sole coordinator: it dispatches work, receives results, and updates the TODO list itself. Subagents are blind to the task list.
-
-## Command Reference
-
-| Command | What It Does |
-|---------|-------------|
-| `@plan-with-team` | Activate the planning prompt — provide your task inline: `@plan-with-team <task>` |
-| `/agent swap` | Switch between agents (select team-lead) |
-| `/agent list` | List available agents |
-| `/read <file>` | Read a file in the chat |
-| `/todo` | View current TODO list (main session only) |
+### Code = Implementation
+Source code implements the designed solution:
+- **Working software** that meets requirements
+- **Tests** that validate functionality
+- **Documentation** that explains usage
+- **Integration** with existing systems
 
 ## Troubleshooting
 
-**"Agent not found" when team-lead tries to spawn builder**
-- All agent JSON files must be directly in `.kiro/agents/` — subdirectories don't work for subagent resolution
-- Verify the agent name in `trustedAgents` matches the JSON filename (without `.json`)
+### Common Issues
 
-**"Agent not found" when switching to team-lead**
-- Verify `.kiro/agents/team-lead.json` exists in your project root
-- Check the JSON is valid: `cat .kiro/agents/team-lead.json | python3 -m json.tool`
+**"GitHub token invalid"**
+- Verify token has required permissions: `repo`, `issues`, `pull_requests`
+- Check token is not expired
+- Ensure token is correctly set in config or environment
 
-**Plan prompt writes code instead of just creating a plan**
-- Verify `.kiro/prompts/plan-with-team.md` contains the `**PLANNING ONLY**` instruction
-- The prompt should only output a spec file to `specs/`
+**"Issue not found"**
+- Verify issue number exists in specified repository
+- Check repository owner/name in configuration
+- Ensure issue is not private (if using public token)
 
-**Builder can't write files**
-- Ensure builder.json includes `"write"` in the `tools` array
-- Only `read`, `write`, `shell`, and MCP tools are available in subagent runtime
+**"Agent spawn failed"**
+- Check agent model availability and API keys
+- Verify agent configuration in `.kiro-krew/config.yaml`
+- Review agent-specific error logs
 
-**TODO list not working**
-- Enable it: `kiro-cli settings chat.enableTodoList true`
-- Restart Kiro CLI after changing settings
-- Remember: only the team-lead (main session) can access it, not subagents
+**"Build validation failed"**
+- Check test coverage meets minimum requirements
+- Verify all required checks pass (lint, type check, security)
+- Review validation logs for specific failures
 
-## Subagent Limitations
+**"PR creation failed"**
+- Verify GitHub token has `pull_requests` permission
+- Check base branch exists and is accessible
+- Ensure no conflicting PR exists for same issue
 
-Tools NOT available in the subagent runtime (per [Kiro docs](https://kiro.dev/docs/cli/chat/subagents#tool-availability)):
+### Debug Mode
 
-- `todo` — task tracking
-- `grep` — search file contents
-- `glob` — find files by pattern
-- `web_search` / `web_fetch` — web access
-- `use_aws` — AWS commands
-- `introspect` — CLI info
-- `thinking` — reasoning tool
+Enable debug logging:
 
-If your agent config includes these tools, they'll be silently unavailable when the agent runs as a subagent.
+```bash
+export KIRO_KREW_DEBUG=true
+kiro-krew run --issue 42
+```
 
-## Requirements
+### Log Files
 
-- Kiro CLI 2.0+ (skills, TUI, headless mode support)
-- Optional — enable TODO list for team-lead task tracking:
-  ```bash
-  kiro-cli settings chat.enableTodoList true
-  ```
+Logs are written to:
+- `~/.kiro-krew/logs/krew-lead.log`
+- `~/.kiro-krew/logs/architect.log`
+- `~/.kiro-krew/logs/builder-{id}.log`
+- `~/.kiro-krew/logs/validator.log`
+- `~/.kiro-krew/logs/documenter.log`
 
-## License
+### Support
 
-MIT
+- Documentation: https://docs.kiro-krew.dev
+- Issues: https://github.com/kiro-dev/kiro-krew/issues
+- Discussions: https://github.com/kiro-dev/kiro-krew/discussions
