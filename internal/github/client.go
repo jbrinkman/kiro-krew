@@ -7,10 +7,14 @@ import (
 	"strings"
 )
 
+type Label struct {
+	Name string `json:"name"`
+}
+
 type Issue struct {
-	Number int      `json:"number"`
-	Title  string   `json:"title"`
-	Labels []string `json:"labels"`
+	Number int     `json:"number"`
+	Title  string  `json:"title"`
+	Labels []Label `json:"labels"`
 }
 
 func GetToken() (string, error) {
@@ -26,19 +30,19 @@ func ListIssues(repo, label string) ([]Issue, error) {
 	cmd := exec.Command("gh", "issue", "list", "--repo", repo, "--label", label, "--state", "open", "--json", "number,title,labels")
 	output, err := cmd.Output()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("gh issue list failed: %w", err)
 	}
 
 	var issues []Issue
 	if err := json.Unmarshal(output, &issues); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse gh output: %w", err)
 	}
 
 	var filtered []Issue
 	for _, issue := range issues {
 		hasExcluded := false
 		for _, l := range issue.Labels {
-			if l == "kiro-krew-done" || l == "kiro-krew-failed" {
+			if l.Name == "kiro-krew-done" || l.Name == "kiro-krew-failed" {
 				hasExcluded = true
 				break
 			}

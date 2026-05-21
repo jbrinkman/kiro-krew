@@ -35,14 +35,19 @@ func New(cfg *config.Config, mgr *agent.Manager) *Watcher {
 
 func (w *Watcher) Start() {
 	w.cleanupOrphanedWorktrees()
+	log.Printf("[watcher] started — polling %s every %s for label %q", w.config.Repo, w.config.PollInterval, w.config.Label)
 	go w.pollLoop()
 }
 
 func (w *Watcher) Stop() {
 	close(w.stop)
+	log.Printf("[watcher] stopped")
 }
 
 func (w *Watcher) pollLoop() {
+	// Run immediately on start, then on interval
+	w.checkIssues()
+
 	ticker := time.NewTicker(w.config.PollInterval)
 	defer ticker.Stop()
 
@@ -57,10 +62,14 @@ func (w *Watcher) pollLoop() {
 }
 
 func (w *Watcher) checkIssues() {
+	log.Printf("[watcher] polling for issues...")
 	issues, err := github.ListIssues(w.config.Repo, w.config.Label)
 	if err != nil {
+		log.Printf("[watcher] error fetching issues: %v", err)
 		return
 	}
+
+	log.Printf("[watcher] found %d actionable issue(s)", len(issues))
 
 	for _, issue := range issues {
 		w.mu.RLock()
@@ -72,11 +81,12 @@ func (w *Watcher) checkIssues() {
 		}
 
 		if w.hasActiveWorktree(issue.Number) {
+			log.Printf("[watcher] issue #%d already has active worktree, skipping", issue.Number)
 			continue
 		}
 
 		if w.hasExceededGlobalRetries(issue.Number) {
-			log.Printf("Skipping issue #%d: exceeded retry limit (%d attempts)", issue.Number, w.config.MaxRetries)
+			log.Printf("[watcher] issue #%d exceeded retry limit (%d attempts), skipping", issue.Number, w.config.MaxRetries)
 			continue
 		}
 
@@ -85,8 +95,11 @@ func (w *Watcher) checkIssues() {
 		w.mu.Unlock()
 
 		w.incrementGlobalRetryCount(issue.Number)
-		log.Printf("Spawning agent for issue #%d (attempt %d)", issue.Number, w.getCurrentRetryCount(issue.Number))
-		w.manager.Spawn(issue.Number, w.config.Repo)
+		attempt := w.getCurrentRetryCount(issue.Number)
+		log.Printf("[watcher] spawning agent for issue #%d %q (attempt %d)", issue.Number, issue.Title, attempt)
+		if _, err := w.manager.Spawn(issue.Number, w.config.Repo); err != nil {
+			log.Printf("[watcher] failed to spawn agent for issue #%d: %v", issue.Number, err)
+		}
 	}
 }
 
@@ -120,7 +133,7 @@ func (w *Watcher) cleanupOrphanedWorktrees() {
 
 		if !w.isProcessRunning(pid) {
 			worktreePath := filepath.Join(worktreesDir, name)
-			log.Printf("Cleaning up orphaned worktree: %s (PID %d no longer running)", name, pid)
+			log.Printf("[watcher] cleaning up orphaned worktree: %s (PID %d no longer running)", name, pid)
 			os.RemoveAll(worktreePath)
 		}
 	}
@@ -128,7 +141,7 @@ func (w *Watcher) cleanupOrphanedWorktrees() {
 
 func (w *Watcher) hasActiveWorktree(issueNumber int) bool {
 	w.cleanupOrphanedWorktrees()
-	
+
 	worktreesDir := ".worktrees"
 	entries, err := os.ReadDir(worktreesDir)
 	if err != nil {
@@ -159,28 +172,28 @@ func (w *Watcher) hasExceededGlobalRetries(issueNumber int) bool {
 	if err != nil {
 		return false
 	}
-	
+
 	count, err := strconv.Atoi(strings.TrimSpace(string(data)))
 	if err != nil {
 		return false
 	}
-	
+
 	return count >= w.config.MaxRetries
 }
 
 func (w *Watcher) incrementGlobalRetryCount(issueNumber int) {
 	retryDir := ".kiro-krew/retries"
 	os.MkdirAll(retryDir, 0755)
-	
+
 	retryFile := fmt.Sprintf("%s/issue-%d.count", retryDir, issueNumber)
-	
+
 	count := 0
 	if data, err := os.ReadFile(retryFile); err == nil {
 		if c, err := strconv.Atoi(strings.TrimSpace(string(data))); err == nil {
 			count = c
 		}
 	}
-	
+
 	count++
 	os.WriteFile(retryFile, []byte(fmt.Sprintf("%d\n", count)), 0644)
 }
@@ -191,11 +204,11 @@ func (w *Watcher) getCurrentRetryCount(issueNumber int) int {
 	if err != nil {
 		return 0
 	}
-	
+
 	count, err := strconv.Atoi(strings.TrimSpace(string(data)))
 	if err != nil {
 		return 0
 	}
-	
+
 	return count
 }

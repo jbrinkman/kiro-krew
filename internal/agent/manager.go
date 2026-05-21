@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"sync"
@@ -31,9 +32,9 @@ type Agent struct {
 }
 
 type Manager struct {
-	mu      sync.RWMutex
-	agents  map[string]*Agent
-	config  *config.Config
+	mu     sync.RWMutex
+	agents map[string]*Agent
+	config *config.Config
 }
 
 func NewManager(cfg *config.Config) *Manager {
@@ -48,14 +49,15 @@ func (m *Manager) Spawn(issueNumber int, repo string) (*Agent, error) {
 	defer m.mu.Unlock()
 
 	id := fmt.Sprintf("agent-%d-%d", issueNumber, time.Now().Unix())
-	
+
 	cmd := exec.Command("kiro-cli", "chat", "--headless")
-	cmd.Env = append(os.Environ(), 
-		fmt.Sprintf("ISSUE_NUMBER=%d", issueNumber), 
+	cmd.Env = append(os.Environ(),
+		fmt.Sprintf("ISSUE_NUMBER=%d", issueNumber),
 		fmt.Sprintf("REPO=%s", repo),
 		fmt.Sprintf("KIRO_KREW_WATCHER_PID=%d", os.Getpid()))
-	
+
 	if err := cmd.Start(); err != nil {
+		log.Printf("[agent] failed to spawn agent %s for issue #%d: %v", id, issueNumber, err)
 		return nil, fmt.Errorf("failed to start agent: %w", err)
 	}
 
@@ -70,6 +72,7 @@ func (m *Manager) Spawn(issueNumber int, repo string) (*Agent, error) {
 	}
 
 	m.agents[id] = agent
+	log.Printf("[agent] started %s (pid %d) for issue #%d", id, cmd.Process.Pid, issueNumber)
 
 	go m.monitorAgent(agent, cmd)
 
@@ -96,6 +99,7 @@ func (m *Manager) Stop(id string) error {
 		return fmt.Errorf("agent %s not found", id)
 	}
 
+	log.Printf("[agent] stopping %s (issue #%d)", id, agent.IssueNumber)
 	if agent.Process != nil {
 		return agent.Process.Signal(syscall.SIGTERM)
 	}
@@ -114,6 +118,7 @@ func (m *Manager) StopAll() {
 
 	for _, agent := range agents {
 		if agent.Process != nil {
+			log.Printf("[agent] stopping %s (issue #%d)", agent.ID, agent.IssueNumber)
 			agent.Process.Signal(syscall.SIGTERM)
 		}
 	}
@@ -130,12 +135,16 @@ func (m *Manager) HandleExit(id string, exitCode int) {
 
 	if exitCode == 0 {
 		agent.Status = StatusCompleted
+		log.Printf("[agent] %s completed successfully (issue #%d)", id, agent.IssueNumber)
 	} else {
 		agent.Status = StatusFailed
+		log.Printf("[agent] %s exited with code %d (issue #%d, retry %d/%d)", id, exitCode, agent.IssueNumber, agent.RetryCount, m.config.MaxRetries)
 		if agent.RetryCount < m.config.MaxRetries {
 			agent.RetryCount++
+			log.Printf("[agent] retrying %s (issue #%d, attempt %d)", id, agent.IssueNumber, agent.RetryCount)
 			go m.retryAgent(agent)
 		} else {
+			log.Printf("[agent] %s exhausted retries, labeling issue #%d as failed", id, agent.IssueNumber)
 			github.AddLabel(m.config.Repo, agent.IssueNumber, "kiro-krew-failed")
 		}
 	}
@@ -155,12 +164,15 @@ func (m *Manager) monitorAgent(agent *Agent, cmd *exec.Cmd) {
 }
 
 func (m *Manager) retryAgent(agent *Agent) {
-	time.Sleep(time.Duration(agent.RetryCount) * time.Second)
-	
+	delay := time.Duration(agent.RetryCount) * time.Second
+	log.Printf("[agent] waiting %s before retry for issue #%d", delay, agent.IssueNumber)
+	time.Sleep(delay)
+
 	cmd := exec.Command("kiro-cli", "chat", "--headless")
 	cmd.Env = append(os.Environ(), fmt.Sprintf("ISSUE_NUMBER=%d", agent.IssueNumber))
-	
+
 	if err := cmd.Start(); err != nil {
+		log.Printf("[agent] retry failed for issue #%d: %v", agent.IssueNumber, err)
 		m.mu.Lock()
 		agent.Status = StatusFailed
 		m.mu.Unlock()
@@ -173,5 +185,6 @@ func (m *Manager) retryAgent(agent *Agent) {
 	agent.StartTime = time.Now()
 	m.mu.Unlock()
 
+	log.Printf("[agent] retry started for issue #%d (pid %d)", agent.IssueNumber, cmd.Process.Pid)
 	go m.monitorAgent(agent, cmd)
 }
