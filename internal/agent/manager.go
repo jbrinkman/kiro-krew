@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jbrinkman/kiro-krew/internal/config"
+	"github.com/jbrinkman/kiro-krew/internal/github"
 )
 
 type Status string
@@ -131,6 +132,8 @@ func (m *Manager) HandleExit(id string, exitCode int) {
 		if agent.RetryCount < m.config.MaxRetries {
 			agent.RetryCount++
 			go m.retryAgent(agent)
+		} else {
+			github.AddLabel(m.config.Repo, agent.IssueNumber, "kiro-krew-failed")
 		}
 	}
 }
