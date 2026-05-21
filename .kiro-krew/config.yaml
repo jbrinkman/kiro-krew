@@ -1,0 +1,4 @@
+repo: "jbrinkman/kiro-krew"
+label: "kiro-krew"
+poll_interval: 5m
+max_retries: 3

@@ -50,7 +50,10 @@ func (m *Manager) Spawn(issueNumber int, repo string) (*Agent, error) {
 	id := fmt.Sprintf("agent-%d-%d", issueNumber, time.Now().Unix())
 	
 	cmd := exec.Command("kiro-cli", "chat", "--headless")
-	cmd.Env = append(os.Environ(), fmt.Sprintf("ISSUE_NUMBER=%d", issueNumber), fmt.Sprintf("REPO=%s", repo))
+	cmd.Env = append(os.Environ(), 
+		fmt.Sprintf("ISSUE_NUMBER=%d", issueNumber), 
+		fmt.Sprintf("REPO=%s", repo),
+		fmt.Sprintf("KIRO_KREW_WATCHER_PID=%d", os.Getpid()))
 	
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("failed to start agent: %w", err)
