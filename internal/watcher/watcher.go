@@ -22,25 +22,31 @@ type Watcher struct {
 	stop    chan struct{}
 	tracked map[int]bool
 	mu      sync.RWMutex
+	started bool
 }
 
 func New(cfg *config.Config, mgr *agent.Manager) *Watcher {
 	return &Watcher{
 		config:  cfg,
 		manager: mgr,
-		stop:    make(chan struct{}),
 		tracked: make(map[int]bool),
 	}
 }
 
 func (w *Watcher) Start() {
 	w.cleanupOrphanedWorktrees()
+	w.stop = make(chan struct{})
+	w.started = true
 	log.Printf("[watcher] started — polling %s every %s for label %q", w.config.Repo, w.config.PollInterval, w.config.Label)
 	go w.pollLoop()
 }
 
 func (w *Watcher) Stop() {
+	if !w.started {
+		return
+	}
 	close(w.stop)
+	w.started = false
 	log.Printf("[watcher] stopped")
 }
 

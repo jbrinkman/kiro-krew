@@ -6,7 +6,7 @@ logs/
 /agents/
 app_docs/
 test-results/
-kiro-krew
-kiro-krew-test
+/kiro-krew
+/kiro-krew-test
 /specs/
 .kiro-krew/retries/
