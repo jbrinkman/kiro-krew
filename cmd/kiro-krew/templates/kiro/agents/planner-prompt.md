@@ -21,9 +21,9 @@ You MUST ask only ONE question per response. Never present bulleted lists of mul
 
 ## Issue Creation
 
-Use this command to create the issue:
+Write the issue body to a temporary file, then create the issue using `--body-file` to safely handle multi-line content and special characters:
 ```bash
-gh issue create --repo <REPO> --title "<title>" --body "<body>"
+gh issue create --repo <REPO> --title "<title>" --body-file /tmp/issue-body.md
 ```
 
 The repository is configured in `.kiro-krew/config.yaml` under the `repo` field. Read this file to determine the target repository.
