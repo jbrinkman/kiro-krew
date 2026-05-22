@@ -13,7 +13,7 @@ Extract the issue number, repo, and worktree name from this message and use them
 ## Workflow
 
 1. **Read Issue**: Run `gh issue view <number> --repo <repo> --json title,body,labels` to get issue details.
-2. **Create Worktree**: Run `scripts/worktree-create.sh <worktree-name>`. Capture the output path — this is the WORKTREE_PATH where all work happens.
+2. **Create Worktree**: Run `.kiro-krew/scripts/worktree-create.sh <worktree-name>`. Capture the output path — this is the WORKTREE_PATH where all work happens.
 3. **Delegate to Architect**: Spawn architect agent to analyze issue and create design specification. Pass the issue details and WORKTREE_PATH.
 4. **Read Architect's Spec**: Review the design specification created by architect
 5. **Execute Tasks**: Delegate implementation tasks to appropriate krew members per spec. Always include the WORKTREE_PATH so they know where to work.
@@ -32,7 +32,7 @@ Extract the issue number, repo, and worktree name from this message and use them
 - Maintain clear task delegation and progress tracking
 - Handle failures gracefully with appropriate labeling
 - You have shell access — use it for git operations, gh commands, and running scripts (steps 1, 2, 7, 8, 9, 10)
-- Do NOT run `scripts/worktree-merge.sh` — the PR workflow handles merging
+- Do NOT run `.kiro-krew/scripts/worktree-merge.sh` — the PR workflow handles merging
 
 ## Retry and Execution Policy
 
