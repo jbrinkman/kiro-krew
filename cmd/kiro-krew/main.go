@@ -8,7 +8,7 @@ import (
 
 	"github.com/jbrinkman/kiro-krew/internal/agent"
 	"github.com/jbrinkman/kiro-krew/internal/config"
-	"github.com/jbrinkman/kiro-krew/internal/repl"
+	"github.com/jbrinkman/kiro-krew/internal/tui"
 	"github.com/jbrinkman/kiro-krew/internal/watcher"
 )
 
@@ -41,12 +41,14 @@ func main() {
 
 	manager := agent.NewManager(cfg)
 	w := watcher.New(cfg, manager)
-	r := repl.New(w, manager)
 
 	defer w.Stop()
 	defer manager.StopAll()
 
-	r.Run()
+	if err := tui.Run(w, manager, cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
 }
 
 func extractTemplates(srcDir, destDir string, force bool) error {
