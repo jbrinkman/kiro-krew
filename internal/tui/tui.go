@@ -89,7 +89,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m = m.appendActivity(fmt.Sprintf("Process exited with error: %v", msg.err))
 		}
-		if msg.planCmd {
+		if msg.planCmd && msg.err == nil {
 			m.labelPrompt = true
 			m = m.appendActivity("Label this issue for kiro-krew to process? (y/n)")
 		}
