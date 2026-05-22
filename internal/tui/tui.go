@@ -29,19 +29,21 @@ type tickMsg struct{}
 type model struct {
 	watcher          *watcher.Watcher
 	manager          *agent.Manager
+	config           *config.Config
 	input            textinput.Model
 	activityLines    []string
 	maxActivityLines int
 	width            int
 	height           int
 	confirmingExit   bool
+	labelPrompt      bool
 	logFile          *os.File
 	logReader        *os.File
 	lastLogPos       int64
 	quitting         bool
 }
 
-func newModel(w *watcher.Watcher, m *agent.Manager, logFile *os.File, logReader *os.File, maxActivityLines int) model {
+func newModel(w *watcher.Watcher, m *agent.Manager, cfg *config.Config, logFile *os.File, logReader *os.File) model {
 	ti := textinput.New()
 	ti.Prompt = "kiro-krew> "
 	ti.Focus()
@@ -49,10 +51,11 @@ func newModel(w *watcher.Watcher, m *agent.Manager, logFile *os.File, logReader 
 	return model{
 		watcher:          w,
 		manager:          m,
+		config:           cfg,
 		input:            ti,
 		logFile:          logFile,
 		logReader:        logReader,
-		maxActivityLines: maxActivityLines,
+		maxActivityLines: cfg.MaxActivityLines,
 	}
 }
 
@@ -86,6 +89,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m = m.appendActivity(fmt.Sprintf("Process exited with error: %v", msg.err))
 		}
+		if msg.planCmd {
+			m.labelPrompt = true
+			m = m.appendActivity("Label this issue for kiro-krew to process? (y/n)")
+		}
 		return m, nil
 
 	case tickMsg:
@@ -96,6 +103,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.tickCmd()
 
 	case tea.KeyMsg:
+		if m.labelPrompt {
+			input := strings.ToLower(strings.TrimSpace(msg.String()))
+			switch input {
+			case "y":
+				m.labelPrompt = false
+				m = m.appendActivity("Labeling issue for kiro-krew processing...")
+				// The last created issue is found via gh
+				go m.labelLastIssue()
+				return m, nil
+			case "n":
+				m.labelPrompt = false
+				m = m.appendActivity("Skipped labeling.")
+				return m, nil
+			default:
+				return m, nil
+			}
+		}
+
 		if m.confirmingExit {
 			input := strings.ToLower(strings.TrimSpace(msg.String()))
 			switch input {
@@ -223,6 +248,12 @@ func (m model) executeCommand(input string) (model, tea.Cmd) {
 			return m, nil
 		}
 		return m.handleStop(parts[1])
+	case "plan":
+		description := ""
+		if len(parts) > 1 {
+			description = strings.Join(parts[1:], " ")
+		}
+		return m.handlePlan(description)
 	case "exit":
 		return m.tryExit()
 	case "help":
@@ -262,7 +293,7 @@ func Run(w *watcher.Watcher, m *agent.Manager, cfg *config.Config) error {
 	}
 	startPos := info.Size()
 
-	mdl := newModel(w, m, logFile, logReader, cfg.MaxActivityLines)
+	mdl := newModel(w, m, cfg, logFile, logReader)
 	mdl.lastLogPos = startPos
 
 	p := tea.NewProgram(mdl, tea.WithAltScreen())
