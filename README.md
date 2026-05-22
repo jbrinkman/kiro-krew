@@ -44,9 +44,9 @@ kiro-krew init
 
 This creates:
 - `.kiro-krew/config.yaml` — watcher configuration
+- `.kiro-krew/scripts/` — worktree management scripts
 - `.kiro/agents/` — agent configurations (krew-lead, architect, builder, validator, documenter)
 - `.kiro/skills/plan-with-krew/` — issue planning skill
-- `scripts/` — worktree management scripts
 
 ### 2. Configure
 
@@ -81,13 +81,14 @@ kiro-krew> status
 
 ## CLI Usage
 
-Kiro Krew has two modes:
-
 ```bash
-# Initialize project with agent configs and templates
+# Initialize project with agent configs and templates (skips existing files)
 kiro-krew init
 
-# Start interactive REPL (default)
+# Force-update templates (overwrites all files except config.yaml)
+kiro-krew update
+
+# Start interactive REPL (default when no arguments)
 kiro-krew
 ```
 
@@ -119,17 +120,17 @@ When the watcher detects a labeled issue:
 The manager spawns agents as `kiro-cli` processes:
 
 ```
-kiro-cli chat --agent krew-lead --no-interactive --trust-all-tools "Process issue #N from repo owner/name"
+kiro-cli chat --agent krew-lead --no-interactive --trust-all-tools "Process issue #N from repo owner/name. Worktree name: issue-N-<pid>"
 ```
 
 Each agent runs with environment variables: `ISSUE_NUMBER`, `REPO`, and `KIRO_KREW_WATCHER_PID`.
 
 ### Git Worktree Isolation
 
-Each issue is processed in an isolated git worktree:
-- `scripts/worktree-create.sh <name>` — creates `.worktrees/<name>/` on branch `spec/<name>`
-- `scripts/worktree-merge.sh <name>` — merges back, removes worktree, deletes branch
-- Orphaned worktrees (from crashed processes) are cleaned up automatically
+Each issue is processed in an isolated git worktree named `issue-<number>-<pid>` (where `<pid>` is the watcher process ID):
+- `.kiro-krew/scripts/worktree-create.sh <name>` — creates `.worktrees/<name>/` on branch `spec/<name>`
+- `.kiro-krew/scripts/worktree-merge.sh <name>` — merges back, removes worktree, deletes branch
+- Orphaned worktrees (from crashed processes) are cleaned up automatically by checking if the PID is still running
 
 ### Issue Lifecycle
 
@@ -140,18 +141,16 @@ Each issue is processed in an isolated git worktree:
 | Done | `kiro-krew-done` | PR created successfully |
 | Failed | `kiro-krew-failed` | Exhausted retries |
 
-Issues with `kiro-krew-done` or `kiro-krew-failed` labels are excluded from polling.
+Issues with `kiro-krew-done` or `kiro-krew-failed` labels are excluded from polling. The done/failed labels are derived from the configured label (e.g., if label is `my-label`, done becomes `my-label-done`).
 
 ### Retry Logic
 
-The system retries failed agents with exponential backoff:
-1. **Attempt 1** — Standard execution
-2. **Attempt 2** — Retry with failure context
-3. **Attempt 3** — Retry with diagnostic analysis from validator
+The system has two layers of retry:
 
-After exhausting retries, the issue is labeled `kiro-krew-failed`.
+1. **Global retries** (watcher level) — Persisted in `.kiro-krew/retries/issue-<number>.count`. The watcher skips issues that have reached `max_retries` attempts and survives process restarts.
+2. **Per-agent retries** (manager level) — When an agent exits with a non-zero code, the manager retries with exponential backoff (delay = retry count × 1 second) up to `max_retries`.
 
-Global retry counts are persisted in `.kiro-krew/retries/issue-<number>.count` to survive process restarts.
+After exhausting retries, the issue is labeled `<label>-failed`.
 
 ## Agent Configuration
 
@@ -161,7 +160,7 @@ Agent configs live in `.kiro/agents/`. Each agent has a JSON config and a prompt
 ```json
 {
   "name": "krew-lead",
-  "tools": ["read", "subagent", "todo"],
+  "tools": ["read", "shell", "subagent", "todo_list"],
   "trustedAgents": ["architect", "builder", "validator", "documenter"],
   "model": "claude-sonnet-4"
 }
