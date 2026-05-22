@@ -11,9 +11,9 @@ Replace the `bufio.Scanner` REPL in `internal/repl/repl.go` with a bubbletea-bas
 ```
 internal/
   tui/
-    tui.go        — Main bubbletea model, Init/Update/View
+    tui.go        — Main bubbletea model, Init/Update/View; log redirection and log-file tailing
     commands.go   — Command parsing and execution (extracted from repl.go)
-    log.go        — File-based logger + log reader for activity pane
+    exec.go       — Subprocess overlay helpers (execCommand wrapper)
 ```
 
 ### Components
@@ -22,20 +22,15 @@ internal/
    - `activityLines []string` — log lines displayed in the activity pane
    - `input textinput.Model` — command prompt (bubbles/textinput)
    - `confirmingExit bool` — exit confirmation state
-   - `suspendedCmd *exec.Cmd` — for subprocess overlay
    - `watcher`, `manager` — existing dependencies
+   - Log setup: redirects Go's `log` package output to `.kiro-krew/kiro-krew.log` and tails the file via a bubbletea `Cmd`; activity pane displays the last N lines that fit the terminal height
 
-2. **Log System** (`log.go`):
-   - Redirect Go's `log` package output to a file (`.kiro-krew/kiro-krew.log`)
-   - TUI tails the log file via a bubbletea `Cmd` that watches for new lines
-   - Activity pane displays the last N lines that fit the terminal height
-
-3. **Command Handler** (`commands.go`):
+2. **Command Handler** (`commands.go`):
    - Same commands: `watch start/stop`, `status`, `stop <issue>`, `exit`, `help`
    - Commands return strings (for activity pane display) instead of printing to stdout
    - `status` returns a formatted table string
 
-4. **Subprocess Overlay**:
+3. **Subprocess Overlay** (`exec.go`):
    - Use `tea.ExecProcess()` (bubbletea's built-in) to hand terminal to child process
    - TUI suspends, child runs, TUI resumes on exit
 
