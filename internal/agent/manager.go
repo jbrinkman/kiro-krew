@@ -50,11 +50,13 @@ func (m *Manager) Spawn(issueNumber int, repo string) (*Agent, error) {
 
 	id := fmt.Sprintf("agent-%d-%d", issueNumber, time.Now().Unix())
 
+	worktreeName := fmt.Sprintf("issue-%d-%d", issueNumber, os.Getpid())
+
 	cmd := exec.Command("kiro-cli", "chat",
 		"--agent", "krew-lead",
 		"--no-interactive",
 		"--trust-all-tools",
-		fmt.Sprintf("Process issue #%d from repo %s", issueNumber, repo))
+		fmt.Sprintf("Process issue #%d from repo %s. Worktree name: %s", issueNumber, repo, worktreeName))
 	cmd.Env = append(os.Environ(),
 		fmt.Sprintf("ISSUE_NUMBER=%d", issueNumber),
 		fmt.Sprintf("REPO=%s", repo),
@@ -177,11 +179,13 @@ func (m *Manager) retryAgent(agent *Agent) {
 	log.Printf("[agent] waiting %s before retry for issue #%d", delay, agent.IssueNumber)
 	time.Sleep(delay)
 
+	worktreeName := fmt.Sprintf("issue-%d-%d", agent.IssueNumber, os.Getpid())
+
 	cmd := exec.Command("kiro-cli", "chat",
 		"--agent", "krew-lead",
 		"--no-interactive",
 		"--trust-all-tools",
-		fmt.Sprintf("Process issue #%d", agent.IssueNumber))
+		fmt.Sprintf("Process issue #%d from repo %s. Worktree name: %s", agent.IssueNumber, m.config.Repo, worktreeName))
 	cmd.Env = append(os.Environ(),
 		fmt.Sprintf("ISSUE_NUMBER=%d", agent.IssueNumber),
 		fmt.Sprintf("REPO=%s", m.config.Repo),
