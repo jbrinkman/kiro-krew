@@ -1,3 +1,8 @@
+---
+name: plan-with-krew
+description: Collaboratively refine user requests into well-structured GitHub issues for development work. Use when planning features, creating issues, or preparing work for kiro-krew automated processing.
+---
+
 # plan-with-krew
 
 ## Purpose
@@ -18,8 +23,8 @@ Collaboratively refine user requests into well-structured GitHub issues for deve
 7. **Apply Label**: If yes, apply `kiro-krew` label to the issue
 
 ## Usage
-- `@plan-with-krew [description]` - Plan and create issue
-- `@plan-with-krew Build auth and start immediately` - Plan, create, and auto-label for immediate work
+- `/plan-with-krew [description]` - Plan and create issue
+- `/plan-with-krew Build auth and start immediately` - Plan, create, and auto-label for immediate work
 
 ## Implementation Notes
 - Focus on problem space, not solution details
