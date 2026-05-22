@@ -129,30 +129,12 @@ func truncate(s string, max int) string {
 	return s[:max-3] + "..."
 }
 
-func (m model) labelLastIssue() {
-	// Find the most recently created issue by the current user
-	cmd := exec.Command("gh", "issue", "list", "--repo", m.config.Repo,
-		"--author", "@me", "--state", "open", "--limit", "1", "--json", "number")
-	output, err := cmd.Output()
-	if err != nil {
+func (m model) labelLastIssue(issueNums ...int) {
+	if len(issueNums) == 0 {
 		return
 	}
-	// Parse [{"number":N}]
-	trimmed := strings.TrimSpace(string(output))
-	if trimmed == "[]" || trimmed == "" {
-		return
-	}
-	// Simple parse: find the number value
-	start := strings.Index(trimmed, ":")
-	end := strings.Index(trimmed, "}")
-	if start < 0 || end < 0 {
-		return
-	}
-	numStr := strings.TrimSpace(trimmed[start+1 : end])
-	issueNum, err := strconv.Atoi(numStr)
-	if err != nil {
-		return
-	}
+
+	issueNum := issueNums[0]
 	exec.Command("gh", "issue", "edit", fmt.Sprintf("%d", issueNum),
 		"--repo", m.config.Repo, "--add-label", m.config.Label).Run()
 }
