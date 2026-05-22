@@ -243,7 +243,10 @@ func Run(w *watcher.Watcher, m *agent.Manager) error {
 	defer logReader.Close()
 
 	// Seek to end so we only show new entries
-	info, _ := logReader.Stat()
+	info, err := logReader.Stat()
+	if err != nil {
+		return fmt.Errorf("failed to stat log file: %w", err)
+	}
 	startPos := info.Size()
 
 	mdl := newModel(w, m, logFile, logReader)
