@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -90,6 +91,7 @@ func (m model) handleHelp() (model, tea.Cmd) {
 		"  watch stop     - Stop watching",
 		"  status         - List all agents with details",
 		"  stop <issue>   - Stop agent for specific issue number",
+		"  plan [desc]    - Start interactive planning session",
 		"  exit           - Exit (Ctrl+C also works)",
 		"  help           - Show this help message",
 	}
@@ -99,17 +101,41 @@ func (m model) handleHelp() (model, tea.Cmd) {
 
 func (m model) handleExec(name string, args ...string) (model, tea.Cmd) {
 	c := tea.ExecProcess(execCommand(name, args...), func(err error) tea.Msg {
-		return execDoneMsg{err}
+		return execDoneMsg{err: err}
 	})
 	return m, c
 }
 
-type execDoneMsg struct{ err error }
+func (m model) handlePlan(description string) (model, tea.Cmd) {
+	args := []string{"chat", "--agent", "planner"}
+	if description != "" {
+		args = append(args, description)
+	}
+	c := tea.ExecProcess(execCommand("kiro-cli", args...), func(err error) tea.Msg {
+		return execDoneMsg{err: err, planCmd: true}
+	})
+	return m, c
+}
+
+type execDoneMsg struct {
+	err     error
+	planCmd bool
+}
 
 func truncate(s string, max int) string {
 	if len(s) <= max {
 		return s
 	}
 	return s[:max-3] + "..."
+}
+
+func (m model) labelLastIssue(issueNums ...int) {
+	if len(issueNums) == 0 {
+		return
+	}
+
+	issueNum := issueNums[0]
+	exec.Command("gh", "issue", "edit", fmt.Sprintf("%d", issueNum),
+		"--repo", m.config.Repo, "--add-label", m.config.Label).Run()
 }
 
