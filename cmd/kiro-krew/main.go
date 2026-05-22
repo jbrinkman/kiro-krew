@@ -45,7 +45,7 @@ func main() {
 	defer w.Stop()
 	defer manager.StopAll()
 
-	if err := tui.Run(w, manager); err != nil {
+	if err := tui.Run(w, manager, cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
