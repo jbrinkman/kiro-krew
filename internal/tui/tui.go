@@ -223,7 +223,9 @@ func (m model) executeCommand(input string) (model, tea.Cmd) {
 // Run starts the TUI, redirecting log output to a file.
 func Run(w *watcher.Watcher, m *agent.Manager) error {
 	logPath := ".kiro-krew/kiro-krew.log"
-	os.MkdirAll(".kiro-krew", 0755)
+	if err := os.MkdirAll(".kiro-krew", 0755); err != nil {
+		return fmt.Errorf("failed to create log directory: %w", err)
+	}
 
 	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
