@@ -58,31 +58,13 @@ func extractTemplates(srcDir, destDir string, force bool) error {
 	for _, entry := range entries {
 		srcPath := filepath.Join(srcDir, entry.Name())
 
-		// Map template directory names to actual directory names
+		// Map template directory names to dot-prefixed names
 		destName := entry.Name()
-		if entry.Name() == "kiro" {
+		switch entry.Name() {
+		case "kiro":
 			destName = ".kiro"
-		} else if entry.Name() == "config.yaml" {
-			// config.yaml always goes in .kiro-krew/ and is NEVER overwritten
-			destPath := filepath.Join(".kiro-krew", "config.yaml")
-			if _, err := os.Stat(destPath); os.IsNotExist(err) {
-				content, err := templates.ReadFile(srcPath)
-				if err != nil {
-					return fmt.Errorf("failed to read template file %s: %w", srcPath, err)
-				}
-
-				if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
-					return fmt.Errorf("failed to create directory for %s: %w", destPath, err)
-				}
-
-				if err := os.WriteFile(destPath, content, 0644); err != nil {
-					return fmt.Errorf("failed to write file %s: %w", destPath, err)
-				}
-				fmt.Printf("Created %s\n", destPath)
-			} else {
-				fmt.Printf("Skipped %s (already exists)\n", destPath)
-			}
-			continue
+		case "kiro-krew":
+			destName = ".kiro-krew"
 		}
 
 		destPath := filepath.Join(destDir, destName)
@@ -95,6 +77,14 @@ func extractTemplates(srcDir, destDir string, force bool) error {
 				return err
 			}
 		} else {
+			// config.yaml is NEVER overwritten
+			if entry.Name() == "config.yaml" && destDir != "." {
+				if _, err := os.Stat(destPath); err == nil {
+					fmt.Printf("Skipped %s (config never overwritten)\n", destPath)
+					continue
+				}
+			}
+
 			if force {
 				if err := writeTemplateFile(srcPath, destPath); err != nil {
 					return err
