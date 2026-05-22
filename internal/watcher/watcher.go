@@ -75,8 +75,6 @@ func (w *Watcher) checkIssues() {
 		return
 	}
 
-	log.Printf("[watcher] found %d actionable issue(s)", len(issues))
-
 	for _, issue := range issues {
 		w.mu.RLock()
 		tracked := w.tracked[issue.Number]

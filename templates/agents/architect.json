@@ -1,5 +1,0 @@
-{
-  "name": "architect",
-  "tools": ["read", "write", "shell"],
-  "model": "claude-sonnet-4"
-}

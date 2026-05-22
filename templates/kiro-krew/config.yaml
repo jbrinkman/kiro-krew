@@ -1,9 +1,0 @@
-github:
-  token: ${GITHUB_TOKEN}
-  owner: ${GITHUB_OWNER}
-  repo: ${GITHUB_REPO}
-
-agents:
-  builder: "agents/builder.json"
-  validator: "agents/validator.json"
-  documenter: "agents/documenter.json"

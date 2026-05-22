@@ -16,12 +16,21 @@ import (
 var templates embed.FS
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "init" {
-		if err := initProject(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "init":
+			if err := extractTemplates("templates", ".", false); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		case "update":
+			if err := extractTemplates("templates", ".", true); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
 		}
-		return
 	}
 
 	cfg, err := config.Load()
@@ -40,11 +49,7 @@ func main() {
 	r.Run()
 }
 
-func initProject() error {
-	return extractTemplates("templates", ".")
-}
-
-func extractTemplates(srcDir, destDir string) error {
+func extractTemplates(srcDir, destDir string, force bool) error {
 	entries, err := templates.ReadDir(srcDir)
 	if err != nil {
 		return fmt.Errorf("failed to read template directory %s: %w", srcDir, err)
@@ -52,63 +57,72 @@ func extractTemplates(srcDir, destDir string) error {
 
 	for _, entry := range entries {
 		srcPath := filepath.Join(srcDir, entry.Name())
-		
+
 		// Map template directory names to actual directory names
 		destName := entry.Name()
 		if entry.Name() == "kiro" {
 			destName = ".kiro"
 		} else if entry.Name() == "config.yaml" {
-			// Special handling for config.yaml - it goes in .kiro-krew/
+			// config.yaml always goes in .kiro-krew/ and is NEVER overwritten
 			destPath := filepath.Join(".kiro-krew", "config.yaml")
 			if _, err := os.Stat(destPath); os.IsNotExist(err) {
 				content, err := templates.ReadFile(srcPath)
 				if err != nil {
 					return fmt.Errorf("failed to read template file %s: %w", srcPath, err)
 				}
-				
+
 				if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
 					return fmt.Errorf("failed to create directory for %s: %w", destPath, err)
 				}
-				
+
 				if err := os.WriteFile(destPath, content, 0644); err != nil {
 					return fmt.Errorf("failed to write file %s: %w", destPath, err)
 				}
 				fmt.Printf("Created %s\n", destPath)
 			} else {
-				fmt.Printf("File %s already exists\n", destPath)
+				fmt.Printf("Skipped %s (already exists)\n", destPath)
 			}
 			continue
 		}
-		
+
 		destPath := filepath.Join(destDir, destName)
 
 		if entry.IsDir() {
 			if err := os.MkdirAll(destPath, 0755); err != nil {
 				return fmt.Errorf("failed to create directory %s: %w", destPath, err)
 			}
-			if err := extractTemplates(srcPath, destPath); err != nil {
+			if err := extractTemplates(srcPath, destPath, force); err != nil {
 				return err
 			}
 		} else {
-			if _, err := os.Stat(destPath); os.IsNotExist(err) {
-				content, err := templates.ReadFile(srcPath)
-				if err != nil {
-					return fmt.Errorf("failed to read template file %s: %w", srcPath, err)
+			if force {
+				if err := writeTemplateFile(srcPath, destPath); err != nil {
+					return err
 				}
-				
-				if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
-					return fmt.Errorf("failed to create directory for %s: %w", destPath, err)
-				}
-				
-				if err := os.WriteFile(destPath, content, 0644); err != nil {
-					return fmt.Errorf("failed to write file %s: %w", destPath, err)
+				fmt.Printf("Updated %s\n", destPath)
+			} else if _, err := os.Stat(destPath); os.IsNotExist(err) {
+				if err := writeTemplateFile(srcPath, destPath); err != nil {
+					return err
 				}
 				fmt.Printf("Created %s\n", destPath)
 			} else {
-				fmt.Printf("File %s already exists\n", destPath)
+				fmt.Printf("Skipped %s (already exists)\n", destPath)
 			}
 		}
 	}
 
 	return nil
+}
+
+func writeTemplateFile(srcPath, destPath string) error {
+	content, err := templates.ReadFile(srcPath)
+	if err != nil {
+		return fmt.Errorf("failed to read template file %s: %w", srcPath, err)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+		return fmt.Errorf("failed to create directory for %s: %w", destPath, err)
+	}
+
+	return os.WriteFile(destPath, content, 0644)
 }
