@@ -9,24 +9,29 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-var watcherRunning bool
+type runningWatcher interface {
+	Running() bool
+}
+
+func watcherIsRunning(w any) bool {
+	rw, ok := w.(runningWatcher)
+	return ok && rw.Running()
+}
 
 func (m model) handleWatch(action string) (model, tea.Cmd) {
 	switch action {
 	case "start":
-		if watcherRunning {
+		if watcherIsRunning(any(m.watcher)) {
 			m.activityLines = append(m.activityLines, "Watcher already running")
 			return m, nil
 		}
 		m.watcher.Start()
-		watcherRunning = true
 	case "stop":
-		if !watcherRunning {
+		if !watcherIsRunning(any(m.watcher)) {
 			m.activityLines = append(m.activityLines, "Watcher not running")
 			return m, nil
 		}
 		m.watcher.Stop()
-		watcherRunning = false
 	default:
 		m.activityLines = append(m.activityLines, "Usage: watch start|stop")
 	}
