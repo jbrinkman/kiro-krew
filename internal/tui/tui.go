@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/jbrinkman/kiro-krew/internal/agent"
+	"github.com/jbrinkman/kiro-krew/internal/config"
 	"github.com/jbrinkman/kiro-krew/internal/watcher"
 )
 
@@ -26,30 +27,32 @@ type logMsg string
 type tickMsg struct{}
 
 type model struct {
-	watcher        *watcher.Watcher
-	manager        *agent.Manager
-	input          textinput.Model
-	activityLines  []string
-	width          int
-	height         int
-	confirmingExit bool
-	logFile        *os.File
-	logReader      *os.File
-	lastLogPos     int64
-	quitting       bool
+	watcher          *watcher.Watcher
+	manager          *agent.Manager
+	input            textinput.Model
+	activityLines    []string
+	maxActivityLines int
+	width            int
+	height           int
+	confirmingExit   bool
+	logFile          *os.File
+	logReader        *os.File
+	lastLogPos       int64
+	quitting         bool
 }
 
-func newModel(w *watcher.Watcher, m *agent.Manager, logFile *os.File, logReader *os.File) model {
+func newModel(w *watcher.Watcher, m *agent.Manager, logFile *os.File, logReader *os.File, maxActivityLines int) model {
 	ti := textinput.New()
 	ti.Prompt = "kiro-krew> "
 	ti.Focus()
 
 	return model{
-		watcher:   w,
-		manager:   m,
-		input:     ti,
-		logFile:   logFile,
-		logReader: logReader,
+		watcher:          w,
+		manager:          m,
+		input:            ti,
+		logFile:          logFile,
+		logReader:        logReader,
+		maxActivityLines: maxActivityLines,
 	}
 }
 
@@ -63,6 +66,15 @@ func (m model) tickCmd() tea.Cmd {
 	})
 }
 
+// appendActivity appends lines to activityLines and trims to maxActivityLines if set.
+func (m model) appendActivity(lines ...string) model {
+	m.activityLines = append(m.activityLines, lines...)
+	if m.maxActivityLines > 0 && len(m.activityLines) > m.maxActivityLines {
+		m.activityLines = m.activityLines[len(m.activityLines)-m.maxActivityLines:]
+	}
+	return m
+}
+
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -72,14 +84,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case execDoneMsg:
 		if msg.err != nil {
-			m.activityLines = append(m.activityLines, fmt.Sprintf("Process exited with error: %v", msg.err))
+			m = m.appendActivity(fmt.Sprintf("Process exited with error: %v", msg.err))
 		}
 		return m, nil
 
 	case tickMsg:
 		newLines := m.readNewLogLines()
 		if len(newLines) > 0 {
-			m.activityLines = append(m.activityLines, newLines...)
+			m = m.appendActivity(newLines...)
 		}
 		return m, m.tickCmd()
 
@@ -94,7 +106,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			default:
 				m.confirmingExit = false
-				m.activityLines = append(m.activityLines, "Exit cancelled.")
+				m = m.appendActivity("Exit cancelled.")
 				return m, nil
 			}
 		}
@@ -183,7 +195,7 @@ func (m model) tryExit() (model, tea.Cmd) {
 
 	if running > 0 {
 		m.confirmingExit = true
-		m.activityLines = append(m.activityLines, fmt.Sprintf("There are %d agents still running. Stop all and exit? (y/N)", running))
+		m = m.appendActivity(fmt.Sprintf("There are %d agents still running. Stop all and exit? (y/N)", running))
 		return m, nil
 	}
 
@@ -199,7 +211,7 @@ func (m model) executeCommand(input string) (model, tea.Cmd) {
 	switch cmd {
 	case "watch":
 		if len(parts) < 2 {
-			m.activityLines = append(m.activityLines, "Usage: watch start|stop")
+			m = m.appendActivity("Usage: watch start|stop")
 			return m, nil
 		}
 		return m.handleWatch(parts[1])
@@ -207,7 +219,7 @@ func (m model) executeCommand(input string) (model, tea.Cmd) {
 		return m.handleStatus()
 	case "stop":
 		if len(parts) < 2 {
-			m.activityLines = append(m.activityLines, "Usage: stop <issue-number>")
+			m = m.appendActivity("Usage: stop <issue-number>")
 			return m, nil
 		}
 		return m.handleStop(parts[1])
@@ -216,13 +228,13 @@ func (m model) executeCommand(input string) (model, tea.Cmd) {
 	case "help":
 		return m.handleHelp()
 	default:
-		m.activityLines = append(m.activityLines, fmt.Sprintf("Unknown command: %s", cmd))
+		m = m.appendActivity(fmt.Sprintf("Unknown command: %s", cmd))
 		return m, nil
 	}
 }
 
 // Run starts the TUI, redirecting log output to a file.
-func Run(w *watcher.Watcher, m *agent.Manager) error {
+func Run(w *watcher.Watcher, m *agent.Manager, cfg *config.Config) error {
 	logPath := ".kiro-krew/kiro-krew.log"
 	if err := os.MkdirAll(".kiro-krew", 0755); err != nil {
 		return fmt.Errorf("failed to create log directory: %w", err)
@@ -250,7 +262,7 @@ func Run(w *watcher.Watcher, m *agent.Manager) error {
 	}
 	startPos := info.Size()
 
-	mdl := newModel(w, m, logFile, logReader)
+	mdl := newModel(w, m, logFile, logReader, cfg.MaxActivityLines)
 	mdl.lastLogPos = startPos
 
 	p := tea.NewProgram(mdl, tea.WithAltScreen())

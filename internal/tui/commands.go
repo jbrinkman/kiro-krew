@@ -22,18 +22,18 @@ func (m model) handleWatch(action string) (model, tea.Cmd) {
 	switch action {
 	case "start":
 		if watcherIsRunning(any(m.watcher)) {
-			m.activityLines = append(m.activityLines, "Watcher already running")
+			m = m.appendActivity("Watcher already running")
 			return m, nil
 		}
 		m.watcher.Start()
 	case "stop":
 		if !watcherIsRunning(any(m.watcher)) {
-			m.activityLines = append(m.activityLines, "Watcher not running")
+			m = m.appendActivity("Watcher not running")
 			return m, nil
 		}
 		m.watcher.Stop()
 	default:
-		m.activityLines = append(m.activityLines, "Usage: watch start|stop")
+		m = m.appendActivity("Usage: watch start|stop")
 	}
 	return m, nil
 }
@@ -41,13 +41,13 @@ func (m model) handleWatch(action string) (model, tea.Cmd) {
 func (m model) handleStatus() (model, tea.Cmd) {
 	agents := m.manager.List()
 	if len(agents) == 0 {
-		m.activityLines = append(m.activityLines, "No agents running")
+		m = m.appendActivity("No agents running")
 		return m, nil
 	}
 
 	header := fmt.Sprintf("%-8s %-30s %-10s %s", "Issue", "Title", "Status", "Elapsed")
 	sep := strings.Repeat("─", 70)
-	m.activityLines = append(m.activityLines, header, sep)
+	m = m.appendActivity(header, sep)
 
 	for _, a := range agents {
 		elapsed := time.Since(a.StartTime).Truncate(time.Second)
@@ -56,7 +56,7 @@ func (m model) handleStatus() (model, tea.Cmd) {
 			truncate(a.IssueTitle, 30),
 			string(a.Status),
 			elapsed)
-		m.activityLines = append(m.activityLines, line)
+		m = m.appendActivity(line)
 	}
 	return m, nil
 }
@@ -64,7 +64,7 @@ func (m model) handleStatus() (model, tea.Cmd) {
 func (m model) handleStop(issueStr string) (model, tea.Cmd) {
 	issueNum, err := strconv.Atoi(issueStr)
 	if err != nil {
-		m.activityLines = append(m.activityLines, fmt.Sprintf("Invalid issue number: %s", issueStr))
+		m = m.appendActivity(fmt.Sprintf("Invalid issue number: %s", issueStr))
 		return m, nil
 	}
 
@@ -72,14 +72,14 @@ func (m model) handleStop(issueStr string) (model, tea.Cmd) {
 	for _, a := range agents {
 		if a.IssueNumber == issueNum {
 			if err := m.manager.Stop(a.ID); err != nil {
-				m.activityLines = append(m.activityLines, fmt.Sprintf("Error stopping agent: %v", err))
+				m = m.appendActivity(fmt.Sprintf("Error stopping agent: %v", err))
 			} else {
-				m.activityLines = append(m.activityLines, fmt.Sprintf("Stopped agent for issue %d", issueNum))
+				m = m.appendActivity(fmt.Sprintf("Stopped agent for issue %d", issueNum))
 			}
 			return m, nil
 		}
 	}
-	m.activityLines = append(m.activityLines, fmt.Sprintf("No agent running for issue %d", issueNum))
+	m = m.appendActivity(fmt.Sprintf("No agent running for issue %d", issueNum))
 	return m, nil
 }
 
@@ -93,7 +93,7 @@ func (m model) handleHelp() (model, tea.Cmd) {
 		"  exit           - Exit (Ctrl+C also works)",
 		"  help           - Show this help message",
 	}
-	m.activityLines = append(m.activityLines, help...)
+	m = m.appendActivity(help...)
 	return m, nil
 }
 

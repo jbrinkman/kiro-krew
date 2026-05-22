@@ -9,17 +9,19 @@ import (
 )
 
 type Config struct {
-	Repo         string        `yaml:"repo"`
-	Label        string        `yaml:"label"`
-	PollInterval time.Duration `yaml:"poll_interval"`
-	MaxRetries   int           `yaml:"max_retries"`
+	Repo             string        `yaml:"repo"`
+	Label            string        `yaml:"label"`
+	PollInterval     time.Duration `yaml:"poll_interval"`
+	MaxRetries       int           `yaml:"max_retries"`
+	MaxActivityLines int           `yaml:"max_activity_lines"`
 }
 
 func Load() (*Config, error) {
 	cfg := &Config{
-		Label:        "kiro-krew",
-		PollInterval: 5 * time.Minute,
-		MaxRetries:   3,
+		Label:            "kiro-krew",
+		PollInterval:     5 * time.Minute,
+		MaxRetries:       3,
+		MaxActivityLines: 1000,
 	}
 
 	data, err := os.ReadFile(".kiro-krew/config.yaml")
