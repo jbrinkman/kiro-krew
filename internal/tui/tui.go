@@ -85,8 +85,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		if m.confirmingExit {
-			switch msg.String() {
-			case "y", "Y":
+			input := strings.ToLower(strings.TrimSpace(msg.String()))
+			switch input {
+			case "y", "yes":
 				m.manager.StopAll()
 				m.watcher.Stop()
 				m.quitting = true
