@@ -1,0 +1,19 @@
+agent: builder
+criteria:
+  - name: code_correctness
+    description: "Generated code compiles/runs without errors"
+    scoring: 1-5
+    deterministic: true
+  - name: spec_adherence
+    description: "Implementation matches the architect's specification"
+    scoring: 1-5
+  - name: code_quality
+    description: "Code follows project conventions, is readable, and well-structured"
+    scoring: 1-5
+  - name: test_coverage
+    description: "Appropriate tests are included for new functionality"
+    scoring: 1-5
+    deterministic: true
+  - name: cost_efficiency
+    description: "Token usage relative to output quality"
+    type: cost

@@ -1,0 +1,18 @@
+agent: validator
+criteria:
+  - name: issue_coverage
+    description: "All acceptance criteria from the issue are verified"
+    scoring: 1-5
+  - name: test_execution
+    description: "Validation commands are actually run and results reported"
+    scoring: 1-5
+    deterministic: true
+  - name: defect_detection
+    description: "Identifies real issues without false positives"
+    scoring: 1-5
+  - name: actionable_feedback
+    description: "Feedback is specific and actionable for the builder"
+    scoring: 1-5
+  - name: cost_efficiency
+    description: "Token usage relative to output quality"
+    type: cost

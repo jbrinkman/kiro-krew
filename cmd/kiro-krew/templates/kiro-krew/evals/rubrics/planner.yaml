@@ -1,0 +1,18 @@
+agent: planner
+criteria:
+  - name: requirement_clarity
+    description: "Issue requirements are clear, specific, and unambiguous"
+    scoring: 1-5
+  - name: scope_appropriateness
+    description: "Issue scope is achievable in a single PR without being too broad"
+    scoring: 1-5
+  - name: acceptance_criteria_quality
+    description: "Acceptance criteria are testable and complete"
+    scoring: 1-5
+    deterministic: true
+  - name: constraint_identification
+    description: "Technical constraints and dependencies are identified"
+    scoring: 1-5
+  - name: cost_efficiency
+    description: "Token usage relative to output quality"
+    type: cost

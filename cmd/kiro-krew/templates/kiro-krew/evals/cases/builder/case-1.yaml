@@ -1,0 +1,13 @@
+name: implement-from-spec
+description: "Evaluate builder output for implementing a spec"
+input: |
+  ## Specification
+  Add a `status` command to the TUI that displays active agents.
+
+  ## Tasks
+  1. Add StatusCmd to internal/tui/commands.go
+  2. Format output as table: Issue | Agent | Elapsed
+
+  ## Files to modify
+  - internal/tui/commands.go
+  - internal/tui/tui.go
