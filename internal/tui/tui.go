@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/jbrinkman/kiro-krew/internal/agent"
 	"github.com/jbrinkman/kiro-krew/internal/config"
@@ -103,7 +103,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.tickCmd()
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		if m.labelPrompt {
 			input := strings.ToLower(strings.TrimSpace(msg.String()))
 			switch input {
@@ -137,10 +137,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		switch msg.Type {
-		case tea.KeyCtrlC:
+		switch msg.String() {
+		case "ctrl+c":
 			return m.tryExit()
-		case tea.KeyEnter:
+		case "enter":
 			input := strings.TrimSpace(m.input.Value())
 			m.input.SetValue("")
 			if input == "" {
@@ -155,9 +155,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m model) View() string {
+func (m model) View() tea.View {
 	if m.quitting {
-		return "Goodbye!\n"
+		return tea.NewView("Goodbye!\n")
 	}
 
 	// Reserve 2 lines for prompt area (separator + input)
@@ -182,7 +182,9 @@ func (m model) View() string {
 	separator := promptStyle.Render(strings.Repeat("─", m.width))
 	prompt := m.input.View()
 
-	return activityStyle.Render(activity) + "\n" + separator + "\n" + prompt
+	v := tea.NewView(activityStyle.Render(activity) + "\n" + separator + "\n" + prompt)
+	v.AltScreen = true
+	return v
 }
 
 func (m model) readNewLogLines() []string {
@@ -297,7 +299,7 @@ func Run(w *watcher.Watcher, m *agent.Manager, cfg *config.Config) error {
 	mdl := newModel(w, m, cfg, logFile, logReader)
 	mdl.lastLogPos = startPos
 
-	p := tea.NewProgram(mdl, tea.WithAltScreen())
+	p := tea.NewProgram(mdl)
 	_, err = p.Run()
 	return err
 }
