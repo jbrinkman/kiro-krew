@@ -1,0 +1,19 @@
+agent: documenter
+criteria:
+  - name: documentation_completeness
+    description: "All required sections present: Overview, What Was Built, Technical Implementation, Usage"
+    scoring: 1-5
+    deterministic: true
+  - name: accuracy
+    description: "Documentation reflects what was actually built, not just what was planned"
+    scoring: 1-5
+  - name: file_naming_convention
+    description: "Output file follows the required format: app_docs/feature-<descriptive-name>.md"
+    scoring: 1-5
+    deterministic: true
+  - name: practical_usage_guidance
+    description: "Usage section includes concrete examples (commands, API calls, or code snippets)"
+    scoring: 1-5
+  - name: cost_efficiency
+    description: "Token usage relative to output quality"
+    type: cost

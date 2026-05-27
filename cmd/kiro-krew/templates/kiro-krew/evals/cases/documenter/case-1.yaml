@@ -1,0 +1,17 @@
+name: document-new-feature
+description: "Evaluate documenter output for a newly built feature"
+input: |
+  ## Instructions from Team Lead
+  The builder has implemented the `status` command feature. Please document it.
+
+  ## Plan File (.kiro-krew/specs/issue-42.md)
+  Add a `status` command that shows currently active agents with issue number, agent name, and elapsed time.
+
+  ## Implementation Files
+  - internal/tui/commands.go: Added StatusCmd function
+  - internal/tui/tui.go: Registered status command in the TUI router
+
+  ## Acceptance Criteria Met
+  - `status` command exists and is callable
+  - Output shows issue number, agent name, elapsed time
+  - Handles empty state gracefully
