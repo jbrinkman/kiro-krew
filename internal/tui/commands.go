@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 type runningWatcher interface {
@@ -138,4 +138,3 @@ func (m model) labelLastIssue(issueNums ...int) {
 	exec.Command("gh", "issue", "edit", fmt.Sprintf("%d", issueNum),
 		"--repo", m.config.Repo, "--add-label", m.config.Label).Run()
 }
-
