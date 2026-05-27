@@ -1,0 +1,44 @@
+name: simple-feature-issue
+description: "Evaluate architect output for a simple feature request"
+input: |
+  ## Problem Statement
+  Users cannot see which issues are currently being processed.
+
+  ## Acceptance Criteria
+  - [ ] Add a `status` command that shows active agents
+  - [ ] Display issue number, agent name, and elapsed time
+  - [ ] Handle case where no agents are running
+output: |
+  # Design Specification: Status Command
+
+  Closes #42
+
+  ## Solution Approach
+
+  Add a `status` command to the TUI that queries the agent manager for running agents and displays them in a formatted table. When no agents are running, display a friendly message.
+
+  ## Relevant Files
+
+  - `internal/tui/commands.go` — add handleStatus function
+  - `internal/tui/tui.go` — register status in executeCommand switch
+  - `internal/agent/manager.go` — existing List() method provides agent data
+
+  ## Tasks
+
+  ### Task 1: Implement handleStatus in commands.go
+  **Acceptance Criteria:**
+  - Function calls manager.List() and formats output as a table
+  - Table columns: Issue (number), Title (truncated to 30 chars), Status, Elapsed
+  - Returns "No agents running" when list is empty
+
+  ### Task 2: Register status command in TUI
+  **Acceptance Criteria:**
+  - `status` is recognized in the executeCommand switch
+  - Dispatches to handleStatus
+
+  ## Validation Commands
+
+  ```bash
+  go build ./cmd/kiro-krew
+  go test ./internal/tui/...
+  ```

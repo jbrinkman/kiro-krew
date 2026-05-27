@@ -1,0 +1,19 @@
+agent: architect
+criteria:
+  - name: task_decomposition
+    description: "Spec breaks work into discrete, independently implementable tasks"
+    scoring: 1-5
+  - name: acceptance_criteria_testability
+    description: "Each task has acceptance criteria verifiable with a command or assertion"
+    scoring: 1-5
+  - name: file_reference_accuracy
+    description: "Referenced files exist and are relevant to the solution"
+    scoring: 1-5
+    deterministic: true
+  - name: completeness
+    description: "All required sections present: solution approach, files, tasks, validation commands"
+    scoring: 1-5
+    deterministic: true
+  - name: cost_efficiency
+    description: "Token usage relative to output quality"
+    type: cost

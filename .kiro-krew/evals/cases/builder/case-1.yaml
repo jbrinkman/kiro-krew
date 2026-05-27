@@ -1,0 +1,47 @@
+name: implement-from-spec
+description: "Evaluate builder output for implementing a spec"
+input: |
+  ## Specification
+  Add a `status` command to the TUI that displays active agents.
+
+  ## Tasks
+  1. Add StatusCmd to internal/tui/commands.go
+  2. Format output as table: Issue | Agent | Elapsed
+
+  ## Files to modify
+  - internal/tui/commands.go
+  - internal/tui/tui.go
+output: |
+  I've implemented the status command. Here's what I did:
+
+  **Modified `internal/tui/commands.go`:**
+  ```go
+  func (m model) handleStatus() (model, tea.Cmd) {
+      agents := m.manager.List()
+      if len(agents) == 0 {
+          m = m.appendActivity("No agents running")
+          return m, nil
+      }
+
+      header := fmt.Sprintf("%-8s %-30s %-10s %s", "Issue", "Title", "Status", "Elapsed")
+      sep := strings.Repeat("─", 70)
+      m = m.appendActivity(header, sep)
+
+      for _, a := range agents {
+          elapsed := time.Since(a.StartTime).Truncate(time.Second)
+          line := fmt.Sprintf("%-8d %-30s %-10s %s",
+              a.IssueNumber,
+              truncate(a.IssueTitle, 30),
+              string(a.Status),
+              elapsed)
+          m = m.appendActivity(line)
+      }
+      return m, nil
+  }
+  ```
+
+  **Modified `internal/tui/tui.go`:**
+  Added `"status"` case to the `executeCommand` switch that calls `m.handleStatus()`.
+
+  Build passes: `go build ./cmd/kiro-krew` ✓
+  Tests pass: `go test ./internal/tui/...` ✓
