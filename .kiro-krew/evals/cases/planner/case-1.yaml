@@ -1,0 +1,5 @@
+name: plan-feature-request
+description: "Evaluate planner output for structuring a feature request"
+input: |
+  Add user authentication with JWT tokens to the API.
+  Users should be able to login and access protected endpoints.

@@ -8,6 +8,7 @@ import (
 
 	"github.com/jbrinkman/kiro-krew/internal/agent"
 	"github.com/jbrinkman/kiro-krew/internal/config"
+	"github.com/jbrinkman/kiro-krew/internal/eval"
 	"github.com/jbrinkman/kiro-krew/internal/tui"
 	"github.com/jbrinkman/kiro-krew/internal/watcher"
 )
@@ -26,6 +27,12 @@ func main() {
 			return
 		case "update":
 			if err := extractTemplates("templates", ".", true); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		case "eval":
+			if err := runEval(); err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
 			}
@@ -117,4 +124,21 @@ func writeTemplateFile(srcPath, destPath string) error {
 	}
 
 	return os.WriteFile(destPath, content, 0644)
+}
+
+func runEval() error {
+	// kiro-krew eval diff <run-a> <run-b>
+	if len(os.Args) > 2 && os.Args[2] == "diff" {
+		if len(os.Args) < 5 {
+			return fmt.Errorf("usage: kiro-krew eval diff <run-a> <run-b>")
+		}
+		return eval.Diff(os.Args[3], os.Args[4])
+	}
+
+	// kiro-krew eval [agent]
+	var agent string
+	if len(os.Args) > 2 {
+		agent = os.Args[2]
+	}
+	return eval.Run(agent)
 }

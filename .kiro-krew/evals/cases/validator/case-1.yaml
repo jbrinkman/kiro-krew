@@ -1,0 +1,13 @@
+name: validate-feature
+description: "Evaluate validator output for checking a feature implementation"
+input: |
+  ## Issue
+  Add a status command showing active agents.
+
+  ## Acceptance Criteria
+  - [ ] `status` command exists and is callable
+  - [ ] Output shows issue number, agent name, elapsed time
+  - [ ] Handles empty state gracefully
+
+  ## Implementation
+  Files changed: internal/tui/commands.go, internal/tui/tui.go

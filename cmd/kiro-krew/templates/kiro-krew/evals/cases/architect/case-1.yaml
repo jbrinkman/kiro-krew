@@ -1,0 +1,10 @@
+name: simple-feature-issue
+description: "Evaluate architect output for a simple feature request"
+input: |
+  ## Problem Statement
+  Users cannot see which issues are currently being processed.
+
+  ## Acceptance Criteria
+  - [ ] Add a `status` command that shows active agents
+  - [ ] Display issue number, agent name, and elapsed time
+  - [ ] Handle case where no agents are running
