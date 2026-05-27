@@ -140,18 +140,32 @@ func scoreDeterministic(criterion Criterion, tc TestCase) (int, string) {
 		return score, fmt.Sprintf("found %d/%d expected structural elements", found, len(sections))
 
 	case strings.Contains(criterion.Name, "file_reference"):
-		// Check if referenced files look like real paths
+		// Extract candidate file paths and verify they exist
 		lines := strings.Split(tc.Output, "\n")
-		refs := 0
+		var candidates []string
 		for _, l := range lines {
-			if strings.Contains(l, "/") && (strings.Contains(l, ".go") || strings.Contains(l, ".ts") || strings.Contains(l, ".yaml")) {
-				refs++
+			for _, word := range strings.Fields(l) {
+				// Strip markdown formatting
+				word = strings.Trim(word, "`*_-•")
+				if strings.Contains(word, "/") && (strings.HasSuffix(word, ".go") || strings.HasSuffix(word, ".ts") || strings.HasSuffix(word, ".yaml") || strings.HasSuffix(word, ".md") || strings.HasSuffix(word, ".json") || strings.HasSuffix(word, ".sh")) {
+					candidates = append(candidates, word)
+				}
 			}
 		}
-		if refs > 0 {
-			return maxScore, fmt.Sprintf("found %d file references", refs)
+		if len(candidates) == 0 {
+			return 1, "no file references found"
 		}
-		return 1, "no file references found"
+		verified := 0
+		for _, path := range candidates {
+			if _, err := os.Stat(path); err == nil {
+				verified++
+			}
+		}
+		score := (verified * maxScore) / len(candidates)
+		if score < 1 {
+			score = 1
+		}
+		return score, fmt.Sprintf("%d/%d referenced files verified on disk", verified, len(candidates))
 
 	default:
 		// Generic: check output is non-empty and has reasonable length
