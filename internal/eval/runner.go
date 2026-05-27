@@ -92,7 +92,7 @@ func evaluate(rubric Rubric, cases []TestCase, gitHash string) AgentResult {
 			}
 
 			if criterion.Deterministic {
-				score.Score, score.Reasoning = scoreDeterministic(criterion, tc)
+				score.Score, score.Reasoning, score.Skipped = scoreDeterministic(criterion, tc)
 			} else {
 				// LLM-judged criteria
 				if tc.Output == "" {
@@ -118,9 +118,9 @@ func evaluate(rubric Rubric, cases []TestCase, gitHash string) AgentResult {
 	return result
 }
 
-func scoreDeterministic(criterion Criterion, tc TestCase) (int, string) {
+func scoreDeterministic(criterion Criterion, tc TestCase) (int, string, bool) {
 	if tc.Output == "" {
-		return 0, "no output to evaluate"
+		return 0, "no output to evaluate", true
 	}
 
 	maxScore := parseMaxScore(criterion.Scoring)
@@ -137,23 +137,22 @@ func scoreDeterministic(criterion Criterion, tc TestCase) (int, string) {
 			}
 		}
 		score := (found * maxScore) / len(sections)
-		return score, fmt.Sprintf("found %d/%d expected structural elements", found, len(sections))
+		return score, fmt.Sprintf("found %d/%d expected structural elements", found, len(sections)), false
 
 	case strings.Contains(criterion.Name, "file_reference"):
 		// Extract candidate file paths and verify they exist
 		lines := strings.Split(tc.Output, "\n")
 		var candidates []string
-		for _, l := range lines {
-			for _, word := range strings.Fields(l) {
-				// Strip markdown formatting
-				word = strings.Trim(word, "`*_-•")
-				if strings.Contains(word, "/") && (strings.HasSuffix(word, ".go") || strings.HasSuffix(word, ".ts") || strings.HasSuffix(word, ".yaml") || strings.HasSuffix(word, ".md") || strings.HasSuffix(word, ".json") || strings.HasSuffix(word, ".sh")) {
-					candidates = append(candidates, word)
+		for _, word := range lines {
+			for _, w := range strings.Fields(word) {
+				w = strings.Trim(w, "`*_-•")
+				if strings.Contains(w, "/") && (strings.HasSuffix(w, ".go") || strings.HasSuffix(w, ".ts") || strings.HasSuffix(w, ".yaml") || strings.HasSuffix(w, ".md") || strings.HasSuffix(w, ".json") || strings.HasSuffix(w, ".sh")) {
+					candidates = append(candidates, w)
 				}
 			}
 		}
 		if len(candidates) == 0 {
-			return 1, "no file references found"
+			return 1, "no file references found", false
 		}
 		verified := 0
 		for _, path := range candidates {
@@ -165,14 +164,18 @@ func scoreDeterministic(criterion Criterion, tc TestCase) (int, string) {
 		if score < 1 {
 			score = 1
 		}
-		return score, fmt.Sprintf("%d/%d referenced files verified on disk", verified, len(candidates))
+		return score, fmt.Sprintf("%d/%d referenced files verified on disk", verified, len(candidates)), false
+
+	case strings.Contains(criterion.Name, "file_naming"):
+		// Check documenter output references correct path format
+		if strings.Contains(tc.Output, "app_docs/feature-") {
+			return maxScore, "output references correct app_docs/feature-* path", false
+		}
+		return 1, "no app_docs/feature-* path found in output", false
 
 	default:
-		// Generic: check output is non-empty and has reasonable length
-		if len(tc.Output) > 100 {
-			return maxScore, "output meets minimum length"
-		}
-		return maxScore / 2, "output is short"
+		// Unknown deterministic criterion — skip rather than award false credit
+		return 0, fmt.Sprintf("no deterministic checker implemented for %q", criterion.Name), true
 	}
 }
 
