@@ -25,24 +25,57 @@ func Diff(runA, runB string) error {
 	fmt.Printf("Eval Diff: %s → %s\n", runA, runB)
 	fmt.Println(strings.Repeat("─", 60))
 
-	// Per-agent score deltas
-	fmt.Println("\nScore Deltas (normalized 0-1):")
+	// Per-agent, per-criterion deltas
 	allAgents := mergeKeys(summaryA.AgentScores, summaryB.AgentScores)
 	for _, agent := range allAgents {
+		resultA, errA := loadAgentResult(filepath.Join(resultsDir, runA, agent+".json"))
+		resultB, errB := loadAgentResult(filepath.Join(resultsDir, runB, agent+".json"))
+
 		scoreA := summaryA.AgentScores[agent]
 		scoreB := summaryB.AgentScores[agent]
 		delta := scoreB - scoreA
 		indicator := "→"
-		if delta > 0 {
+		if delta > 0.001 {
 			indicator = "↑"
-		} else if delta < 0 {
+		} else if delta < -0.001 {
 			indicator = "↓"
 		}
-		fmt.Printf("  %-12s  %.3f → %.3f  %s %+.3f\n", agent, scoreA, scoreB, indicator, delta)
+		fmt.Printf("\n%s: %.3f → %.3f  %s %+.3f\n", agent, scoreA, scoreB, indicator, delta)
+
+		if errA != nil || errB != nil {
+			continue
+		}
+
+		// Build criterion averages for each run
+		avgA := criterionAverages(resultA)
+		avgB := criterionAverages(resultB)
+		allCriteria := mergeKeys(avgA, avgB)
+
+		for _, crit := range allCriteria {
+			cA, hasA := avgA[crit]
+			cB, hasB := avgB[crit]
+			if !hasA && !hasB {
+				continue
+			}
+			cDelta := cB - cA
+			cInd := "→"
+			if cDelta > 0.001 {
+				cInd = "↑"
+			} else if cDelta < -0.001 {
+				cInd = "↓"
+			}
+			if !hasA {
+				fmt.Printf("  %-30s  [new]  %.3f\n", crit, cB)
+			} else if !hasB {
+				fmt.Printf("  %-30s  %.3f  [removed]\n", crit, cA)
+			} else {
+				fmt.Printf("  %-30s  %.3f → %.3f  %s %+.3f\n", crit, cA, cB, cInd, cDelta)
+			}
+		}
 	}
 
 	// Cost delta
-	fmt.Println("\nCost Delta:")
+	fmt.Printf("\nCost Delta:\n")
 	costDelta := summaryB.TotalCost.EstimatedUSD - summaryA.TotalCost.EstimatedUSD
 	tokenDelta := (summaryB.TotalCost.TokensIn + summaryB.TotalCost.TokensOut) -
 		(summaryA.TotalCost.TokensIn + summaryA.TotalCost.TokensOut)
@@ -50,7 +83,7 @@ func Diff(runA, runB string) error {
 	fmt.Printf("  Cost:   %+.6f USD\n", costDelta)
 
 	// Quality per dollar
-	fmt.Println("\nQuality per Dollar:")
+	fmt.Printf("\nQuality per Dollar:\n")
 	avgA := avgScore(summaryA.AgentScores)
 	avgB := avgScore(summaryB.AgentScores)
 	if summaryA.TotalCost.EstimatedUSD > 0 {
@@ -71,6 +104,37 @@ func loadSummary(path string) (Summary, error) {
 	}
 	err = json.Unmarshal(data, &s)
 	return s, err
+}
+
+func loadAgentResult(path string) (AgentResult, error) {
+	var r AgentResult
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return r, err
+	}
+	err = json.Unmarshal(data, &r)
+	return r, err
+}
+
+func criterionAverages(result AgentResult) map[string]float64 {
+	totals := make(map[string]float64)
+	counts := make(map[string]int)
+	for _, c := range result.Cases {
+		for _, sc := range c.Scores {
+			if sc.Skipped || sc.MaxScore == 0 {
+				continue
+			}
+			totals[sc.Name] += float64(sc.Score) / float64(sc.MaxScore)
+			counts[sc.Name]++
+		}
+	}
+	avgs := make(map[string]float64)
+	for name, total := range totals {
+		if counts[name] > 0 {
+			avgs[name] = total / float64(counts[name])
+		}
+	}
+	return avgs
 }
 
 func mergeKeys(a, b map[string]float64) []string {
