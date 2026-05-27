@@ -1,0 +1,6 @@
+name: orchestrate-issue-resolution
+description: "Evaluate krew-lead output for processing a GitHub issue end-to-end"
+input: |
+  Process issue #42 from owner/my-repo. Worktree name: issue-42-12345
+
+  The issue requests adding a `status` command to display active agents.

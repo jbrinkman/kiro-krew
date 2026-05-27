@@ -9,18 +9,26 @@ The evaluation framework measures agent quality and cost, enabling data-driven p
   rubrics/           # Scoring criteria per agent
     architect.yaml
     builder.yaml
-    validator.yaml
+    documenter.yaml
+    krew-lead.yaml
     planner.yaml
+    validator.yaml
   cases/             # Test cases per agent
     architect/
       case-1.yaml
     builder/
+      case-1.yaml
+    documenter/
+      case-1.yaml
+    krew-lead/
       case-1.yaml
     ...
   results/           # Results tagged by git hash
     <git-short-hash>/
       architect.json
       builder.json
+      documenter.json
+      krew-lead.json
       summary.json
 ```
 
@@ -94,6 +102,19 @@ kiro-krew eval diff abc1234 def5678
 - **Cost criteria** — tracked automatically from token usage
 
 Results are written to `.kiro-krew/evals/results/<git-hash>/` enabling before/after comparison when prompts change.
+
+## Agent Coverage
+
+All six shipped agents have rubrics and test cases:
+
+| Agent | Rubric | Key Criteria |
+|-------|--------|--------------|
+| `architect` | `rubrics/architect.yaml` | task_decomposition, acceptance_criteria_testability, file_reference_accuracy, completeness |
+| `builder` | `rubrics/builder.yaml` | code_correctness, spec_adherence, code_quality, test_coverage |
+| `documenter` | `rubrics/documenter.yaml` | documentation_completeness, accuracy, file_naming_convention, practical_usage_guidance |
+| `krew-lead` | `rubrics/krew-lead.yaml` | workflow_adherence, delegation_quality, retry_policy_compliance, error_handling |
+| `planner` | `rubrics/planner.yaml` | requirement_clarity, scope_appropriateness, acceptance_criteria_quality, constraint_identification |
+| `validator` | `rubrics/validator.yaml` | issue_coverage, test_execution, defect_detection, actionable_feedback |
 
 ## Comparing Runs
 
