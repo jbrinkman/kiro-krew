@@ -98,8 +98,25 @@ kiro-krew eval diff abc1234 def5678
 ## How Scoring Works
 
 - **Deterministic criteria** — scored by code checks (file existence, structural completeness)
-- **LLM-judged criteria** — scored by an LLM evaluator using the rubric description (requires output)
+- **LLM-judged criteria** — scored by an LLM evaluator using the rubric description (requires output and a configured judge)
 - **Cost criteria** — tracked automatically from token usage
+
+### Skipped Criteria
+
+Non-deterministic criteria require an LLM judge to score. When no LLM judge is configured, these criteria are marked as `skipped` in the results and excluded from aggregate score calculations. This prevents false signal — scores only reflect what was actually measured.
+
+Skipped criteria appear in results as:
+```json
+{
+  "name": "task_decomposition",
+  "score": 0,
+  "max_score": 5,
+  "skipped": true,
+  "reasoning": "LLM judge not configured — criterion skipped"
+}
+```
+
+To get full scoring coverage, configure an LLM judge (future feature). Until then, aggregate scores reflect only deterministic criteria.
 
 Results are written to `.kiro-krew/evals/results/<git-hash>/` enabling before/after comparison when prompts change.
 

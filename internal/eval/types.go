@@ -37,6 +37,7 @@ type CriterionScore struct {
 	Score         int    `json:"score"`
 	MaxScore      int    `json:"max_score"`
 	Deterministic bool   `json:"deterministic"`
+	Skipped       bool   `json:"skipped,omitempty"`
 	Reasoning     string `json:"reasoning,omitempty"`
 }
 

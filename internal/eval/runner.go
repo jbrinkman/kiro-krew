@@ -94,12 +94,13 @@ func evaluate(rubric Rubric, cases []TestCase, gitHash string) AgentResult {
 			if criterion.Deterministic {
 				score.Score, score.Reasoning = scoreDeterministic(criterion, tc)
 			} else {
-				// LLM-judged criteria get a placeholder score when no output is available
+				// LLM-judged criteria
 				if tc.Output == "" {
 					score.Score = 0
+					score.Skipped = true
 					score.Reasoning = "no output available for LLM judging"
 				} else {
-					score.Score, score.Reasoning = scoreLLMJudge(criterion, tc)
+					score.Score, score.Reasoning, score.Skipped = scoreLLMJudge(criterion, tc)
 				}
 			}
 
@@ -161,11 +162,9 @@ func scoreDeterministic(criterion Criterion, tc TestCase) (int, string) {
 	}
 }
 
-func scoreLLMJudge(criterion Criterion, tc TestCase) (int, string) {
-	// Placeholder: in production this would call an LLM with the rubric criterion and output
-	// For now, return a middle score indicating manual review needed
-	maxScore := parseMaxScore(criterion.Scoring)
-	return maxScore / 2, "LLM judge not yet configured — manual review needed"
+func scoreLLMJudge(criterion Criterion, tc TestCase) (int, string, bool) {
+	// LLM judge not yet configured — skip criterion to avoid false signal
+	return 0, "LLM judge not configured — criterion skipped", true
 }
 
 func estimateCost(input, output string) CostInfo {
@@ -191,6 +190,9 @@ func buildSummary(results []AgentResult, gitHash string) Summary {
 		var totalScore, totalMax float64
 		for _, c := range r.Cases {
 			for _, sc := range c.Scores {
+				if sc.Skipped {
+					continue
+				}
 				totalScore += float64(sc.Score)
 				totalMax += float64(sc.MaxScore)
 			}
