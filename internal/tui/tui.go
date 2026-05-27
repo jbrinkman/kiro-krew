@@ -93,7 +93,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.labelPrompt = true
 			m = m.appendActivity("Label this issue for kiro-krew to process? (y/n)")
 		}
-		return m, nil
+		m.input.Focus()
+		return m, tea.Batch(textinput.Blink, tea.ClearScreen)
 
 	case tickMsg:
 		newLines := m.readNewLogLines()
