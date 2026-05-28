@@ -241,7 +241,10 @@ func (m *Manager) cleanupWorktree(issueNumber, pid int) error {
 // cleanupRetryFile removes the retry count file for the given issue
 func (m *Manager) cleanupRetryFile(issueNumber int) error {
 	retryPath := filepath.Join(".kiro-krew", "retries", fmt.Sprintf("issue-%d.count", issueNumber))
-	if err := os.Remove(retryPath); err != nil && !os.IsNotExist(err) {
+	if err := os.Remove(retryPath); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
 		return fmt.Errorf("failed to remove retry file %s: %w", retryPath, err)
 	}
 	log.Printf("[cleanup] removed retry file: %s", retryPath)
