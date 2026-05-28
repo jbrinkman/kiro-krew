@@ -104,8 +104,12 @@ func (m *modal) writeInput(data string) {
 	}
 }
 
-// close shuts down the PTY and process.
 func (m *modal) close() {
+	// Best-effort shutdown: try SIGINT first, then force-kill.
+	if m.cmd != nil && m.cmd.Process != nil {
+		_ = m.cmd.Process.Signal(os.Interrupt)
+		_ = m.cmd.Process.Kill()
+	}
 	if m.ptmx != nil {
 		_ = m.ptmx.Close()
 	}
