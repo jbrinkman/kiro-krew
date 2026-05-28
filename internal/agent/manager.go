@@ -216,10 +216,25 @@ func (m *Manager) retryAgent(agent *Agent) {
 // cleanupWorktree removes the worktree directory for the given issue and PID
 func (m *Manager) cleanupWorktree(issueNumber, pid int) error {
 	worktreePath := filepath.Join(".worktrees", fmt.Sprintf("issue-%d-%d", issueNumber, pid))
-	if err := os.RemoveAll(worktreePath); err != nil {
-		return fmt.Errorf("failed to remove worktree %s: %w", worktreePath, err)
+
+	removeCmd := exec.Command("git", "worktree", "remove", "--force", worktreePath)
+	if output, err := removeCmd.CombinedOutput(); err == nil {
+		log.Printf("[cleanup] removed git worktree: %s", worktreePath)
+		return nil
+	} else {
+		log.Printf("[cleanup] git worktree remove failed for %s: %v (output: %s)", worktreePath, err, string(output))
 	}
-	log.Printf("[cleanup] removed worktree directory: %s", worktreePath)
+
+	if err := os.RemoveAll(worktreePath); err != nil {
+		return fmt.Errorf("failed to remove worktree %s after git worktree remove failure: %w", worktreePath, err)
+	}
+
+	pruneCmd := exec.Command("git", "worktree", "prune")
+	if output, err := pruneCmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("removed worktree directory %s but failed to prune git worktree metadata: %w (output: %s)", worktreePath, err, string(output))
+	}
+
+	log.Printf("[cleanup] removed worktree directory and pruned git metadata: %s", worktreePath)
 	return nil
 }
 
