@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
@@ -185,6 +186,9 @@ func (m *Manager) HandleExit(id string, exitCode int) {
 				github.AddLabel(m.config.Repo, issueNumber, failedLabel)
 			}
 		}
+		// Perform cleanup after successful completion
+		go m.performCleanup(agent.IssueNumber, os.Getpid())
+
 	} else {
 		m.mu.Lock()
 		defer m.mu.Unlock()
@@ -254,4 +258,69 @@ func (m *Manager) retryAgent(agent *Agent) {
 
 	log.Printf("[agent] retry started for issue #%d (pid %d)", agent.IssueNumber, cmd.Process.Pid)
 	go m.monitorAgent(agent, cmd)
+}
+
+// cleanupWorktree removes the worktree directory for the given issue and PID
+func (m *Manager) cleanupWorktree(issueNumber, pid int) error {
+	worktreePath := filepath.Join(".worktrees", fmt.Sprintf("issue-%d-%d", issueNumber, pid))
+
+	removeCmd := exec.Command("git", "worktree", "remove", "--force", worktreePath)
+	if output, err := removeCmd.CombinedOutput(); err == nil {
+		log.Printf("[cleanup] removed git worktree: %s", worktreePath)
+		return nil
+	} else {
+		log.Printf("[cleanup] git worktree remove failed for %s: %v (output: %s)", worktreePath, err, string(output))
+	}
+
+	if err := os.RemoveAll(worktreePath); err != nil {
+		return fmt.Errorf("failed to remove worktree %s after git worktree remove failure: %w", worktreePath, err)
+	}
+
+	pruneCmd := exec.Command("git", "worktree", "prune")
+	if output, err := pruneCmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("removed worktree directory %s but failed to prune git worktree metadata: %w (output: %s)", worktreePath, err, string(output))
+	}
+
+	log.Printf("[cleanup] removed worktree directory and pruned git metadata: %s", worktreePath)
+	return nil
+}
+
+// cleanupRetryFile removes the retry count file for the given issue
+func (m *Manager) cleanupRetryFile(issueNumber int) error {
+	retryPath := filepath.Join(".kiro-krew", "retries", fmt.Sprintf("issue-%d.count", issueNumber))
+	if err := os.Remove(retryPath); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to remove retry file %s: %w", retryPath, err)
+	}
+	log.Printf("[cleanup] removed retry file: %s", retryPath)
+	return nil
+}
+
+// performCleanup verifies PR creation and cleans up worktree and retry files
+func (m *Manager) performCleanup(issueNumber, pid int) {
+	// Verify PR exists with expected branch name
+	prExists, err := github.VerifyPRExists(m.config.Repo, issueNumber, pid)
+	if err != nil {
+		log.Printf("[cleanup] failed to verify PR for issue #%d: %v", issueNumber, err)
+		return
+	}
+
+	if !prExists {
+		log.Printf("[cleanup] no PR found with expected branch name for issue #%d, skipping cleanup", issueNumber)
+		return
+	}
+
+	log.Printf("[cleanup] PR verified for issue #%d, proceeding with cleanup", issueNumber)
+
+	// Clean up worktree
+	if err := m.cleanupWorktree(issueNumber, pid); err != nil {
+		log.Printf("[cleanup] worktree cleanup failed for issue #%d: %v", issueNumber, err)
+	}
+
+	// Clean up retry file
+	if err := m.cleanupRetryFile(issueNumber); err != nil {
+		log.Printf("[cleanup] retry file cleanup failed for issue #%d: %v", issueNumber, err)
+	}
 }
