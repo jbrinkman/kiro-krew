@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -98,22 +99,33 @@ func (m model) handleHelp() (model, tea.Cmd) {
 	return m, nil
 }
 
-func (m model) handleExec(name string, args ...string) (model, tea.Cmd) {
-	c := tea.ExecProcess(execCommand(name, args...), func(err error) tea.Msg {
-		return execDoneMsg{err: err}
-	})
-	return m, c
-}
-
 func (m model) handlePlan(description string) (model, tea.Cmd) {
-	args := []string{"chat", "--agent", "planner"}
+	args := []string{"chat", "--classic", "--agent", "planner"}
 	if description != "" {
 		args = append(args, description)
 	}
-	mdl, cmd := newModal("kiro-cli", args, m.width, m.height)
-	m.modal = mdl
 	m.input.Blur()
-	return m, cmd
+	// Wrap in shell with clear and centered ASCII art banner
+	banner := `cols=$(tput cols 2>/dev/null || echo 80)
+art1="  _  ___              _  __                   "
+art2=" | |/ (_)_ __ ___    | |/ /_ __ _____      __"
+art3=" | ' /| | '__/ _ \   | ' /| '__/ _ \ \ /\ / /"
+art4=" | . \| | | | (_) |  | . \| | |  __/\ V  V / "
+art5=" |_|\_\_|_|  \___/   |_|\_\_|  \___| \_/\_/  "
+pad() { local w=${#1}; local p=$(( (cols - w) / 2 )); printf "%*s%s\n" "$p" "" "$1"; }
+echo ""
+pad "$art1"
+pad "$art2"
+pad "$art3"
+pad "$art4"
+pad "$art5"
+echo ""`
+	shellArgs := "clear && " + banner + " && kiro-cli " + strings.Join(args, " ")
+	cmd := exec.Command("sh", "-c", shellArgs)
+	c := tea.ExecProcess(cmd, func(err error) tea.Msg {
+		return execDoneMsg{err: err}
+	})
+	return m, c
 }
 
 type execDoneMsg struct {
