@@ -137,6 +137,13 @@ func (m model) View() tea.View {
 		return tea.NewView("Goodbye!\n")
 	}
 
+	// Wait for window size before rendering full layout
+	if m.height == 0 {
+		v := tea.NewView(m.input.View())
+		v.AltScreen = true
+		return v
+	}
+
 	// Reserve 2 lines for prompt area (separator + input)
 	activityHeight := m.height - 2
 	if activityHeight < 1 {
@@ -149,12 +156,17 @@ func (m model) View() tea.View {
 		lines = lines[len(lines)-activityHeight:]
 	}
 
-	// Pad activity pane
-	activity := strings.Join(lines, "\n")
-	lineCount := len(lines)
-	if lineCount < activityHeight {
-		activity += strings.Repeat("\n", activityHeight-lineCount)
+	// Build activity pane padded to exactly activityHeight lines
+	var activityBuilder strings.Builder
+	for i := 0; i < activityHeight; i++ {
+		if i < len(lines) {
+			activityBuilder.WriteString(lines[i])
+		}
+		if i < activityHeight-1 {
+			activityBuilder.WriteByte('\n')
+		}
 	}
+	activity := activityBuilder.String()
 
 	separator := promptStyle.Render(strings.Repeat("─", m.width))
 	prompt := m.input.View()
