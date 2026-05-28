@@ -133,7 +133,7 @@ func (m *Manager) StopAll() {
 // verifyPRExists checks if a PR exists for the given issue number
 func (m *Manager) verifyPRExists(issueNumber int) bool {
 	// Check for PRs with branch pattern spec/issue-<number>-*
-	cmd := exec.Command("gh", "pr", "list", "--search", fmt.Sprintf("head:spec/issue-%d-", issueNumber), "--json", "number")
+	cmd := exec.Command("gh", "pr", "list", "--repo", m.config.Repo, "--search", fmt.Sprintf("head:spec/issue-%d-", issueNumber), "--json", "number")
 	output, err := cmd.Output()
 	if err != nil {
 		log.Printf("[agent] failed to check for PR for issue #%d: %v", issueNumber, err)
