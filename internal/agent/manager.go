@@ -163,7 +163,7 @@ func (m *Manager) HandleExit(id string, exitCode int) {
 		issueNumber := agent.IssueNumber
 		m.mu.Unlock()
 
-		log.Printf("[agent] %s completed with exit code 0 (issue #%d), verifying PR exists", id, agent.IssueNumber)
+		log.Printf("[agent] %s completed with exit code 0 (issue #%d), verifying PR exists", id, issueNumber)
 
 		// Verify PR exists before marking as done
 		if m.verifyPRExists(issueNumber) {
@@ -178,8 +178,8 @@ func (m *Manager) HandleExit(id string, exitCode int) {
 			doneLabel := m.config.Label + "-done"
 			m.mu.Unlock()
 
-			if err := github.AddLabel(m.config.Repo, agent.IssueNumber, doneLabel); err != nil {
-				log.Printf("[agent] failed to add %s label to issue #%d: %v", doneLabel, agent.IssueNumber, err)
+			if err := github.AddLabel(m.config.Repo, issueNumber, doneLabel); err != nil {
+				log.Printf("[agent] failed to add %s label to issue #%d: %v", doneLabel, issueNumber, err)
 			}
 		} else {
 			m.mu.Lock()
@@ -200,7 +200,7 @@ func (m *Manager) HandleExit(id string, exitCode int) {
 				failedLabel := m.config.Label + "-failed"
 				log.Printf("[agent] %s exhausted retries, labeling issue #%d as %s", id, agent.IssueNumber, failedLabel)
 				m.mu.Unlock()
-				github.AddLabel(m.config.Repo, agent.IssueNumber, failedLabel)
+				github.AddLabel(m.config.Repo, issueNumber, failedLabel)
 			}
 		}
 	} else {
