@@ -144,8 +144,6 @@ func (w *Watcher) cleanupOrphanedWorktrees() {
 }
 
 func (w *Watcher) hasActiveWorktree(issueNumber int) bool {
-	w.cleanupOrphanedWorktrees()
-
 	worktreesDir := ".worktrees"
 	entries, err := os.ReadDir(worktreesDir)
 	if err != nil {
@@ -154,7 +152,23 @@ func (w *Watcher) hasActiveWorktree(issueNumber int) bool {
 
 	prefix := fmt.Sprintf("issue-%d-", issueNumber)
 	for _, entry := range entries {
-		if entry.IsDir() && strings.HasPrefix(entry.Name(), prefix) {
+		if !entry.IsDir() || !strings.HasPrefix(entry.Name(), prefix) {
+			continue
+		}
+
+		// Extract PID from worktree name and check if process is running
+		parts := strings.Split(entry.Name(), "-")
+		if len(parts) < 3 {
+			continue
+		}
+
+		pidStr := parts[len(parts)-1]
+		pid, err := strconv.Atoi(pidStr)
+		if err != nil {
+			continue
+		}
+
+		if w.isProcessRunning(pid) {
 			return true
 		}
 	}
@@ -215,4 +229,8 @@ func (w *Watcher) getCurrentRetryCount(issueNumber int) int {
 	}
 
 	return count
+}
+
+func (w *Watcher) Running() bool {
+	return w.started
 }
