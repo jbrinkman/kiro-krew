@@ -104,7 +104,7 @@ func VerifyPRExists(repo string, issueNumber, pid int) (bool, error) {
 }
 
 type Release struct {
-	TagName string `json:"tag_name"`
+	TagName string `json:"tagName"`
 	Name    string `json:"name"`
 }
 
