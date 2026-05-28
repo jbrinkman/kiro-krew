@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"sync"
 	"syscall"
-
 	"time"
 
 	"github.com/jbrinkman/kiro-krew/internal/config"
