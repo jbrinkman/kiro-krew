@@ -14,6 +14,7 @@ import (
 
 	"github.com/jbrinkman/kiro-krew/internal/agent"
 	"github.com/jbrinkman/kiro-krew/internal/config"
+	"github.com/jbrinkman/kiro-krew/internal/version"
 	"github.com/jbrinkman/kiro-krew/internal/watcher"
 )
 
@@ -92,6 +93,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.input.Focus()
 		return m, tea.Batch(textinput.Blink, tea.ClearScreen)
+
+	case updateCheckMsg:
+		if msg.err != nil {
+			m = m.appendActivity("Update Status: Unable to check for updates")
+			m = m.appendActivity(fmt.Sprintf("  Error: %v", msg.err))
+		} else {
+			currentVersion := version.Version
+			latestVersion := msg.release.TagName
+			if currentVersion == "dev" {
+				m = m.appendActivity("Update Status: Development build")
+			} else if currentVersion == latestVersion {
+				m = m.appendActivity("Update Status: Up to date")
+			} else {
+				m = m.appendActivity("Update Status: Update available")
+				m = m.appendActivity(fmt.Sprintf("  Latest: %s (%s)", latestVersion, msg.release.Name))
+			}
+		}
+		return m, nil
 
 	case tickMsg:
 		newLines := m.readNewLogLines()
