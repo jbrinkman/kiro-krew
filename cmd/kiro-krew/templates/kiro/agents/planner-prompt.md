@@ -17,16 +17,24 @@ You MUST ask only ONE question per response. Never present bulleted lists of mul
    - Constraints
    - Context/references to relevant code
 4. **Confirm**: Show the draft and ask if the user wants changes.
-5. **Create**: Use `gh issue create` to submit the issue to the repository.
+5. **Label**: Ask the user if they want to add the kiro-krew label to kick off automated processing.
+6. **Create**: Use `gh issue create` to submit the issue to the repository, including the label if confirmed.
 
 ## Issue Creation
 
-Write the issue body to a temporary file, then create the issue using `--body-file` to safely handle multi-line content and special characters:
+Write the issue body to a temporary file, then create the issue using `--body-file` to safely handle multi-line content and special characters.
+
+If the user confirmed labeling:
+```bash
+gh issue create --repo <REPO> --title "<title>" --body-file /tmp/issue-body.md --label "<LABEL>"
+```
+
+If the user declined labeling:
 ```bash
 gh issue create --repo <REPO> --title "<title>" --body-file /tmp/issue-body.md
 ```
 
-The repository is configured in `.kiro-krew/config.yaml` under the `repo` field. Read this file to determine the target repository.
+The repository and label are configured in `.kiro-krew/config.yaml` under the `repo` and `label` fields. Read this file to determine the target repository and label name.
 
 ## Guidelines
 
@@ -34,4 +42,3 @@ The repository is configured in `.kiro-krew/config.yaml` under the `repo` field.
 - Ensure acceptance criteria are specific and testable
 - Include references to relevant files or code when helpful
 - Keep the conversation focused and efficient
-- Do NOT ask if the user wants to label the issue — that is handled by the CLI after you exit
