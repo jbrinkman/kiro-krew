@@ -130,23 +130,34 @@ func (m *modal) appendOutput(data string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Split incoming data by newlines and append to line buffer
-	// Handle \r\n and bare \r (carriage return for line overwrite)
+	// Normalize newlines.
 	data = strings.ReplaceAll(data, "\r\n", "\n")
 
-	parts := strings.Split(data, "\n")
-	for i, part := range parts {
-		// Handle carriage return within a part (overwrites current line)
-		if cr := strings.LastIndex(part, "\r"); cr >= 0 {
-			part = part[cr+1:]
+	// Ensure we always have a "current" line to append to.
+	if len(m.lines) == 0 {
+		m.lines = append(m.lines, "")
+	}
+
+	for _, chunk := range strings.SplitAfter(data, "\n") {
+		hasNL := strings.HasSuffix(chunk, "\n")
+		text := strings.TrimSuffix(chunk, "\n")
+
+		// Carriage return moves to start-of-line; approximate by replacing current line.
+		if cr := strings.LastIndex(text, "\r"); cr >= 0 {
+			text = text[cr+1:]
+			m.lines[len(m.lines)-1] = text
+		} else {
+			m.lines[len(m.lines)-1] += text
 		}
 
-		if i == 0 && len(m.lines) > 0 {
-			// Append to last line
-			m.lines[len(m.lines)-1] += part
-		} else {
-			m.lines = append(m.lines, part)
+		if hasNL {
+			m.lines = append(m.lines, "")
 		}
+	}
+
+	const maxModalLines = 5000
+	if len(m.lines) > maxModalLines {
+		m.lines = m.lines[len(m.lines)-maxModalLines:]
 	}
 }
 
