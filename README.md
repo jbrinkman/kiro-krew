@@ -161,7 +161,11 @@ Agent configs live in `.kiro/agents/`. Each agent has a JSON config and a prompt
 {
   "name": "krew-lead",
   "tools": ["read", "shell", "subagent", "todo_list"],
-  "trustedAgents": ["architect", "builder", "validator", "documenter"],
+  "toolsSettings": {
+    "subagent": {
+      "trustedAgents": ["architect", "builder", "validator", "documenter"]
+    }
+  },
   "model": "claude-sonnet-4"
 }
 ```
