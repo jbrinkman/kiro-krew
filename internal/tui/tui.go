@@ -86,7 +86,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case execDoneMsg:
 		if msg.err != nil {
-			m = m.appendActivity(fmt.Sprintf("Process exited with error: %v", msg.err))
+			m = m.appendActivity(fmt.Sprintf("Planning session exited with error: %v", msg.err))
 		} else {
 			m = m.appendActivity("Planning session completed.")
 		}
