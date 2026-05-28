@@ -130,6 +130,19 @@ func (m *Manager) StopAll() {
 	}
 }
 
+// verifyPRExists checks if a PR exists for the given issue number
+func (m *Manager) verifyPRExists(issueNumber int) bool {
+	// Check for PRs with branch pattern spec/issue-<number>-*
+	cmd := exec.Command("gh", "pr", "list", "--search", fmt.Sprintf("head:spec/issue-%d-", issueNumber), "--json", "number")
+	output, err := cmd.Output()
+	if err != nil {
+		log.Printf("[agent] failed to check for PR for issue #%d: %v", issueNumber, err)
+		return false
+	}
+	// If output is not empty JSON array, PR exists
+	return len(output) > 3 // More than just "[]"
+}
+
 func (m *Manager) HandleExit(id string, exitCode int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -140,11 +153,29 @@ func (m *Manager) HandleExit(id string, exitCode int) {
 	}
 
 	if exitCode == 0 {
-		agent.Status = StatusCompleted
-		log.Printf("[agent] %s completed successfully (issue #%d)", id, agent.IssueNumber)
-		doneLabel := m.config.Label + "-done"
-		if err := github.AddLabel(m.config.Repo, agent.IssueNumber, doneLabel); err != nil {
-			log.Printf("[agent] failed to add %s label to issue #%d: %v", doneLabel, agent.IssueNumber, err)
+		log.Printf("[agent] %s completed with exit code 0 (issue #%d), verifying PR exists", id, agent.IssueNumber)
+		
+		// Verify PR exists before marking as done
+		if m.verifyPRExists(agent.IssueNumber) {
+			agent.Status = StatusCompleted
+			log.Printf("[agent] %s completed successfully with PR (issue #%d)", id, agent.IssueNumber)
+			doneLabel := m.config.Label + "-done"
+			if err := github.AddLabel(m.config.Repo, agent.IssueNumber, doneLabel); err != nil {
+				log.Printf("[agent] failed to add %s label to issue #%d: %v", doneLabel, agent.IssueNumber, err)
+			}
+		} else {
+			// No PR found, treat as failure
+			agent.Status = StatusFailed
+			log.Printf("[agent] %s completed but no PR found (issue #%d, retry %d/%d)", id, agent.IssueNumber, agent.RetryCount, m.config.MaxRetries)
+			if agent.RetryCount < m.config.MaxRetries {
+				agent.RetryCount++
+				log.Printf("[agent] retrying %s (issue #%d, attempt %d)", id, agent.IssueNumber, agent.RetryCount)
+				go m.retryAgent(agent)
+			} else {
+				failedLabel := m.config.Label + "-failed"
+				log.Printf("[agent] %s exhausted retries, labeling issue #%d as %s", id, agent.IssueNumber, failedLabel)
+				github.AddLabel(m.config.Repo, agent.IssueNumber, failedLabel)
+			}
 		}
 	} else {
 		agent.Status = StatusFailed
