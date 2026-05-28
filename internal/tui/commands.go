@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-
 	"github.com/jbrinkman/kiro-krew/internal/github"
 	"github.com/jbrinkman/kiro-krew/internal/version"
 	tea "charm.land/bubbletea/v2"
