@@ -36,12 +36,12 @@ type modal struct {
 
 var (
 	modalBorderStyle = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(lipgloss.Color("6")).
-				Padding(0, 1)
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("6")).
+		Padding(0, 1)
 	modalTitleStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("6")).
-			Bold(true)
+		Foreground(lipgloss.Color("6")).
+		Bold(true)
 )
 
 // newModal starts a subprocess in a PTY and returns the modal state.
