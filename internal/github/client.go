@@ -1,10 +1,12 @@
 package github
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 type Label struct {
@@ -101,4 +103,31 @@ func VerifyPRExists(repo string, issueNumber, pid int) (bool, error) {
 	}
 
 	return len(prs) > 0, nil
+}
+
+type Release struct {
+	TagName string `json:"tagName"`
+	Name    string `json:"name"`
+}
+
+// GetLatestRelease fetches the latest release from GitHub
+func GetLatestRelease(repo string) (*Release, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "gh", "release", "view", "--repo", repo, "--json", "tagName,name")
+	output, err := cmd.Output()
+	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return nil, fmt.Errorf("gh release view timed out after 10 seconds")
+		}
+		return nil, fmt.Errorf("gh release view failed: %w", err)
+	}
+
+	var release Release
+	if err := json.Unmarshal(output, &release); err != nil {
+		return nil, fmt.Errorf("failed to parse release info: %w", err)
+	}
+
+	return &release, nil
 }

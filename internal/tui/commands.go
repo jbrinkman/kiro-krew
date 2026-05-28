@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jbrinkman/kiro-krew/internal/github"
+	"github.com/jbrinkman/kiro-krew/internal/version"
 	tea "charm.land/bubbletea/v2"
 )
 
@@ -92,6 +94,7 @@ func (m model) handleHelp() (model, tea.Cmd) {
 		"  status         - List all agents with details",
 		"  stop <issue>   - Stop agent for specific issue number",
 		"  plan [desc]    - Start interactive planning session",
+		"  about          - Show version information and check for updates",
 		"  exit           - Exit (Ctrl+C also works)",
 		"  help           - Show this help message",
 	}
@@ -132,9 +135,37 @@ type execDoneMsg struct {
 	err error
 }
 
+type updateCheckMsg struct {
+	release *github.Release
+	err     error
+}
+
 func truncate(s string, max int) string {
 	if len(s) <= max {
 		return s
 	}
 	return s[:max-3] + "..."
+}
+
+func (m model) handleAbout() (model, tea.Cmd) {
+	info := version.Info()
+
+	m = m.appendActivity(
+		"Kiro-Krew Version Information:",
+		fmt.Sprintf("  Version:    %s", info["version"]),
+		fmt.Sprintf("  Build Date: %s", info["build_date"]),
+		fmt.Sprintf("  Go Version: %s", info["go_version"]),
+		fmt.Sprintf("  Arch:       %s", info["arch"]),
+		"",
+		"Checking for updates...",
+	)
+
+	return m, checkForUpdateCmd()
+}
+
+func checkForUpdateCmd() tea.Cmd {
+	return func() tea.Msg {
+		release, err := github.GetLatestRelease("jbrinkman/kiro-krew")
+		return updateCheckMsg{release: release, err: err}
+	}
 }

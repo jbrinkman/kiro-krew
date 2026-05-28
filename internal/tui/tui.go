@@ -12,8 +12,11 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"golang.org/x/mod/semver"
+
 	"github.com/jbrinkman/kiro-krew/internal/agent"
 	"github.com/jbrinkman/kiro-krew/internal/config"
+	"github.com/jbrinkman/kiro-krew/internal/version"
 	"github.com/jbrinkman/kiro-krew/internal/watcher"
 )
 
@@ -92,6 +95,36 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.input.Focus()
 		return m, tea.Batch(textinput.Blink, tea.ClearScreen)
+
+	case updateCheckMsg:
+		if msg.err != nil {
+			m = m.appendActivity("Update Status: Unable to check for updates")
+			m = m.appendActivity(fmt.Sprintf("  Error: %v", msg.err))
+		} else {
+			current := version.Version
+			latest := msg.release.TagName
+			if current == "dev" {
+				m = m.appendActivity("Update Status: Development build")
+			} else {
+				// Ensure "v" prefix for semver comparison
+				if !strings.HasPrefix(current, "v") {
+					current = "v" + current
+				}
+				if !strings.HasPrefix(latest, "v") {
+					latest = "v" + latest
+				}
+				if !semver.IsValid(current) || !semver.IsValid(latest) {
+					m = m.appendActivity("Update Status: Unable to compare versions (non-semver format)")
+					m = m.appendActivity(fmt.Sprintf("  Current: %s, Latest: %s", version.Version, msg.release.TagName))
+				} else if semver.Compare(current, latest) < 0 {
+					m = m.appendActivity("Update Status: Update available")
+					m = m.appendActivity(fmt.Sprintf("  Latest: %s (%s)", msg.release.TagName, msg.release.Name))
+				} else {
+					m = m.appendActivity("Update Status: Up to date")
+				}
+			}
+		}
+		return m, nil
 
 	case tickMsg:
 		newLines := m.readNewLogLines()
@@ -250,6 +283,8 @@ func (m model) executeCommand(input string) (model, tea.Cmd) {
 		return m.handlePlan(description)
 	case "exit":
 		return m.tryExit()
+	case "about":
+		return m.handleAbout()
 	case "help":
 		return m.handleHelp()
 	default:
