@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -112,14 +111,13 @@ func (m model) handlePlan(description string) (model, tea.Cmd) {
 		args = append(args, description)
 	}
 	c := tea.ExecProcess(execCommand("kiro-cli", args...), func(err error) tea.Msg {
-		return execDoneMsg{err: err, planCmd: true}
+		return execDoneMsg{err: err}
 	})
 	return m, c
 }
 
 type execDoneMsg struct {
-	err     error
-	planCmd bool
+	err error
 }
 
 func truncate(s string, max int) string {
@@ -127,14 +125,4 @@ func truncate(s string, max int) string {
 		return s
 	}
 	return s[:max-3] + "..."
-}
-
-func (m model) labelLastIssue(issueNums ...int) {
-	if len(issueNums) == 0 {
-		return
-	}
-
-	issueNum := issueNums[0]
-	exec.Command("gh", "issue", "edit", fmt.Sprintf("%d", issueNum),
-		"--repo", m.config.Repo, "--add-label", m.config.Label).Run()
 }
