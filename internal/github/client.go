@@ -62,3 +62,20 @@ func AddLabel(repo string, issueNumber int, label string) error {
 	cmd := exec.Command("gh", "issue", "edit", fmt.Sprintf("%d", issueNumber), "--repo", repo, "--add-label", label)
 	return cmd.Run()
 }
+
+func PRExistsForIssue(repo string, issueNumber int) (bool, error) {
+	cmd := exec.Command("gh", "pr", "list", "--repo", repo, "--search", fmt.Sprintf("head:spec/issue-%d-", issueNumber), "--json", "number")
+	output, err := cmd.Output()
+	if err != nil {
+		return false, fmt.Errorf("gh pr list failed: %w", err)
+	}
+
+	var prs []struct {
+		Number int `json:"number"`
+	}
+	if err := json.Unmarshal(output, &prs); err != nil {
+		return false, fmt.Errorf("failed to parse gh output: %w", err)
+	}
+
+	return len(prs) > 0, nil
+}

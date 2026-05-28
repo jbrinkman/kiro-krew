@@ -131,22 +131,69 @@ func (m *Manager) StopAll() {
 }
 
 func (m *Manager) HandleExit(id string, exitCode int) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	agent, exists := m.agents[id]
-	if !exists {
-		return
-	}
-
 	if exitCode == 0 {
-		agent.Status = StatusCompleted
-		log.Printf("[agent] %s completed successfully (issue #%d)", id, agent.IssueNumber)
-		doneLabel := m.config.Label + "-done"
-		if err := github.AddLabel(m.config.Repo, agent.IssueNumber, doneLabel); err != nil {
-			log.Printf("[agent] failed to add %s label to issue #%d: %v", doneLabel, agent.IssueNumber, err)
+		m.mu.Lock()
+		agent, exists := m.agents[id]
+		if !exists {
+			m.mu.Unlock()
+			return
+		}
+		issueNumber := agent.IssueNumber
+		m.mu.Unlock()
+
+		log.Printf("[agent] %s completed with exit code 0 (issue #%d), verifying PR exists", id, issueNumber)
+
+		// Verify PR exists before marking as done
+		prExists, err := github.PRExistsForIssue(m.config.Repo, issueNumber)
+		if err != nil {
+			log.Printf("[agent] failed to check for PR for issue #%d: %v", issueNumber, err)
+		}
+		if prExists {
+			m.mu.Lock()
+			updatedAgent, exists := m.agents[id]
+			if !exists || updatedAgent.Status != StatusRunning {
+				m.mu.Unlock()
+				return
+			}
+			updatedAgent.Status = StatusCompleted
+			log.Printf("[agent] %s completed successfully with PR (issue #%d)", id, updatedAgent.IssueNumber)
+			doneLabel := m.config.Label + "-done"
+			m.mu.Unlock()
+
+			if err := github.AddLabel(m.config.Repo, issueNumber, doneLabel); err != nil {
+				log.Printf("[agent] failed to add %s label to issue #%d: %v", doneLabel, issueNumber, err)
+			}
+		} else {
+			m.mu.Lock()
+			updatedAgent, exists := m.agents[id]
+			if !exists || updatedAgent.Status != StatusRunning {
+				m.mu.Unlock()
+				return
+			}
+			// No PR found, treat as failure
+			updatedAgent.Status = StatusFailed
+			log.Printf("[agent] %s completed but no PR found (issue #%d, retry %d/%d)", id, updatedAgent.IssueNumber, updatedAgent.RetryCount, m.config.MaxRetries)
+			if updatedAgent.RetryCount < m.config.MaxRetries {
+				updatedAgent.RetryCount++
+				log.Printf("[agent] retrying %s (issue #%d, attempt %d)", id, updatedAgent.IssueNumber, updatedAgent.RetryCount)
+				go m.retryAgent(updatedAgent)
+				m.mu.Unlock()
+			} else {
+				failedLabel := m.config.Label + "-failed"
+				log.Printf("[agent] %s exhausted retries, labeling issue #%d as %s", id, updatedAgent.IssueNumber, failedLabel)
+				m.mu.Unlock()
+				github.AddLabel(m.config.Repo, issueNumber, failedLabel)
+			}
 		}
 	} else {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+
+		agent, exists := m.agents[id]
+		if !exists {
+			return
+		}
+
 		agent.Status = StatusFailed
 		log.Printf("[agent] %s exited with code %d (issue #%d, retry %d/%d)", id, exitCode, agent.IssueNumber, agent.RetryCount, m.config.MaxRetries)
 		if agent.RetryCount < m.config.MaxRetries {
