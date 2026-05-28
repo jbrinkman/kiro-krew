@@ -110,10 +110,10 @@ func (m model) handlePlan(description string) (model, tea.Cmd) {
 	if description != "" {
 		args = append(args, description)
 	}
-	c := tea.ExecProcess(execCommand("kiro-cli", args...), func(err error) tea.Msg {
-		return execDoneMsg{err: err}
-	})
-	return m, c
+	mdl, cmd := newModal("kiro-cli", args, m.width, m.height)
+	m.modal = mdl
+	m.input.Blur()
+	return m, cmd
 }
 
 type execDoneMsg struct {
