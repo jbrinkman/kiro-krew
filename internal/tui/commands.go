@@ -120,8 +120,8 @@ pad "$art3"
 pad "$art4"
 pad "$art5"
 echo ""`
-	shellArgs := "clear && " + banner + " && kiro-cli " + strings.Join(args, " ")
-	cmd := exec.Command("sh", "-c", shellArgs)
+	script := "clear && " + banner + " && exec kiro-cli \"$@\""
+	cmd := exec.Command("sh", "-c", script, append([]string{"sh"}, args...)...)
 	c := tea.ExecProcess(cmd, func(err error) tea.Msg {
 		return execDoneMsg{err: err}
 	})
