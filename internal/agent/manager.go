@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -131,27 +130,6 @@ func (m *Manager) StopAll() {
 	}
 }
 
-// verifyPRExists checks if a PR exists for the given issue number
-func (m *Manager) verifyPRExists(issueNumber int) bool {
-	// Check for PRs with branch pattern spec/issue-<number>-*
-	cmd := exec.Command("gh", "pr", "list", "--repo", m.config.Repo, "--search", fmt.Sprintf("head:spec/issue-%d-", issueNumber), "--json", "number")
-	output, err := cmd.Output()
-	if err != nil {
-		log.Printf("[agent] failed to check for PR for issue #%d: %v", issueNumber, err)
-		return false
-	}
-
-	var prs []struct {
-		Number int `json:"number"`
-	}
-	if err := json.Unmarshal(output, &prs); err != nil {
-		log.Printf("[agent] failed to parse PR check output for issue #%d: %v", issueNumber, err)
-		return false
-	}
-
-	return len(prs) > 0
-}
-
 func (m *Manager) HandleExit(id string, exitCode int) {
 	if exitCode == 0 {
 		m.mu.Lock()
@@ -166,7 +144,11 @@ func (m *Manager) HandleExit(id string, exitCode int) {
 		log.Printf("[agent] %s completed with exit code 0 (issue #%d), verifying PR exists", id, issueNumber)
 
 		// Verify PR exists before marking as done
-		if m.verifyPRExists(issueNumber) {
+		prExists, err := github.PRExistsForIssue(m.config.Repo, issueNumber)
+		if err != nil {
+			log.Printf("[agent] failed to check for PR for issue #%d: %v", issueNumber, err)
+		}
+		if prExists {
 			m.mu.Lock()
 			updatedAgent, exists := m.agents[id]
 			if !exists || updatedAgent.Status != StatusRunning {
