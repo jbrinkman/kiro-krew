@@ -20,7 +20,7 @@ func watcherIsRunning(w any) bool {
 }
 
 func (m model) handleWatch(action string) (model, tea.Cmd) {
-	switch action {
+	switch strings.ToLower(action) {
 	case "start":
 		if watcherIsRunning(any(m.watcher)) {
 			m = m.appendActivity("Watcher already running")
@@ -121,7 +121,7 @@ pad "$art4"
 pad "$art5"
 echo ""`
 	script := "clear && " + banner + " && exec kiro-cli \"$@\""
-	cmd := exec.Command("sh", "-c", script, append([]string{"sh"}, args...)...)
+	cmd := exec.Command("sh", "-c", script)
 	c := tea.ExecProcess(cmd, func(err error) tea.Msg {
 		return execDoneMsg{err: err}
 	})

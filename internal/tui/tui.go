@@ -227,7 +227,7 @@ func (m model) executeCommand(input string) (model, tea.Cmd) {
 	parts := strings.Fields(input)
 	cmd := parts[0]
 
-	switch cmd {
+	switch strings.ToLower(cmd) {
 	case "watch":
 		if len(parts) < 2 {
 			m = m.appendActivity("Usage: watch start|stop")

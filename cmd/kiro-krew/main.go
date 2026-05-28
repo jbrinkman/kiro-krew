@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/jbrinkman/kiro-krew/internal/agent"
 	"github.com/jbrinkman/kiro-krew/internal/config"
@@ -18,7 +19,7 @@ var templates embed.FS
 
 func main() {
 	if len(os.Args) > 1 {
-		switch os.Args[1] {
+		switch strings.ToLower(os.Args[1]) {
 		case "init":
 			if err := extractTemplates("templates", ".", false); err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -128,7 +129,7 @@ func writeTemplateFile(srcPath, destPath string) error {
 
 func runEval() error {
 	// kiro-krew eval diff <run-a> <run-b>
-	if len(os.Args) > 2 && os.Args[2] == "diff" {
+	if len(os.Args) > 2 && strings.ToLower(os.Args[2]) == "diff" {
 		if len(os.Args) < 5 {
 			return fmt.Errorf("usage: kiro-krew eval diff <run-a> <run-b>")
 		}
