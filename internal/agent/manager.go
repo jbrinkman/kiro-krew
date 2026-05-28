@@ -169,7 +169,7 @@ func (m *Manager) HandleExit(id string, exitCode int) {
 		if m.verifyPRExists(issueNumber) {
 			m.mu.Lock()
 			agent, exists := m.agents[id]
-			if !exists {
+			if !exists || agent.Status != StatusRunning {
 				m.mu.Unlock()
 				return
 			}
@@ -184,7 +184,7 @@ func (m *Manager) HandleExit(id string, exitCode int) {
 		} else {
 			m.mu.Lock()
 			agent, exists := m.agents[id]
-			if !exists {
+			if !exists || agent.Status != StatusRunning {
 				m.mu.Unlock()
 				return
 			}
