@@ -36,7 +36,6 @@ type model struct {
 	width            int
 	height           int
 	confirmingExit   bool
-	labelPrompt      bool
 	logFile          *os.File
 	logReader        *os.File
 	lastLogPos       int64
@@ -89,10 +88,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m = m.appendActivity(fmt.Sprintf("Process exited with error: %v", msg.err))
 		}
-		if msg.planCmd && msg.err == nil {
-			m.labelPrompt = true
-			m = m.appendActivity("Label this issue for kiro-krew to process? (y/n)")
-		}
 		m.input.Focus()
 		return m, tea.Batch(textinput.Blink, tea.ClearScreen)
 
@@ -104,24 +99,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.tickCmd()
 
 	case tea.KeyPressMsg:
-		if m.labelPrompt {
-			input := strings.ToLower(strings.TrimSpace(msg.String()))
-			switch input {
-			case "y":
-				m.labelPrompt = false
-				m = m.appendActivity("Labeling issue for kiro-krew processing...")
-				// The last created issue is found via gh
-				go m.labelLastIssue()
-				return m, nil
-			case "n":
-				m.labelPrompt = false
-				m = m.appendActivity("Skipped labeling.")
-				return m, nil
-			default:
-				return m, nil
-			}
-		}
-
 		if m.confirmingExit {
 			input := strings.ToLower(strings.TrimSpace(msg.String()))
 			switch input {
