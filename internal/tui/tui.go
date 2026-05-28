@@ -250,6 +250,8 @@ func (m model) executeCommand(input string) (model, tea.Cmd) {
 		return m.handlePlan(description)
 	case "exit":
 		return m.tryExit()
+	case "about":
+		return m.handleAbout()
 	case "help":
 		return m.handleHelp()
 	default:

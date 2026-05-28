@@ -7,6 +7,9 @@ import (
 	"strings"
 	"time"
 
+
+	"github.com/jbrinkman/kiro-krew/internal/github"
+	"github.com/jbrinkman/kiro-krew/internal/version"
 	tea "charm.land/bubbletea/v2"
 )
 
@@ -92,6 +95,7 @@ func (m model) handleHelp() (model, tea.Cmd) {
 		"  status         - List all agents with details",
 		"  stop <issue>   - Stop agent for specific issue number",
 		"  plan [desc]    - Start interactive planning session",
+		"  about          - Show version information and check for updates",
 		"  exit           - Exit (Ctrl+C also works)",
 		"  help           - Show this help message",
 	}
@@ -137,4 +141,39 @@ func truncate(s string, max int) string {
 		return s
 	}
 	return s[:max-3] + "..."
+}
+
+func (m model) handleAbout() (model, tea.Cmd) {
+	info := version.Info()
+	
+	lines := []string{
+		"Kiro-Krew Version Information:",
+		fmt.Sprintf("  Version:    %s", info["version"]),
+		fmt.Sprintf("  Build Date: %s", info["build_date"]),
+		fmt.Sprintf("  Go Version: %s", info["go_version"]),
+		fmt.Sprintf("  Arch:       %s", info["arch"]),
+		"",
+	}
+	
+	// Check for updates
+	release, err := github.GetLatestRelease("jbrinkman/kiro-krew")
+	if err != nil {
+		lines = append(lines, "Update Status: Unable to check for updates")
+		lines = append(lines, fmt.Sprintf("  Error: %v", err))
+	} else {
+		currentVersion := info["version"]
+		latestVersion := release.TagName
+		
+		if currentVersion == "dev" {
+			lines = append(lines, "Update Status: Development build")
+		} else if currentVersion == latestVersion {
+			lines = append(lines, "Update Status: Up to date")
+		} else {
+			lines = append(lines, "Update Status: Update available")
+			lines = append(lines, fmt.Sprintf("  Latest: %s (%s)", latestVersion, release.Name))
+		}
+	}
+	
+	m = m.appendActivity(lines...)
+	return m, nil
 }

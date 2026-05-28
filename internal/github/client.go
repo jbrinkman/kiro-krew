@@ -102,3 +102,24 @@ func VerifyPRExists(repo string, issueNumber, pid int) (bool, error) {
 
 	return len(prs) > 0, nil
 }
+
+type Release struct {
+	TagName string `json:"tag_name"`
+	Name    string `json:"name"`
+}
+
+// GetLatestRelease fetches the latest release from GitHub
+func GetLatestRelease(repo string) (*Release, error) {
+	cmd := exec.Command("gh", "release", "view", "--repo", repo, "--json", "tagName,name")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("gh release view failed: %w", err)
+	}
+
+	var release Release
+	if err := json.Unmarshal(output, &release); err != nil {
+		return nil, fmt.Errorf("failed to parse release info: %w", err)
+	}
+
+	return &release, nil
+}
