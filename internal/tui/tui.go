@@ -40,6 +40,7 @@ type model struct {
 	logReader        *os.File
 	lastLogPos       int64
 	quitting         bool
+	modal            *modal
 }
 
 func newModel(w *watcher.Watcher, m *agent.Manager, cfg *config.Config, logFile *os.File, logReader *os.File) model {
@@ -82,6 +83,29 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		if m.modal != nil {
+			m.modal.resize(m.width, m.height)
+		}
+		return m, nil
+
+	case modalOutputMsg:
+		if m.modal != nil {
+			m.modal.appendOutput(msg.data)
+			return m, m.modal.readOutput()
+		}
+		return m, nil
+
+	case modalDoneMsg:
+		if m.modal != nil {
+			m.modal.close()
+			m.modal = nil
+			if msg.err != nil {
+				m = m.appendActivity(fmt.Sprintf("Planning session exited with error: %v", msg.err))
+			} else {
+				m = m.appendActivity("Planning session completed.")
+			}
+			m.input.Focus()
+		}
 		return m, nil
 
 	case execDoneMsg:
@@ -99,6 +123,33 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.tickCmd()
 
 	case tea.KeyPressMsg:
+		// When modal is active, forward input to subprocess
+		if m.modal != nil {
+			key := msg.String()
+			switch key {
+			case "ctrl+c":
+				// Close modal on Ctrl+C
+				m.modal.close()
+				m.modal = nil
+				m = m.appendActivity("Planning session cancelled.")
+				m.input.Focus()
+				return m, nil
+			case "enter":
+				m.modal.writeInput("\r")
+			case "backspace":
+				m.modal.writeInput("\x7f")
+			case "tab":
+				m.modal.writeInput("\t")
+			case "escape", "esc":
+				m.modal.writeInput("\x1b")
+			default:
+				if len(key) == 1 {
+					m.modal.writeInput(key)
+				}
+			}
+			return m, nil
+		}
+
 		if m.confirmingExit {
 			input := strings.ToLower(strings.TrimSpace(msg.String()))
 			switch input {
@@ -171,7 +222,21 @@ func (m model) View() tea.View {
 	separator := promptStyle.Render(strings.Repeat("─", m.width))
 	prompt := m.input.View()
 
-	v := tea.NewView(activityStyle.Render(activity) + "\n" + separator + "\n" + prompt)
+	base := activityStyle.Render(activity) + "\n" + separator + "\n" + prompt
+
+	// If modal is active, overlay it on top
+	if m.modal != nil {
+		overlay := m.modal.view(m.width, m.height)
+		// Use Lipgloss Place to center the modal over the base
+		canvas := lipgloss.NewCanvas(m.width, m.height)
+		canvas.Compose(lipgloss.NewLayer(base))
+		canvas.Compose(lipgloss.NewLayer(overlay))
+		v := tea.NewView(canvas.Render())
+		v.AltScreen = true
+		return v
+	}
+
+	v := tea.NewView(base)
 	v.AltScreen = true
 	return v
 }
