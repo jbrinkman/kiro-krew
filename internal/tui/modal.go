@@ -172,9 +172,10 @@ func (m *modal) view(termWidth, termHeight int) string {
 	// Truncate lines to content width
 	var content strings.Builder
 	for i, line := range visible {
-		// Truncate to width (simple byte truncation; ANSI-aware would be better but this works)
-		if len(line) > cw {
-			line = line[:cw]
+		// Truncate to width (rune-safe; still not ANSI-width aware).
+		r := []rune(line)
+		if len(r) > cw {
+			line = string(r[:cw])
 		}
 		content.WriteString(line)
 		if i < len(visible)-1 {
