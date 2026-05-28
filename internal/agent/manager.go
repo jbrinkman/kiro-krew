@@ -168,13 +168,13 @@ func (m *Manager) HandleExit(id string, exitCode int) {
 		// Verify PR exists before marking as done
 		if m.verifyPRExists(issueNumber) {
 			m.mu.Lock()
-			agent, exists := m.agents[id]
-			if !exists || agent.Status != StatusRunning {
+			updatedAgent, exists := m.agents[id]
+			if !exists || updatedAgent.Status != StatusRunning {
 				m.mu.Unlock()
 				return
 			}
-			agent.Status = StatusCompleted
-			log.Printf("[agent] %s completed successfully with PR (issue #%d)", id, agent.IssueNumber)
+			updatedAgent.Status = StatusCompleted
+			log.Printf("[agent] %s completed successfully with PR (issue #%d)", id, updatedAgent.IssueNumber)
 			doneLabel := m.config.Label + "-done"
 			m.mu.Unlock()
 
@@ -183,22 +183,22 @@ func (m *Manager) HandleExit(id string, exitCode int) {
 			}
 		} else {
 			m.mu.Lock()
-			agent, exists := m.agents[id]
-			if !exists || agent.Status != StatusRunning {
+			updatedAgent, exists := m.agents[id]
+			if !exists || updatedAgent.Status != StatusRunning {
 				m.mu.Unlock()
 				return
 			}
 			// No PR found, treat as failure
-			agent.Status = StatusFailed
-			log.Printf("[agent] %s completed but no PR found (issue #%d, retry %d/%d)", id, agent.IssueNumber, agent.RetryCount, m.config.MaxRetries)
-			if agent.RetryCount < m.config.MaxRetries {
-				agent.RetryCount++
-				log.Printf("[agent] retrying %s (issue #%d, attempt %d)", id, agent.IssueNumber, agent.RetryCount)
-				go m.retryAgent(agent)
+			updatedAgent.Status = StatusFailed
+			log.Printf("[agent] %s completed but no PR found (issue #%d, retry %d/%d)", id, updatedAgent.IssueNumber, updatedAgent.RetryCount, m.config.MaxRetries)
+			if updatedAgent.RetryCount < m.config.MaxRetries {
+				updatedAgent.RetryCount++
+				log.Printf("[agent] retrying %s (issue #%d, attempt %d)", id, updatedAgent.IssueNumber, updatedAgent.RetryCount)
+				go m.retryAgent(updatedAgent)
 				m.mu.Unlock()
 			} else {
 				failedLabel := m.config.Label + "-failed"
-				log.Printf("[agent] %s exhausted retries, labeling issue #%d as %s", id, agent.IssueNumber, failedLabel)
+				log.Printf("[agent] %s exhausted retries, labeling issue #%d as %s", id, updatedAgent.IssueNumber, failedLabel)
 				m.mu.Unlock()
 				github.AddLabel(m.config.Repo, issueNumber, failedLabel)
 			}
