@@ -123,12 +123,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.tickCmd()
 
 	case tea.KeyPressMsg:
-		// When modal is active, forward input to subprocess
+		// When modal is active, forward input to subprocess.
 		if m.modal != nil {
 			key := msg.String()
 			switch key {
 			case "ctrl+c":
-				// Close modal on Ctrl+C
+				// Send Ctrl+C (SIGINT) to the subprocess, then close the modal.
+				m.modal.writeInput("\x03")
 				m.modal.close()
 				m.modal = nil
 				m = m.appendActivity("Planning session cancelled.")
@@ -142,12 +143,27 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.modal.writeInput("\t")
 			case "escape", "esc":
 				m.modal.writeInput("\x1b")
+			case "up":
+				m.modal.writeInput("\x1b[A")
+			case "down":
+				m.modal.writeInput("\x1b[B")
+			case "right":
+				m.modal.writeInput("\x1b[C")
+			case "left":
+				m.modal.writeInput("\x1b[D")
+			case "home":
+				m.modal.writeInput("\x1b[H")
+			case "end":
+				m.modal.writeInput("\x1b[F")
+			case "delete":
+				m.modal.writeInput("\x1b[3~")
 			default:
 				if len(key) == 1 {
 					m.modal.writeInput(key)
 				}
 			}
 			return m, nil
+		}
 		}
 
 		if m.confirmingExit {
