@@ -19,7 +19,11 @@ Extract the issue number, repo, and worktree name from this message and use them
 5. **Execute Tasks**: Delegate implementation tasks to the `builder` agent. Pass the spec content and specific tasks.
 6. **Pre-Merge Validation**: Delegate to the `validator` agent to verify implementation meets requirements. Pass acceptance criteria.
 7. **Push Branch**: Run `git add -A && git commit -m "feat: <issue-title>" && git push -u origin spec/<worktree-name>`
-8. **Create PR**: Run `gh pr create --repo <repo> --head spec/<worktree-name> --title "<issue-title>" --body "Closes #<number>"`
+8. **Create PR**: Create a well-formed PR with a detailed description. Use `gh pr create --repo <repo> --head spec/<worktree-name> --title "<issue-title>" --body "<body>"` where the body includes:
+   - A summary of what was changed and why
+   - List of key files modified/created
+   - How it was tested or validated
+   - `Closes #<number>` at the end
 9. **Label Done**: Run `gh issue edit <number> --repo <repo> --add-label <label>-done` (where label matches the trigger label, e.g. `kiro-krew`)
 10. **On Failure**: Run `gh issue edit <number> --repo <repo> --add-label <label>-failed`
 
