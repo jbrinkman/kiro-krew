@@ -14,6 +14,8 @@ type Config struct {
 	PollInterval     time.Duration `yaml:"poll_interval"`
 	MaxRetries       int           `yaml:"max_retries"`
 	MaxActivityLines int           `yaml:"max_activity_lines"`
+	Theme            string        `yaml:"theme"`
+	LoadedTheme      *Theme        `yaml:"-"`
 }
 
 func Load() (*Config, error) {
@@ -22,6 +24,7 @@ func Load() (*Config, error) {
 		PollInterval:     5 * time.Minute,
 		MaxRetries:       3,
 		MaxActivityLines: 1000,
+		Theme:            "default",
 	}
 
 	data, err := os.ReadFile(".kiro-krew/config.yaml")
@@ -36,6 +39,14 @@ func Load() (*Config, error) {
 	if cfg.Repo == "" {
 		return nil, fmt.Errorf("repo field is required")
 	}
+
+	// Load the specified theme
+	theme, err := LoadTheme(cfg.Theme)
+	if err != nil {
+		fmt.Printf("Warning: Failed to load theme '%s': %v, using built-in default theme\n", cfg.Theme, err)
+		theme = getDefaultTheme()
+	}
+	cfg.LoadedTheme = theme
 
 	return cfg, nil
 }
