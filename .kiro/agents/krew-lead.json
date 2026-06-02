@@ -2,6 +2,7 @@
   "name": "krew-lead",
   "prompt": "file://./krew-lead-prompt.md",
   "tools": ["read", "shell", "subagent", "todo_list"],
+  "allowedTools": ["read", "shell", "subagent", "todo_list"],
   "toolsSettings": {
     "subagent": {
       "trustedAgents": ["architect", "builder", "validator", "documenter"]
