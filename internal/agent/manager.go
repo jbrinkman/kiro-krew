@@ -28,6 +28,7 @@ type Agent struct {
 	IssueNumber int
 	IssueTitle  string
 	Process     *os.Process
+	LogFile     *os.File
 	Status      Status
 	RetryCount  int
 	StartTime   time.Time
@@ -65,12 +66,24 @@ func (m *Manager) Spawn(issueNumber int, repo string) (*Agent, error) {
 	worktreePath := strings.TrimSpace(string(wtOutput))
 	log.Printf("[agent] created worktree at %s", worktreePath)
 
+	// Create per-issue log file for agent output
+	agentLogDir := filepath.Join(".kiro-krew", "logs")
+	os.MkdirAll(agentLogDir, 0755)
+	agentLogPath := filepath.Join(agentLogDir, fmt.Sprintf("issue-%d.log", issueNumber))
+	agentLogFile, err := os.OpenFile(agentLogPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		log.Printf("[agent] failed to create log file for issue #%d: %v", issueNumber, err)
+		return nil, fmt.Errorf("failed to create agent log file: %w", err)
+	}
+
 	cmd := exec.Command("kiro-cli", "chat",
 		"--agent", "krew-lead",
 		"--no-interactive",
 		"--trust-all-tools",
 		fmt.Sprintf("Process issue #%d from repo %s. Worktree name: %s. You are already in the worktree directory — all file operations happen here. Skip worktree creation (step 2).", issueNumber, repo, worktreeName))
 	cmd.Dir = worktreePath
+	cmd.Stdout = agentLogFile
+	cmd.Stderr = agentLogFile
 	cmd.Env = append(os.Environ(),
 		fmt.Sprintf("ISSUE_NUMBER=%d", issueNumber),
 		fmt.Sprintf("REPO=%s", repo),
@@ -78,6 +91,7 @@ func (m *Manager) Spawn(issueNumber int, repo string) (*Agent, error) {
 		fmt.Sprintf("WORKTREE_PATH=%s", worktreePath))
 
 	if err := cmd.Start(); err != nil {
+		agentLogFile.Close()
 		log.Printf("[agent] failed to spawn agent %s for issue #%d: %v", id, issueNumber, err)
 		return nil, fmt.Errorf("failed to start agent: %w", err)
 	}
@@ -87,13 +101,14 @@ func (m *Manager) Spawn(issueNumber int, repo string) (*Agent, error) {
 		IssueNumber: issueNumber,
 		IssueTitle:  fmt.Sprintf("Issue #%d", issueNumber),
 		Process:     cmd.Process,
+		LogFile:     agentLogFile,
 		Status:      StatusRunning,
 		RetryCount:  0,
 		StartTime:   time.Now(),
 	}
 
 	m.agents[id] = agent
-	log.Printf("[agent] started %s for issue #%d (worktree: %s)", id, issueNumber, worktreeName)
+	log.Printf("[agent] spawned for issue #%d (worktree: %s, log: %s)", issueNumber, worktreeName, agentLogPath)
 
 	go m.monitorAgent(agent, cmd)
 
@@ -227,7 +242,30 @@ func (m *Manager) HandleExit(id string, exitCode int) {
 }
 
 func (m *Manager) monitorAgent(agent *Agent, cmd *exec.Cmd) {
+	log.Printf("[agent] started working on issue #%d", agent.IssueNumber)
+
+	done := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(60 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				elapsed := time.Since(agent.StartTime).Truncate(time.Second)
+				log.Printf("[agent] still working on issue #%d (%s elapsed)", agent.IssueNumber, elapsed)
+			}
+		}
+	}()
+
 	err := cmd.Wait()
+	close(done)
+
+	if agent.LogFile != nil {
+		agent.LogFile.Close()
+	}
+
 	exitCode := 0
 	if err != nil {
 		if exitError, ok := err.(*exec.ExitError); ok {
@@ -236,6 +274,14 @@ func (m *Manager) monitorAgent(agent *Agent, cmd *exec.Cmd) {
 			exitCode = 1
 		}
 	}
+
+	elapsed := time.Since(agent.StartTime).Truncate(time.Second)
+	if exitCode == 0 {
+		log.Printf("[agent] finished issue #%d (%s elapsed)", agent.IssueNumber, elapsed)
+	} else {
+		log.Printf("[agent] failed issue #%d (exit %d, %s elapsed)", agent.IssueNumber, exitCode, elapsed)
+	}
+
 	m.HandleExit(agent.ID, exitCode)
 }
 
@@ -267,12 +313,25 @@ func (m *Manager) retryAgent(agent *Agent) {
 		}
 	}
 
+	// Reopen log file for retry (append mode)
+	agentLogPath := filepath.Join(".kiro-krew", "logs", fmt.Sprintf("issue-%d.log", agent.IssueNumber))
+	agentLogFile, err := os.OpenFile(agentLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		log.Printf("[agent] retry failed to open log file for issue #%d: %v", agent.IssueNumber, err)
+		m.mu.Lock()
+		agent.Status = StatusFailed
+		m.mu.Unlock()
+		return
+	}
+
 	cmd := exec.Command("kiro-cli", "chat",
 		"--agent", "krew-lead",
 		"--no-interactive",
 		"--trust-all-tools",
 		fmt.Sprintf("Process issue #%d from repo %s. Worktree name: %s. You are already in the worktree directory — all file operations happen here. Skip worktree creation (step 2).", agent.IssueNumber, m.config.Repo, worktreeName))
 	cmd.Dir = worktreePath
+	cmd.Stdout = agentLogFile
+	cmd.Stderr = agentLogFile
 	cmd.Env = append(os.Environ(),
 		fmt.Sprintf("ISSUE_NUMBER=%d", agent.IssueNumber),
 		fmt.Sprintf("REPO=%s", m.config.Repo),
@@ -280,6 +339,7 @@ func (m *Manager) retryAgent(agent *Agent) {
 		fmt.Sprintf("WORKTREE_PATH=%s", worktreePath))
 
 	if err := cmd.Start(); err != nil {
+		agentLogFile.Close()
 		log.Printf("[agent] retry failed for issue #%d: %v", agent.IssueNumber, err)
 		m.mu.Lock()
 		agent.Status = StatusFailed
@@ -289,6 +349,7 @@ func (m *Manager) retryAgent(agent *Agent) {
 
 	m.mu.Lock()
 	agent.Process = cmd.Process
+	agent.LogFile = agentLogFile
 	agent.Status = StatusRunning
 	agent.StartTime = time.Now()
 	m.mu.Unlock()
