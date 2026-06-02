@@ -93,17 +93,14 @@ func TestValidateTheme(t *testing.T) {
 	}
 }
 
-func TestLoadThemeGracefulFallback(t *testing.T) {
-	// Test loading nonexistent theme falls back gracefully
+func TestLoadThemeReturnsErrorForMissingTheme(t *testing.T) {
+	// Test loading nonexistent theme returns an error
 	theme, err := LoadTheme("nonexistent-theme")
-	if err != nil {
-		t.Errorf("LoadTheme() should not return error for nonexistent theme, got: %v", err)
+	if err == nil {
+		t.Error("LoadTheme() should return error for nonexistent theme")
 	}
-	if theme == nil {
-		t.Error("LoadTheme() should return a valid theme even for nonexistent theme")
-	}
-	if theme.Name != "Default" {
-		t.Errorf("LoadTheme() should fall back to default theme, got: %s", theme.Name)
+	if theme != nil {
+		t.Error("LoadTheme() should return nil theme on error")
 	}
 }
 
@@ -119,14 +116,11 @@ func TestLoadThemeInvalidName(t *testing.T) {
 	for _, name := range invalidNames {
 		t.Run(name, func(t *testing.T) {
 			theme, err := LoadTheme(name)
-			if err != nil {
-				t.Errorf("LoadTheme(%q) should not return error, got: %v", name, err)
+			if err == nil {
+				t.Errorf("LoadTheme(%q) should return error for invalid name", name)
 			}
-			if theme == nil {
-				t.Errorf("LoadTheme(%q) should return built-in default theme for invalid name", name)
-			}
-			if theme.Name != "Default" {
-				t.Errorf("LoadTheme(%q) should fall back to built-in theme, got: %s", name, theme.Name)
+			if theme != nil {
+				t.Errorf("LoadTheme(%q) should return nil theme for invalid name", name)
 			}
 		})
 	}

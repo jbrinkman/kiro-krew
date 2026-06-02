@@ -145,37 +145,21 @@ func getDefaultTheme() *Theme {
 
 func LoadTheme(name string) (*Theme, error) {
 	if !validThemeNamePattern.MatchString(name) {
-		fmt.Printf("Warning: Invalid theme name '%s' (only alphanumeric, '-', and '_' are allowed), falling back to built-in theme\n", name)
-		return getDefaultTheme(), nil
+		return nil, fmt.Errorf("invalid theme name '%s': only alphanumeric, '-', and '_' characters are allowed", name)
 	}
 	path := fmt.Sprintf(".kiro-krew/themes/%s.yaml", name)
 	data, err := os.ReadFile(path)
 	if err != nil {
-		if name != "default" {
-			fmt.Printf("Warning: Theme '%s' not found, falling back to default theme\n", name)
-			return LoadTheme("default")
-		}
-		fmt.Printf("Warning: Default theme file not found, using built-in theme\n")
-		return getDefaultTheme(), nil
+		return nil, fmt.Errorf("theme '%s' not found: %w", name, err)
 	}
 
 	var theme Theme
 	if err := yaml.Unmarshal(data, &theme); err != nil {
-		if name != "default" {
-			fmt.Printf("Warning: Failed to parse theme '%s': %v, falling back to default theme\n", name, err)
-			return LoadTheme("default")
-		}
-		fmt.Printf("Warning: Failed to parse default theme: %v, using built-in theme\n", err)
-		return getDefaultTheme(), nil
+		return nil, fmt.Errorf("failed to parse theme '%s': %w", name, err)
 	}
 
 	if err := validateTheme(&theme); err != nil {
-		if name != "default" {
-			fmt.Printf("Warning: Theme '%s' validation failed: %v, falling back to default theme\n", name, err)
-			return LoadTheme("default")
-		}
-		fmt.Printf("Warning: Default theme validation failed: %v, using built-in theme\n", err)
-		return getDefaultTheme(), nil
+		return nil, fmt.Errorf("theme '%s' validation failed: %w", name, err)
 	}
 
 	return &theme, nil
