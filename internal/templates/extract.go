@@ -39,6 +39,13 @@ func Extract(srcDir, destDir string, force bool) error {
 			return os.MkdirAll(destPath, 0755)
 		}
 
+		// config.yaml is NEVER overwritten (preserve user settings)
+		if strings.HasSuffix(filepath.ToSlash(destPath), "/.kiro-krew/config.yaml") {
+			if _, err := os.Stat(destPath); err == nil {
+				return nil
+			}
+		}
+
 		if !force {
 			if _, err := os.Stat(destPath); err == nil {
 				return nil
