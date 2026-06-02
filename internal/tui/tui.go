@@ -47,34 +47,7 @@ func newModel(w *watcher.Watcher, m *agent.Manager, cfg *config.Config, logFile 
 	ti.Prompt = "kiro-krew> "
 	ti.Focus()
 
-	theme, err := config.LoadTheme(cfg.Theme)
-	if err != nil {
-		// Fallback to basic styles if theme loading fails
-		theme = &config.Theme{
-			Colors: struct {
-				Primary       string `yaml:"primary"`
-				Secondary     string `yaml:"secondary"`
-				Success       string `yaml:"success"`
-				Warning       string `yaml:"warning"`
-				Error         string `yaml:"error"`
-				TextPrimary   string `yaml:"text_primary"`
-				TextSecondary string `yaml:"text_secondary"`
-				TextMuted     string `yaml:"text_muted"`
-				Prompt        string `yaml:"prompt"`
-				Separator     string `yaml:"separator"`
-				Activity      string `yaml:"activity"`
-				Background    string `yaml:"background"`
-				Surface       string `yaml:"surface"`
-			}{
-				Prompt:    "6",
-				Activity:  "8",
-				Separator: "6",
-				Success:   "2",
-				Warning:   "3",
-				Error:     "1",
-			},
-		}
-	}
+	theme := cfg.LoadedTheme
 
 	return model{
 		watcher:          w,
