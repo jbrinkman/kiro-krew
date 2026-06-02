@@ -30,6 +30,7 @@ type Theme struct {
 }
 
 var validColorPattern = regexp.MustCompile(`^(#[0-9A-Fa-f]{6}|#[0-9A-Fa-f]{3}|\d{1,3}|[a-zA-Z-]+)$`)
+var validThemeNamePattern = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
 var namedColors = map[string]bool{
 	"black": true, "red": true, "green": true, "yellow": true,
@@ -143,6 +144,10 @@ func getDefaultTheme() *Theme {
 }
 
 func LoadTheme(name string) (*Theme, error) {
+	if !validThemeNamePattern.MatchString(name) {
+		fmt.Printf("Warning: Invalid theme name '%s' (only alphanumeric, '-', and '_' are allowed), falling back to built-in theme\n", name)
+		return getDefaultTheme(), nil
+	}
 	path := fmt.Sprintf(".kiro-krew/themes/%s.yaml", name)
 	data, err := os.ReadFile(path)
 	if err != nil {

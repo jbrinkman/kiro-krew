@@ -104,6 +104,31 @@ func TestLoadThemeGracefulFallback(t *testing.T) {
 	}
 }
 
+func TestLoadThemeInvalidName(t *testing.T) {
+	invalidNames := []string{
+		"../../etc/passwd",
+		"../secret",
+		"theme/subdir",
+		"theme name",
+		"theme@name",
+		"theme.yaml",
+	}
+	for _, name := range invalidNames {
+		t.Run(name, func(t *testing.T) {
+			theme, err := LoadTheme(name)
+			if err != nil {
+				t.Errorf("LoadTheme(%q) should not return error, got: %v", name, err)
+			}
+			if theme == nil {
+				t.Errorf("LoadTheme(%q) should return built-in default theme for invalid name", name)
+			}
+			if theme.Name != "Default" {
+				t.Errorf("LoadTheme(%q) should fall back to built-in theme, got: %s", name, theme.Name)
+			}
+		})
+	}
+}
+
 func TestGetDefaultTheme(t *testing.T) {
 	theme := getDefaultTheme()
 	if theme.Name != "Default" {
