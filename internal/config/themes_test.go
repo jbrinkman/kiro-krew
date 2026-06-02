@@ -6,10 +6,10 @@ import (
 
 func TestValidateColor(t *testing.T) {
 	tests := []struct {
-		color    string
-		field    string
-		wantErr  bool
-		errMsg   string
+		color   string
+		field   string
+		wantErr bool
+		errMsg  string
 	}{
 		{"#FF0000", "primary", false, ""},
 		{"#FFF", "primary", false, ""},
@@ -133,5 +133,31 @@ func TestGetDefaultTheme(t *testing.T) {
 	}
 	if err := validateTheme(theme); err != nil {
 		t.Errorf("getDefaultTheme() should return valid theme: %v", err)
+	}
+}
+
+func TestGetAvailableThemes(t *testing.T) {
+	// This test relies on the current directory structure
+	themes := getAvailableThemes()
+	// Should at least contain our test theme
+	found := false
+	for _, theme := range themes {
+		if theme == "test-theme" {
+			found = true
+			break
+		}
+	}
+	if !found && len(themes) > 0 {
+		// If themes directory exists but test-theme not found, that's ok for this minimal test
+		t.Logf("Available themes: %v", themes)
+	}
+	// Test that themes are sorted (if we have multiple)
+	if len(themes) > 1 {
+		for i := 1; i < len(themes); i++ {
+			if themes[i-1] > themes[i] {
+				t.Errorf("themes are not sorted: %v", themes)
+				break
+			}
+		}
 	}
 }

@@ -2,14 +2,18 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
+	"github.com/jbrinkman/kiro-krew/internal/config"
 	"github.com/jbrinkman/kiro-krew/internal/github"
 	"github.com/jbrinkman/kiro-krew/internal/version"
-	tea "charm.land/bubbletea/v2"
 )
 
 type runningWatcher interface {
@@ -100,6 +104,8 @@ func (m model) handleHelp() (model, tea.Cmd) {
 		"  status         - List all agents with details",
 		"  stop <issue>   - Stop agent for specific issue number",
 		"  plan [desc]    - Start interactive planning session",
+		"  theme          - Show current theme",
+		"  theme <name>   - Switch to theme",
 		"  about          - Show version information and check for updates",
 		"  exit           - Exit (Ctrl+C also works)",
 		"  help           - Show this help message",
@@ -167,6 +173,71 @@ func (m model) handleAbout() (model, tea.Cmd) {
 	)
 
 	return m, checkForUpdateCmd()
+}
+
+func (m model) handleTheme(args []string) (model, tea.Cmd) {
+	if len(args) == 0 {
+		// Display current theme
+		m = m.appendActivity(m.styles.Success.Render(fmt.Sprintf("Current theme: %s", m.config.Theme)))
+		return m, nil
+	}
+
+	if len(args) > 1 {
+		m = m.appendActivity(m.styles.Error.Render("Usage: theme [name]"))
+		return m, nil
+	}
+
+	themeName := args[0]
+
+	// Try to load the theme (this handles validation)
+	theme, err := config.LoadTheme(themeName)
+	if err != nil {
+		available := getAvailableThemes()
+		m = m.appendActivity(
+			m.styles.Error.Render(fmt.Sprintf("Failed to load theme '%s': %v", themeName, err)),
+			m.styles.Warning.Render(fmt.Sprintf("Available themes: %s", strings.Join(available, ", "))),
+		)
+		return m, nil
+	}
+
+	// Update config
+	m.config.Theme = themeName
+	m.config.LoadedTheme = theme
+
+	// Save config
+	if err := m.config.Save(); err != nil {
+		m = m.appendActivity(m.styles.Error.Render(fmt.Sprintf("Failed to save config: %v", err)))
+		return m, nil
+	}
+
+	// Update styles with new theme
+	m.styles = NewStyles(theme)
+
+	m = m.appendActivity(m.styles.Success.Render(fmt.Sprintf("Theme changed to: %s", themeName)))
+	return m, nil
+}
+
+func getAvailableThemes() []string {
+	themesDir := ".kiro-krew/themes"
+	entries, err := os.ReadDir(themesDir)
+	if err != nil {
+		return []string{"default"}
+	}
+
+	var themes []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if filepath.Ext(name) == ".yaml" {
+			themeName := strings.TrimSuffix(name, ".yaml")
+			themes = append(themes, themeName)
+		}
+	}
+
+	sort.Strings(themes)
+	return themes
 }
 
 func checkForUpdateCmd() tea.Cmd {

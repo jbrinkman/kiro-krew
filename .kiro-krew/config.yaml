@@ -5,4 +5,4 @@ max_retries: 3
 
 # Theme selection (optional, defaults to 'default')
 # Available themes: default, high-contrast, light
-# theme: high-contrast
+theme: "high-contrast"

@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"github.com/spf13/cobra"
 	"github.com/jbrinkman/kiro-krew/internal/templates"
+	"github.com/spf13/cobra"
 )
 
 var updateCmd = &cobra.Command{
