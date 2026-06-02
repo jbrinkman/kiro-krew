@@ -17,7 +17,58 @@ import (
 //go:embed templates
 var templates embed.FS
 
+// Help data structure
+type CommandHelp struct {
+	Brief    string
+	Usage    string
+	Detailed string
+}
+
+var helpData = map[string]CommandHelp{
+	"init": {
+		Brief:    "Extract project templates",
+		Usage:    "kiro-krew init",
+		Detailed: "Purpose: Extract kiro-krew project templates to current directory.\n\nBehavior:\n- Creates .kiro and .kiro-krew directories with configuration files\n- Skips files that already exist (non-destructive)\n- Sets up the project structure for kiro-krew usage",
+	},
+	"update": {
+		Brief:    "Update project templates (force overwrite)",
+		Usage:    "kiro-krew update",
+		Detailed: "Purpose: Update kiro-krew project templates with force overwrite.\n\nBehavior:\n- Overwrites existing template files to update them to latest versions\n- Uses --force flag behavior by default\n- Never overwrites config.yaml to preserve user settings",
+	},
+	"eval": {
+		Brief:    "Run evaluations or show diff between runs", 
+		Usage:    "kiro-krew eval [agent]\nkiro-krew eval diff <run-a> <run-b>",
+		Detailed: "Purpose: Run evaluations on your project.\n\nUsage:\n- kiro-krew eval: Run evaluation with default settings\n- kiro-krew eval [agent]: Run evaluation with specified agent (optional parameter)\n- kiro-krew eval diff <run-a> <run-b>: Compare two evaluation runs\n\nSubcommands:\n  diff    Compare two evaluation runs (see 'kiro-krew eval diff --help')",
+	},
+	"eval-diff": {
+		Brief:    "Compare two evaluation runs",
+		Usage:    "kiro-krew eval diff <run-a> <run-b>",
+		Detailed: "Purpose: Compare two evaluation runs to see differences.\n\nRequired parameters:\n- run-a: First evaluation run identifier\n- run-b: Second evaluation run identifier\n\nShows detailed comparison between the specified evaluation runs.",
+	},
+}
+
 func main() {
+	// Check for help flags first
+	if len(os.Args) > 1 {
+		// Global help: kiro-krew --help or kiro-krew -h
+		if os.Args[1] == "--help" || os.Args[1] == "-h" {
+			showGeneralHelp()
+			return
+		}
+
+		// Command-specific help: kiro-krew <command> --help or kiro-krew <command> -h
+		if len(os.Args) > 2 && (os.Args[2] == "--help" || os.Args[2] == "-h") {
+			showCommandHelp(strings.ToLower(os.Args[1]))
+			return
+		}
+
+		// eval diff help: kiro-krew eval diff --help or kiro-krew eval diff -h
+		if len(os.Args) > 3 && strings.ToLower(os.Args[1]) == "eval" && strings.ToLower(os.Args[2]) == "diff" && (os.Args[3] == "--help" || os.Args[3] == "-h") {
+			showCommandHelp("eval-diff")
+			return
+		}
+	}
+
 	if len(os.Args) > 1 {
 		switch strings.ToLower(os.Args[1]) {
 		case "init":
@@ -142,4 +193,37 @@ func runEval() error {
 		agent = os.Args[2]
 	}
 	return eval.Run(agent)
+}
+
+func showGeneralHelp() {
+	fmt.Println("kiro-krew - Multi-agent development tool")
+	fmt.Println()
+	fmt.Println("USAGE:")
+	fmt.Println("  kiro-krew [command]")
+	fmt.Println()
+	fmt.Println("AVAILABLE COMMANDS:")
+	// Show commands in specific order, excluding internal eval-diff
+	commands := []string{"init", "update", "eval"}
+	for _, cmd := range commands {
+		if help, exists := helpData[cmd]; exists {
+			fmt.Printf("  %-8s %s\n", cmd, help.Brief)
+		}
+	}
+	fmt.Println()
+	fmt.Println("FLAGS:")
+	fmt.Println("  -h, --help   Show help")
+	fmt.Println()
+	fmt.Println("Use \"kiro-krew [command] --help\" for more information about a command.")
+}
+
+func showCommandHelp(command string) {
+	help, exists := helpData[command]
+	if !exists {
+		fmt.Printf("Unknown command: %s\n\n", command)
+		showGeneralHelp()
+		return
+	}
+
+	fmt.Printf("Usage: %s\n\n", help.Usage)
+	fmt.Printf("%s\n", help.Detailed)
 }
