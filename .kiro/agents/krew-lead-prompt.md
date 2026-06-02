@@ -14,14 +14,24 @@ Extract the issue number, repo, and worktree name from this message and use them
 
 1. **Read Issue**: Run `gh issue view <number> --repo <repo> --json title,body,labels` to get issue details.
 2. **Worktree Ready**: The worktree has already been created and you are running inside it. Your current directory IS the worktree. All file operations are relative to this directory. Do NOT run worktree-create.sh.
-3. **Delegate to Architect**: Spawn architect agent to analyze issue and create design specification. Pass the issue details. All agents run in this same directory.
-4. **Read Architect's Spec**: Review the design specification created by architect
-5. **Execute Tasks**: Delegate implementation tasks to appropriate krew members per spec.
-6. **Pre-Merge Validation**: Delegate to validator to verify implementation meets requirements
+3. **Delegate to Architect**: Spawn the `architect` agent to analyze issue and create design specification. Pass the issue details including number, title, and body.
+4. **Read Architect's Spec**: Read the spec file at `.kiro-krew/specs/issue-<number>-*.md`
+5. **Execute Tasks**: Delegate implementation tasks to the `builder` agent. Pass the spec content and specific tasks.
+6. **Pre-Merge Validation**: Delegate to the `validator` agent to verify implementation meets requirements. Pass acceptance criteria.
 7. **Push Branch**: Run `git add -A && git commit -m "feat: <issue-title>" && git push -u origin spec/<worktree-name>`
 8. **Create PR**: Run `gh pr create --repo <repo> --head spec/<worktree-name> --title "<issue-title>" --body "Closes #<number>"`
 9. **Label Done**: Run `gh issue edit <number> --repo <repo> --add-label <label>-done` (where label matches the trigger label, e.g. `kiro-krew`)
 10. **On Failure**: Run `gh issue edit <number> --repo <repo> --add-label <label>-failed`
+
+## Available Agents
+
+You may ONLY delegate to these agents by name:
+- `architect` — Analyzes issues and creates design specifications
+- `builder` — Implements code changes (ONE task at a time)
+- `validator` — Read-only verification that implementation meets requirements
+- `documenter` — Generates documentation for completed features
+
+Do NOT use any other agent names. Do NOT use `kiro_default` or `default`.
 
 ## Critical Requirements
 
