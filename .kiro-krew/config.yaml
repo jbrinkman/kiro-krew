@@ -1,1 +1,4 @@
-repo: "test/repo"
+repo: "jbrinkman/kiro-krew"
+label: "kiro-krew"
+poll_interval: 1m
+max_retries: 3
