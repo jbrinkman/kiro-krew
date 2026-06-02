@@ -25,8 +25,6 @@ var (
 	activityStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 )
 
-type logMsg string
-
 type tickMsg struct{}
 
 type model struct {

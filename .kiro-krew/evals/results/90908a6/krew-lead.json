@@ -1,0 +1,48 @@
+{
+  "agent": "krew-lead",
+  "git_hash": "90908a6",
+  "cases": [
+    {
+      "case_name": "orchestrate-issue-resolution",
+      "scores": [
+        {
+          "name": "workflow_adherence",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "LLM judge not configured — criterion skipped"
+        },
+        {
+          "name": "delegation_quality",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "LLM judge not configured — criterion skipped"
+        },
+        {
+          "name": "retry_policy_compliance",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "LLM judge not configured — criterion skipped"
+        },
+        {
+          "name": "error_handling",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "LLM judge not configured — criterion skipped"
+        }
+      ],
+      "cost": {
+        "tokens_in": 35,
+        "tokens_out": 365,
+        "estimated_usd": 0.00558
+      }
+    }
+  ]
+}

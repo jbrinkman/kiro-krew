@@ -1,0 +1,17 @@
+agent: krew-lead
+criteria:
+  - name: workflow_adherence
+    description: "All workflow steps executed in correct order: read issue, create worktree, architect, build, validate, push, PR, label"
+    scoring: 1-5
+  - name: delegation_quality
+    description: "Sub-agents receive complete context including WORKTREE_PATH and relevant issue details"
+    scoring: 1-5
+  - name: retry_policy_compliance
+    description: "Four-stage retry process applied correctly with proper attempt tags and escalation"
+    scoring: 1-5
+  - name: error_handling
+    description: "Failures are handled gracefully with appropriate labeling and incident reports when required"
+    scoring: 1-5
+  - name: cost_efficiency
+    description: "Token usage relative to output quality"
+    type: cost

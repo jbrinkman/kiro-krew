@@ -1,0 +1,5 @@
+repo: ""
+label: "kiro-krew"
+poll_interval: 5m
+max_retries: 3
+max_activity_lines: 1000

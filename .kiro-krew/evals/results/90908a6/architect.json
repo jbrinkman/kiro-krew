@@ -1,0 +1,46 @@
+{
+  "agent": "architect",
+  "git_hash": "90908a6",
+  "cases": [
+    {
+      "case_name": "simple-feature-issue",
+      "scores": [
+        {
+          "name": "task_decomposition",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "LLM judge not configured — criterion skipped"
+        },
+        {
+          "name": "acceptance_criteria_testability",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "LLM judge not configured — criterion skipped"
+        },
+        {
+          "name": "file_reference_accuracy",
+          "score": 5,
+          "max_score": 5,
+          "deterministic": true,
+          "reasoning": "3/3 referenced files verified on disk"
+        },
+        {
+          "name": "completeness",
+          "score": 5,
+          "max_score": 5,
+          "deterministic": true,
+          "reasoning": "found 2/2 expected structural elements"
+        }
+      ],
+      "cost": {
+        "tokens_in": 65,
+        "tokens_out": 249,
+        "estimated_usd": 0.00393
+      }
+    }
+  ]
+}
