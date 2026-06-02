@@ -127,8 +127,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tickMsg:
-		newLines := m.readNewLogLines()
+		newLines, newPos := m.readNewLogLines()
 		if len(newLines) > 0 {
+			m.lastLogPos = newPos
 			m = m.appendActivity(newLines...)
 		}
 		return m, m.tickCmd()
@@ -211,29 +212,29 @@ func (m model) View() tea.View {
 	return v
 }
 
-func (m model) readNewLogLines() []string {
+func (m model) readNewLogLines() ([]string, int64) {
 	info, err := m.logReader.Stat()
 	if err != nil {
-		return nil
+		return nil, m.lastLogPos
 	}
 
 	size := info.Size()
 	if size <= m.lastLogPos {
-		return nil
+		return nil, m.lastLogPos
 	}
 
 	buf := make([]byte, size-m.lastLogPos)
 	n, err := m.logReader.ReadAt(buf, m.lastLogPos)
 	if err != nil && err != io.EOF {
-		return nil
+		return nil, m.lastLogPos
 	}
-	m.lastLogPos += int64(n)
+	newPos := m.lastLogPos + int64(n)
 
 	text := strings.TrimRight(string(buf[:n]), "\n")
 	if text == "" {
-		return nil
+		return nil, newPos
 	}
-	return strings.Split(text, "\n")
+	return strings.Split(text, "\n"), newPos
 }
 
 func (m model) tryExit() (model, tea.Cmd) {
