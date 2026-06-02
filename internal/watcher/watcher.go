@@ -37,7 +37,7 @@ func (w *Watcher) Start() {
 	w.cleanupOrphanedWorktrees()
 	w.stop = make(chan struct{})
 	w.started = true
-	log.Printf("[watcher] started — polling %s every %s for label %q", w.config.Repo, w.config.PollInterval, w.config.Label)
+	log.Printf("[watcher] <--------------------starting the watcher--------------------> polling %s every %s for label %q", w.config.Repo, w.config.PollInterval, w.config.Label)
 	go w.pollLoop()
 }
 
@@ -47,7 +47,7 @@ func (w *Watcher) Stop() {
 	}
 	close(w.stop)
 	w.started = false
-	log.Printf("[watcher] stopped")
+	log.Printf("[watcher] <--------------------stopping the watcher--------------------->")
 }
 
 func (w *Watcher) pollLoop() {
