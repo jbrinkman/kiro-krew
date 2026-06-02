@@ -1,0 +1,177 @@
+package config
+
+import (
+	"fmt"
+	"os"
+	"regexp"
+	"strings"
+
+	"gopkg.in/yaml.v3"
+)
+
+type Theme struct {
+	Name        string `yaml:"name"`
+	Description string `yaml:"description"`
+	Colors      struct {
+		Primary       string `yaml:"primary"`
+		Secondary     string `yaml:"secondary"`
+		Success       string `yaml:"success"`
+		Warning       string `yaml:"warning"`
+		Error         string `yaml:"error"`
+		TextPrimary   string `yaml:"text_primary"`
+		TextSecondary string `yaml:"text_secondary"`
+		TextMuted     string `yaml:"text_muted"`
+		Prompt        string `yaml:"prompt"`
+		Separator     string `yaml:"separator"`
+		Activity      string `yaml:"activity"`
+		Background    string `yaml:"background"`
+		Surface       string `yaml:"surface"`
+	} `yaml:"colors"`
+}
+
+var validColorPattern = regexp.MustCompile(`^(#[0-9A-Fa-f]{6}|#[0-9A-Fa-f]{3}|\d{1,3}|[a-zA-Z-]+)$`)
+
+var namedColors = map[string]bool{
+	"black": true, "red": true, "green": true, "yellow": true,
+	"blue": true, "magenta": true, "cyan": true, "white": true,
+	"gray": true, "grey": true, "bright-black": true, "bright-red": true,
+	"bright-green": true, "bright-yellow": true, "bright-blue": true,
+	"bright-magenta": true, "bright-cyan": true, "bright-white": true,
+}
+
+func validateColor(color, field string) error {
+	if color == "" {
+		return fmt.Errorf("color field '%s' is required but empty", field)
+	}
+	
+	if !validColorPattern.MatchString(color) {
+		return fmt.Errorf("invalid color format for '%s': %s (expected hex #RRGGBB, #RGB, ANSI code 0-255, or named color)", field, color)
+	}
+	
+	// Validate ANSI codes (0-255)
+	if regexp.MustCompile(`^\d+$`).MatchString(color) {
+		if len(color) > 3 {
+			return fmt.Errorf("invalid color format for '%s': %s (ANSI codes must be 0-255)", field, color)
+		}
+		// Parse and check range
+		if code := 0; len(color) > 0 {
+			for _, r := range color {
+				code = code*10 + int(r-'0')
+			}
+			if code > 255 {
+				return fmt.Errorf("invalid color format for '%s': %s (ANSI codes must be 0-255)", field, color)
+			}
+		}
+		return nil
+	}
+	
+	// Validate named colors
+	if !strings.HasPrefix(color, "#") {
+		if !namedColors[strings.ToLower(color)] {
+			return fmt.Errorf("unknown named color for '%s': %s", field, color)
+		}
+	}
+	
+	return nil
+}
+
+func validateTheme(theme *Theme) error {
+	if theme.Name == "" {
+		return fmt.Errorf("theme name is required")
+	}
+	
+	// Validate all required color fields
+	colorFields := map[string]string{
+		"primary":        theme.Colors.Primary,
+		"secondary":      theme.Colors.Secondary,
+		"success":        theme.Colors.Success,
+		"warning":        theme.Colors.Warning,
+		"error":          theme.Colors.Error,
+		"text_primary":   theme.Colors.TextPrimary,
+		"text_secondary": theme.Colors.TextSecondary,
+		"text_muted":     theme.Colors.TextMuted,
+		"prompt":         theme.Colors.Prompt,
+		"separator":      theme.Colors.Separator,
+		"activity":       theme.Colors.Activity,
+		"background":     theme.Colors.Background,
+		"surface":        theme.Colors.Surface,
+	}
+	
+	for field, value := range colorFields {
+		if err := validateColor(value, field); err != nil {
+			return err
+		}
+	}
+	
+	return nil
+}
+
+func getDefaultTheme() *Theme {
+	return &Theme{
+		Name:        "Default",
+		Description: "Built-in fallback theme",
+		Colors: struct {
+			Primary       string `yaml:"primary"`
+			Secondary     string `yaml:"secondary"`
+			Success       string `yaml:"success"`
+			Warning       string `yaml:"warning"`
+			Error         string `yaml:"error"`
+			TextPrimary   string `yaml:"text_primary"`
+			TextSecondary string `yaml:"text_secondary"`
+			TextMuted     string `yaml:"text_muted"`
+			Prompt        string `yaml:"prompt"`
+			Separator     string `yaml:"separator"`
+			Activity      string `yaml:"activity"`
+			Background    string `yaml:"background"`
+			Surface       string `yaml:"surface"`
+		}{
+			Primary:       "#00AAFF",
+			Secondary:     "#888888",
+			Success:       "#00AA00",
+			Warning:       "#FFAA00",
+			Error:         "#FF0000",
+			TextPrimary:   "#FFFFFF",
+			TextSecondary: "#CCCCCC",
+			TextMuted:     "#888888",
+			Prompt:        "#00AAFF",
+			Separator:     "#00AAFF",
+			Activity:      "#FFFFFF",
+			Background:    "#000000",
+			Surface:       "#111111",
+		},
+	}
+}
+
+func LoadTheme(name string) (*Theme, error) {
+	path := fmt.Sprintf(".kiro-krew/themes/%s.yaml", name)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if name != "default" {
+			fmt.Printf("Warning: Theme '%s' not found, falling back to default theme\n", name)
+			return LoadTheme("default")
+		}
+		fmt.Printf("Warning: Default theme file not found, using built-in theme\n")
+		return getDefaultTheme(), nil
+	}
+
+	var theme Theme
+	if err := yaml.Unmarshal(data, &theme); err != nil {
+		if name != "default" {
+			fmt.Printf("Warning: Failed to parse theme '%s': %v, falling back to default theme\n", name, err)
+			return LoadTheme("default")
+		}
+		fmt.Printf("Warning: Failed to parse default theme: %v, using built-in theme\n", err)
+		return getDefaultTheme(), nil
+	}
+
+	if err := validateTheme(&theme); err != nil {
+		if name != "default" {
+			fmt.Printf("Warning: Theme '%s' validation failed: %v, falling back to default theme\n", name, err)
+			return LoadTheme("default")
+		}
+		fmt.Printf("Warning: Default theme validation failed: %v, using built-in theme\n", err)
+		return getDefaultTheme(), nil
+	}
+
+	return &theme, nil
+}
