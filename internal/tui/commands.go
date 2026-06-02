@@ -28,6 +28,10 @@ func (m model) handleWatch(action string) (model, tea.Cmd) {
 			m = m.appendActivity("Watcher already running")
 			return m, nil
 		}
+		// Update log position to current end before starting watcher
+		if info, err := m.logReader.Stat(); err == nil {
+			m.lastLogPos = info.Size()
+		}
 		m.watcher.Start()
 	case "stop":
 		if !watcherIsRunning(any(m.watcher)) {
