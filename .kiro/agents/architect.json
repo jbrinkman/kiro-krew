@@ -2,5 +2,6 @@
   "name": "architect",
   "prompt": "file://./architect-prompt.md",
   "tools": ["read", "write", "shell"],
+  "allowedTools": ["read", "write", "shell"],
   "model": "claude-sonnet-4"
 }
