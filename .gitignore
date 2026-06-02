@@ -8,5 +8,6 @@ app_docs/
 test-results/
 /kiro-krew
 /kiro-krew-test
+cmd/kiro-krew/kiro-krew
 /specs/
 .kiro-krew/retries/
