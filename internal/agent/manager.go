@@ -79,7 +79,7 @@ func (m *Manager) Spawn(issueNumber int, repo string) (*Agent, error) {
 	}
 
 	m.agents[id] = agent
-	log.Printf("[agent] started %s (pid %d) for issue #%d", id, cmd.Process.Pid, issueNumber)
+	log.Printf("[agent] started %s for issue #%d (worktree: %s)", id, issueNumber, worktreeName)
 
 	go m.monitorAgent(agent, cmd)
 
@@ -256,7 +256,7 @@ func (m *Manager) retryAgent(agent *Agent) {
 	agent.StartTime = time.Now()
 	m.mu.Unlock()
 
-	log.Printf("[agent] retry started for issue #%d (pid %d)", agent.IssueNumber, cmd.Process.Pid)
+	log.Printf("[agent] retry started for issue #%d (worktree: %s)", agent.IssueNumber, worktreeName)
 	go m.monitorAgent(agent, cmd)
 }
 
