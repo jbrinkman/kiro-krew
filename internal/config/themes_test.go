@@ -29,8 +29,11 @@ func TestValidateColor(t *testing.T) {
 				t.Errorf("validateColor(%s, %s) error = %v, wantErr %v", tt.color, tt.field, err, tt.wantErr)
 				return
 			}
-			if err != nil && tt.errMsg != "" && err.Error()[:len(tt.errMsg)] != tt.errMsg {
-				t.Errorf("validateColor(%s, %s) error = %v, expected to start with %s", tt.color, tt.field, err, tt.errMsg)
+			if err != nil && tt.errMsg != "" {
+				got := err.Error()
+				if len(got) < len(tt.errMsg) || got[:len(tt.errMsg)] != tt.errMsg {
+					t.Errorf("validateColor(%s, %s) error = %v, expected to start with %s", tt.color, tt.field, err, tt.errMsg)
+				}
 			}
 		})
 	}
