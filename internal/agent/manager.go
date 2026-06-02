@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -47,6 +48,69 @@ func NewManager(cfg *config.Config) *Manager {
 	}
 }
 
+type prefixedWriter struct {
+	prefix      []byte
+	writer      io.Writer
+	mu          sync.Mutex
+	atLineStart bool
+}
+
+func (pw *prefixedWriter) Write(p []byte) (n int, err error) {
+	pw.mu.Lock()
+	defer pw.mu.Unlock()
+
+	origLen := len(p)
+	writeAll := func(b []byte) error {
+		for len(b) > 0 {
+			wn, werr := pw.writer.Write(b)
+			if werr != nil {
+				return werr
+			}
+			if wn == 0 {
+				return io.ErrShortWrite
+			}
+			b = b[wn:]
+		}
+		return nil
+	}
+
+	for i := 0; i < len(p); {
+		if pw.atLineStart {
+			if err := writeAll(pw.prefix); err != nil {
+				return 0, err
+			}
+			pw.atLineStart = false
+		}
+
+		j := i
+		for j < len(p) && p[j] != '\n' {
+			j++
+		}
+		if j < len(p) {
+			j++ // include newline
+		}
+
+		if err := writeAll(p[i:j]); err != nil {
+			return 0, err
+		}
+		if j > 0 && p[j-1] == '\n' {
+			pw.atLineStart = true
+		}
+		i = j
+	}
+
+	return origLen, nil
+}
+
+func (m *Manager) createPrefixedWriter(issueNumber int) io.Writer {
+	prefix := fmt.Sprintf("[agent issue-%d] ", issueNumber)
+	return &prefixedWriter{
+		prefix:      []byte(prefix),
+		writer:      os.Stderr,
+		atLineStart: true,
+	}
+}
+
 func (m *Manager) Spawn(issueNumber int, repo string) (*Agent, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -82,8 +146,16 @@ func (m *Manager) Spawn(issueNumber int, repo string) (*Agent, error) {
 		"--trust-all-tools",
 		fmt.Sprintf("Process issue #%d from repo %s. Worktree name: %s. You are already in the worktree directory — all file operations happen here. Skip worktree creation (step 2).", issueNumber, repo, worktreeName))
 	cmd.Dir = worktreePath
-	cmd.Stdout = agentLogFile
-	cmd.Stderr = agentLogFile
+	
+	// Create conditional writer based on console logging configuration
+	var outputWriter io.Writer
+	if m.config.ConsoleLogging {
+		outputWriter = io.MultiWriter(agentLogFile, m.createPrefixedWriter(issueNumber))
+	} else {
+		outputWriter = agentLogFile
+	}
+	cmd.Stdout = outputWriter
+	cmd.Stderr = outputWriter
 	cmd.Env = append(os.Environ(),
 		fmt.Sprintf("ISSUE_NUMBER=%d", issueNumber),
 		fmt.Sprintf("REPO=%s", repo),
@@ -330,8 +402,16 @@ func (m *Manager) retryAgent(agent *Agent) {
 		"--trust-all-tools",
 		fmt.Sprintf("Process issue #%d from repo %s. Worktree name: %s. You are already in the worktree directory — all file operations happen here. Skip worktree creation (step 2).", agent.IssueNumber, m.config.Repo, worktreeName))
 	cmd.Dir = worktreePath
-	cmd.Stdout = agentLogFile
-	cmd.Stderr = agentLogFile
+	
+	// Create conditional writer based on console logging configuration
+	var outputWriter io.Writer
+	if m.config.ConsoleLogging {
+		outputWriter = io.MultiWriter(agentLogFile, m.createPrefixedWriter(agent.IssueNumber))
+	} else {
+		outputWriter = agentLogFile
+	}
+	cmd.Stdout = outputWriter
+	cmd.Stderr = outputWriter
 	cmd.Env = append(os.Environ(),
 		fmt.Sprintf("ISSUE_NUMBER=%d", agent.IssueNumber),
 		fmt.Sprintf("REPO=%s", m.config.Repo),
