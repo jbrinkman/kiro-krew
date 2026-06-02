@@ -49,20 +49,65 @@ func NewManager(cfg *config.Config) *Manager {
 }
 
 type prefixedWriter struct {
-	prefix string
-	writer io.Writer
+	prefix      []byte
+	writer      io.Writer
+	mu          sync.Mutex
+	atLineStart bool
 }
 
 func (pw *prefixedWriter) Write(p []byte) (n int, err error) {
-	prefixed := fmt.Sprintf("%s%s", pw.prefix, string(p))
-	return pw.writer.Write([]byte(prefixed))
+	pw.mu.Lock()
+	defer pw.mu.Unlock()
+
+	origLen := len(p)
+	writeAll := func(b []byte) error {
+		for len(b) > 0 {
+			wn, werr := pw.writer.Write(b)
+			if werr != nil {
+				return werr
+			}
+			if wn == 0 {
+				return io.ErrShortWrite
+			}
+			b = b[wn:]
+		}
+		return nil
+	}
+
+	for i := 0; i < len(p); {
+		if pw.atLineStart {
+			if err := writeAll(pw.prefix); err != nil {
+				return 0, err
+			}
+			pw.atLineStart = false
+		}
+
+		j := i
+		for j < len(p) && p[j] != '\n' {
+			j++
+		}
+		if j < len(p) {
+			j++ // include newline
+		}
+
+		if err := writeAll(p[i:j]); err != nil {
+			return 0, err
+		}
+		if j > 0 && p[j-1] == '\n' {
+			pw.atLineStart = true
+		}
+		i = j
+	}
+
+	return origLen, nil
 }
 
 func (m *Manager) createPrefixedWriter(issueNumber int) io.Writer {
 	prefix := fmt.Sprintf("[agent issue-%d] ", issueNumber)
 	return &prefixedWriter{
-		prefix: prefix,
-		writer: os.Stdout,
+		prefix:      []byte(prefix),
+		writer:      os.Stderr,
+		atLineStart: true,
 	}
 }
 
