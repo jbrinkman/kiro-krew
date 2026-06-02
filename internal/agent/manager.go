@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -53,15 +54,28 @@ func (m *Manager) Spawn(issueNumber int, repo string) (*Agent, error) {
 
 	worktreeName := fmt.Sprintf("issue-%d-%d", issueNumber, os.Getpid())
 
+	// Create worktree before spawning agent so it runs inside it
+	createScript := filepath.Join(".kiro-krew", "scripts", "worktree-create.sh")
+	createCmd := exec.Command("bash", createScript, worktreeName)
+	wtOutput, err := createCmd.Output()
+	if err != nil {
+		log.Printf("[agent] failed to create worktree for issue #%d: %v", issueNumber, err)
+		return nil, fmt.Errorf("failed to create worktree: %w", err)
+	}
+	worktreePath := strings.TrimSpace(string(wtOutput))
+	log.Printf("[agent] created worktree at %s", worktreePath)
+
 	cmd := exec.Command("kiro-cli", "chat",
 		"--agent", "krew-lead",
 		"--no-interactive",
 		"--trust-all-tools",
-		fmt.Sprintf("Process issue #%d from repo %s. Worktree name: %s", issueNumber, repo, worktreeName))
+		fmt.Sprintf("Process issue #%d from repo %s. Worktree name: %s. You are already in the worktree directory — all file operations happen here. Skip worktree creation (step 2).", issueNumber, repo, worktreeName))
+	cmd.Dir = worktreePath
 	cmd.Env = append(os.Environ(),
 		fmt.Sprintf("ISSUE_NUMBER=%d", issueNumber),
 		fmt.Sprintf("REPO=%s", repo),
-		fmt.Sprintf("KIRO_KREW_WATCHER_PID=%d", os.Getpid()))
+		fmt.Sprintf("KIRO_KREW_WATCHER_PID=%d", os.Getpid()),
+		fmt.Sprintf("WORKTREE_PATH=%s", worktreePath))
 
 	if err := cmd.Start(); err != nil {
 		log.Printf("[agent] failed to spawn agent %s for issue #%d: %v", id, issueNumber, err)
@@ -231,16 +245,39 @@ func (m *Manager) retryAgent(agent *Agent) {
 	time.Sleep(delay)
 
 	worktreeName := fmt.Sprintf("issue-%d-%d", agent.IssueNumber, os.Getpid())
+	worktreePath := filepath.Join(".worktrees", worktreeName)
+
+	// Ensure worktree exists (it should from initial spawn, but recreate if needed)
+	if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
+		createScript := filepath.Join(".kiro-krew", "scripts", "worktree-create.sh")
+		createCmd := exec.Command("bash", createScript, worktreeName)
+		if wtOutput, err := createCmd.Output(); err != nil {
+			log.Printf("[agent] retry failed to create worktree for issue #%d: %v", agent.IssueNumber, err)
+			m.mu.Lock()
+			agent.Status = StatusFailed
+			m.mu.Unlock()
+			return
+		} else {
+			worktreePath = strings.TrimSpace(string(wtOutput))
+		}
+	} else {
+		// Convert to absolute path
+		if abs, err := filepath.Abs(worktreePath); err == nil {
+			worktreePath = abs
+		}
+	}
 
 	cmd := exec.Command("kiro-cli", "chat",
 		"--agent", "krew-lead",
 		"--no-interactive",
 		"--trust-all-tools",
-		fmt.Sprintf("Process issue #%d from repo %s. Worktree name: %s", agent.IssueNumber, m.config.Repo, worktreeName))
+		fmt.Sprintf("Process issue #%d from repo %s. Worktree name: %s. You are already in the worktree directory — all file operations happen here. Skip worktree creation (step 2).", agent.IssueNumber, m.config.Repo, worktreeName))
+	cmd.Dir = worktreePath
 	cmd.Env = append(os.Environ(),
 		fmt.Sprintf("ISSUE_NUMBER=%d", agent.IssueNumber),
 		fmt.Sprintf("REPO=%s", m.config.Repo),
-		fmt.Sprintf("KIRO_KREW_WATCHER_PID=%d", os.Getpid()))
+		fmt.Sprintf("KIRO_KREW_WATCHER_PID=%d", os.Getpid()),
+		fmt.Sprintf("WORKTREE_PATH=%s", worktreePath))
 
 	if err := cmd.Start(); err != nil {
 		log.Printf("[agent] retry failed for issue #%d: %v", agent.IssueNumber, err)
