@@ -34,6 +34,9 @@ func New(cfg *config.Config, mgr *agent.Manager) *Watcher {
 }
 
 func (w *Watcher) Start() {
+	if w.started {
+		return
+	}
 	w.cleanupOrphanedWorktrees()
 	w.stop = make(chan struct{})
 	w.started = true
