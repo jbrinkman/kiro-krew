@@ -25,7 +25,15 @@ func Extract(srcDir, destDir string, force bool) error {
 			return err
 		}
 
-		destPath := filepath.Join(destDir, relPath)
+		relSlash := filepath.ToSlash(relPath)
+		switch {
+		case relSlash == "kiro" || strings.HasPrefix(relSlash, "kiro/"):
+			relSlash = ".kiro" + strings.TrimPrefix(relSlash, "kiro")
+		case relSlash == "kiro-krew" || strings.HasPrefix(relSlash, "kiro-krew/"):
+			relSlash = ".kiro-krew" + strings.TrimPrefix(relSlash, "kiro-krew")
+		}
+
+		destPath := filepath.Join(destDir, filepath.FromSlash(relSlash))
 
 		if d.IsDir() {
 			return os.MkdirAll(destPath, 0755)
