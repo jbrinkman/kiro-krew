@@ -2,3 +2,7 @@ repo: "jbrinkman/kiro-krew"
 label: "kiro-krew"
 poll_interval: 1m
 max_retries: 3
+
+# Theme selection (optional, defaults to 'default')
+# Available themes: default, high-contrast, light
+# theme: high-contrast

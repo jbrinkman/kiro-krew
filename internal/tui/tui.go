@@ -10,7 +10,6 @@ import (
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 
 	"golang.org/x/mod/semver"
 
@@ -20,10 +19,7 @@ import (
 	"github.com/jbrinkman/kiro-krew/internal/watcher"
 )
 
-var (
-	promptStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
-	activityStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-)
+
 
 type logMsg string
 
@@ -33,6 +29,7 @@ type model struct {
 	watcher          *watcher.Watcher
 	manager          *agent.Manager
 	config           *config.Config
+	styles           *Styles
 	input            textinput.Model
 	activityLines    []string
 	maxActivityLines int
@@ -50,10 +47,13 @@ func newModel(w *watcher.Watcher, m *agent.Manager, cfg *config.Config, logFile 
 	ti.Prompt = "kiro-krew> "
 	ti.Focus()
 
+	theme := cfg.LoadedTheme
+
 	return model{
 		watcher:          w,
 		manager:          m,
 		config:           cfg,
+		styles:           NewStyles(theme),
 		input:            ti,
 		logFile:          logFile,
 		logReader:        logReader,
@@ -89,22 +89,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case execDoneMsg:
 		if msg.err != nil {
-			m = m.appendActivity(fmt.Sprintf("Planning session exited with error: %v", msg.err))
+			m = m.appendActivity(m.styles.Error.Render(fmt.Sprintf("Planning session exited with error: %v", msg.err)))
 		} else {
-			m = m.appendActivity("Planning session completed.")
+			m = m.appendActivity(m.styles.Success.Render("Planning session completed."))
 		}
 		m.input.Focus()
 		return m, tea.Batch(textinput.Blink, tea.ClearScreen)
 
 	case updateCheckMsg:
 		if msg.err != nil {
-			m = m.appendActivity("Update Status: Unable to check for updates")
-			m = m.appendActivity(fmt.Sprintf("  Error: %v", msg.err))
+			m = m.appendActivity(m.styles.Warning.Render("Update Status: Unable to check for updates"))
+			m = m.appendActivity(m.styles.Error.Render(fmt.Sprintf("  Error: %v", msg.err)))
 		} else {
 			current := version.Version
 			latest := msg.release.TagName
 			if current == "dev" {
-				m = m.appendActivity("Update Status: Development build")
+				m = m.appendActivity(m.styles.Warning.Render("Update Status: Development build"))
 			} else {
 				// Ensure "v" prefix for semver comparison
 				if !strings.HasPrefix(current, "v") {
@@ -114,13 +114,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					latest = "v" + latest
 				}
 				if !semver.IsValid(current) || !semver.IsValid(latest) {
-					m = m.appendActivity("Update Status: Unable to compare versions (non-semver format)")
+					m = m.appendActivity(m.styles.Warning.Render("Update Status: Unable to compare versions (non-semver format)"))
 					m = m.appendActivity(fmt.Sprintf("  Current: %s, Latest: %s", version.Version, msg.release.TagName))
 				} else if semver.Compare(current, latest) < 0 {
-					m = m.appendActivity("Update Status: Update available")
+					m = m.appendActivity(m.styles.Warning.Render("Update Status: Update available"))
 					m = m.appendActivity(fmt.Sprintf("  Latest: %s (%s)", msg.release.TagName, msg.release.Name))
 				} else {
-					m = m.appendActivity("Update Status: Up to date")
+					m = m.appendActivity(m.styles.Success.Render("Update Status: Up to date"))
 				}
 			}
 		}
@@ -145,7 +145,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			default:
 				m.confirmingExit = false
-				m = m.appendActivity("Exit cancelled.")
+				m = m.appendActivity(m.styles.Warning.Render("Exit cancelled."))
 				return m, nil
 			}
 		}
@@ -204,10 +204,10 @@ func (m model) View() tea.View {
 	}
 	activity := activityBuilder.String()
 
-	separator := promptStyle.Render(strings.Repeat("─", m.width))
-	prompt := m.input.View()
+	separator := m.styles.Separator.Render(strings.Repeat("─", m.width))
+	prompt := m.styles.Prompt.Render(m.input.View())
 
-	v := tea.NewView(activityStyle.Render(activity) + "\n" + separator + "\n" + prompt)
+	v := tea.NewView(m.styles.Activity.Render(activity) + "\n" + separator + "\n" + prompt)
 	v.AltScreen = true
 	return v
 }
@@ -248,7 +248,7 @@ func (m model) tryExit() (model, tea.Cmd) {
 
 	if running > 0 {
 		m.confirmingExit = true
-		m = m.appendActivity(fmt.Sprintf("There are %d agents still running. Stop all and exit? (y/N)", running))
+		m = m.appendActivity(m.styles.Warning.Render(fmt.Sprintf("There are %d agents still running. Stop all and exit? (y/N)", running)))
 		return m, nil
 	}
 
@@ -264,7 +264,7 @@ func (m model) executeCommand(input string) (model, tea.Cmd) {
 	switch strings.ToLower(cmd) {
 	case "watch":
 		if len(parts) < 2 {
-			m = m.appendActivity("Usage: watch start|stop")
+			m = m.appendActivity(m.styles.Error.Render("Usage: watch start|stop"))
 			return m, nil
 		}
 		return m.handleWatch(parts[1])
@@ -272,7 +272,7 @@ func (m model) executeCommand(input string) (model, tea.Cmd) {
 		return m.handleStatus()
 	case "stop":
 		if len(parts) < 2 {
-			m = m.appendActivity("Usage: stop <issue-number>")
+			m = m.appendActivity(m.styles.Error.Render("Usage: stop <issue-number>"))
 			return m, nil
 		}
 		return m.handleStop(parts[1])
@@ -289,7 +289,7 @@ func (m model) executeCommand(input string) (model, tea.Cmd) {
 	case "help":
 		return m.handleHelp()
 	default:
-		m = m.appendActivity(fmt.Sprintf("Unknown command: %s", cmd))
+		m = m.appendActivity(m.styles.Error.Render(fmt.Sprintf("Unknown command: %s", cmd)))
 		return m, nil
 	}
 }
