@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -47,6 +48,24 @@ func NewManager(cfg *config.Config) *Manager {
 	}
 }
 
+type prefixedWriter struct {
+	prefix string
+	writer io.Writer
+}
+
+func (pw *prefixedWriter) Write(p []byte) (n int, err error) {
+	prefixed := fmt.Sprintf("%s%s", pw.prefix, string(p))
+	return pw.writer.Write([]byte(prefixed))
+}
+
+func (m *Manager) createPrefixedWriter(issueNumber int) io.Writer {
+	prefix := fmt.Sprintf("[agent issue-%d] ", issueNumber)
+	return &prefixedWriter{
+		prefix: prefix,
+		writer: os.Stdout,
+	}
+}
+
 func (m *Manager) Spawn(issueNumber int, repo string) (*Agent, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -82,8 +101,16 @@ func (m *Manager) Spawn(issueNumber int, repo string) (*Agent, error) {
 		"--trust-all-tools",
 		fmt.Sprintf("Process issue #%d from repo %s. Worktree name: %s. You are already in the worktree directory — all file operations happen here. Skip worktree creation (step 2).", issueNumber, repo, worktreeName))
 	cmd.Dir = worktreePath
-	cmd.Stdout = agentLogFile
-	cmd.Stderr = agentLogFile
+	
+	// Create conditional writer based on console logging configuration
+	var outputWriter io.Writer
+	if m.config.ConsoleLogging {
+		outputWriter = io.MultiWriter(agentLogFile, m.createPrefixedWriter(issueNumber))
+	} else {
+		outputWriter = agentLogFile
+	}
+	cmd.Stdout = outputWriter
+	cmd.Stderr = outputWriter
 	cmd.Env = append(os.Environ(),
 		fmt.Sprintf("ISSUE_NUMBER=%d", issueNumber),
 		fmt.Sprintf("REPO=%s", repo),
@@ -330,8 +357,16 @@ func (m *Manager) retryAgent(agent *Agent) {
 		"--trust-all-tools",
 		fmt.Sprintf("Process issue #%d from repo %s. Worktree name: %s. You are already in the worktree directory — all file operations happen here. Skip worktree creation (step 2).", agent.IssueNumber, m.config.Repo, worktreeName))
 	cmd.Dir = worktreePath
-	cmd.Stdout = agentLogFile
-	cmd.Stderr = agentLogFile
+	
+	// Create conditional writer based on console logging configuration
+	var outputWriter io.Writer
+	if m.config.ConsoleLogging {
+		outputWriter = io.MultiWriter(agentLogFile, m.createPrefixedWriter(agent.IssueNumber))
+	} else {
+		outputWriter = agentLogFile
+	}
+	cmd.Stdout = outputWriter
+	cmd.Stderr = outputWriter
 	cmd.Env = append(os.Environ(),
 		fmt.Sprintf("ISSUE_NUMBER=%d", agent.IssueNumber),
 		fmt.Sprintf("REPO=%s", m.config.Repo),

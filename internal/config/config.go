@@ -14,6 +14,7 @@ type Config struct {
 	PollInterval     time.Duration `yaml:"poll_interval"`
 	MaxRetries       int           `yaml:"max_retries"`
 	MaxActivityLines int           `yaml:"max_activity_lines"`
+	ConsoleLogging   bool          `yaml:"console_logging"`
 }
 
 func Load() (*Config, error) {
@@ -22,6 +23,7 @@ func Load() (*Config, error) {
 		PollInterval:     5 * time.Minute,
 		MaxRetries:       3,
 		MaxActivityLines: 1000,
+		ConsoleLogging:   false,
 	}
 
 	data, err := os.ReadFile(".kiro-krew/config.yaml")
