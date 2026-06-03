@@ -407,9 +407,13 @@ func (m model) renderOverlay() string {
 	
 	// Trim content lines to fit within overlay width
 	maxContentWidth := m.overlayWidth - 6 // Account for border + padding
+	if maxContentWidth < 1 {
+		maxContentWidth = 1
+	}
+	truncateStyle := lipgloss.NewStyle().Width(maxContentWidth)
 	for i, line := range content {
 		if lipgloss.Width(line) > maxContentWidth {
-			content[i] = line[:maxContentWidth-3] + "..."
+			content[i] = truncateStyle.Render(line)
 		}
 	}
 	
