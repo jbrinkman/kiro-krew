@@ -157,9 +157,12 @@ func TestHotkeyIntegrationEndToEnd(t *testing.T) {
 	})
 }
 
-func TestSessionStatePreservation(t *testing.T) {
-	sm := session.NewSessionManager()
+	tempDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	_ = os.Chdir(tempDir)
 
+	sm := session.NewSessionManager()
 	// Create console session with data
 	consoleID, err := sm.Create(session.Console)
 	if err != nil {
