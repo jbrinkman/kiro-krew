@@ -355,7 +355,6 @@ func (m model) renderBaseView() string {
 		promptWidth = 1
 	}
 	// Create prompt with adjusted width
-	// Create prompt with adjusted width
 	promptInput := m.input.View()
 	prompt := m.styles.Prompt.Width(promptWidth).Render(promptInput)
 
