@@ -1,6 +1,9 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -137,27 +140,38 @@ func TestGetDefaultTheme(t *testing.T) {
 }
 
 func TestGetAvailableThemes(t *testing.T) {
-	// This test relies on the current directory structure
-	themes := getAvailableThemes()
-	// Should at least contain our test theme
-	found := false
-	for _, theme := range themes {
-		if theme == "test-theme" {
-			found = true
-			break
+	originalWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get current directory: %v", err)
+	}
+
+	t.Cleanup(func() {
+		if chdirErr := os.Chdir(originalWD); chdirErr != nil {
+			t.Fatalf("failed to restore working directory: %v", chdirErr)
+		}
+	})
+
+	tempDir := t.TempDir()
+	themesDir := filepath.Join(tempDir, ".kiro-krew", "themes")
+	if err := os.MkdirAll(themesDir, 0o755); err != nil {
+		t.Fatalf("failed to create themes directory: %v", err)
+	}
+
+	files := []string{"zebra.yaml", "alpha.yaml", "notes.txt"}
+	for _, file := range files {
+		path := filepath.Join(themesDir, file)
+		if err := os.WriteFile(path, []byte("name: test\n"), 0o644); err != nil {
+			t.Fatalf("failed to write theme fixture %s: %v", file, err)
 		}
 	}
-	if !found && len(themes) > 0 {
-		// If themes directory exists but test-theme not found, that's ok for this minimal test
-		t.Logf("Available themes: %v", themes)
+
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatalf("failed to change directory to temp dir: %v", err)
 	}
-	// Test that themes are sorted (if we have multiple)
-	if len(themes) > 1 {
-		for i := 1; i < len(themes); i++ {
-			if themes[i-1] > themes[i] {
-				t.Errorf("themes are not sorted: %v", themes)
-				break
-			}
-		}
+
+	got := GetAvailableThemes()
+	want := []string{"alpha", "zebra"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("GetAvailableThemes() = %v, want %v", got, want)
 	}
 }

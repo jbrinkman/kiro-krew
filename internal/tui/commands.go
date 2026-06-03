@@ -2,10 +2,7 @@ package tui
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -192,7 +189,7 @@ func (m model) handleTheme(args []string) (model, tea.Cmd) {
 	// Try to load the theme (this handles validation)
 	theme, err := config.LoadTheme(themeName)
 	if err != nil {
-		available := getAvailableThemes()
+		available := config.GetAvailableThemes()
 		m = m.appendActivity(
 			m.styles.Error.Render(fmt.Sprintf("Failed to load theme '%s': %v", themeName, err)),
 			m.styles.Warning.Render(fmt.Sprintf("Available themes: %s", strings.Join(available, ", "))),
@@ -200,12 +197,17 @@ func (m model) handleTheme(args []string) (model, tea.Cmd) {
 		return m, nil
 	}
 
+	previousTheme := m.config.Theme
+	previousLoadedTheme := m.config.LoadedTheme
+
 	// Update config
 	m.config.Theme = themeName
 	m.config.LoadedTheme = theme
 
 	// Save config
 	if err := m.config.Save(); err != nil {
+		m.config.Theme = previousTheme
+		m.config.LoadedTheme = previousLoadedTheme
 		m = m.appendActivity(m.styles.Error.Render(fmt.Sprintf("Failed to save config: %v", err)))
 		return m, nil
 	}
@@ -214,30 +216,7 @@ func (m model) handleTheme(args []string) (model, tea.Cmd) {
 	m.styles = NewStyles(theme)
 
 	m = m.appendActivity(m.styles.Success.Render(fmt.Sprintf("Theme changed to: %s", themeName)))
-	return m, nil
-}
-
-func getAvailableThemes() []string {
-	themesDir := ".kiro-krew/themes"
-	entries, err := os.ReadDir(themesDir)
-	if err != nil {
-		return []string{"default"}
-	}
-
-	var themes []string
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
-		if filepath.Ext(name) == ".yaml" {
-			themeName := strings.TrimSuffix(name, ".yaml")
-			themes = append(themes, themeName)
-		}
-	}
-
-	sort.Strings(themes)
-	return themes
+	return m, tea.ClearScreen
 }
 
 func checkForUpdateCmd() tea.Cmd {

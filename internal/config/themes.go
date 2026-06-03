@@ -166,21 +166,21 @@ func LoadTheme(name string) (*Theme, error) {
 	return &theme, nil
 }
 
-func getAvailableThemes() []string {
+func GetAvailableThemes() []string {
 	var themes []string
-	
+
 	entries, err := os.ReadDir(".kiro-krew/themes")
 	if err != nil {
 		return themes
 	}
-	
+
 	for _, entry := range entries {
 		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".yaml") {
 			name := strings.TrimSuffix(entry.Name(), ".yaml")
 			themes = append(themes, name)
 		}
 	}
-	
+
 	sort.Strings(themes)
 	return themes
 }

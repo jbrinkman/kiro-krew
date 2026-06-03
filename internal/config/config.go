@@ -71,14 +71,15 @@ func (c *Config) Save() error {
 	themeUpdated := false
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
+		leadingWhitespace := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
 		if strings.HasPrefix(trimmed, "theme:") {
-			lines[i] = fmt.Sprintf("theme: %q", c.Theme)
+			lines[i] = fmt.Sprintf("%stheme: %q", leadingWhitespace, c.Theme)
 			themeUpdated = true
 			break
 		}
 		// Check for commented theme line
 		if strings.HasPrefix(trimmed, "# theme:") {
-			lines[i] = fmt.Sprintf("theme: %q", c.Theme)
+			lines[i] = fmt.Sprintf("%stheme: %q", leadingWhitespace, c.Theme)
 			themeUpdated = true
 			break
 		}
