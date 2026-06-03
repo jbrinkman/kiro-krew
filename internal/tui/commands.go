@@ -52,24 +52,27 @@ func (m model) handleWatch(action string) (model, tea.Cmd) {
 
 func (m model) handleStatus() (model, tea.Cmd) {
 	agents := m.manager.List()
+	content := []string{}
+	
 	if len(agents) == 0 {
-		m = m.appendActivity(m.styles.Warning.Render("No agents running"))
-		return m, nil
-	}
+		content = append(content, m.styles.Warning.Render("No agents running"))
+	} else {
+		header := fmt.Sprintf("%-8s %-30s %-10s %s", "Issue", "Title", "Status", "Elapsed")
+		sep := strings.Repeat("─", 70)
+		content = append(content, m.styles.Prompt.Render(header), m.styles.Separator.Render(sep))
 
-	header := fmt.Sprintf("%-8s %-30s %-10s %s", "Issue", "Title", "Status", "Elapsed")
-	sep := strings.Repeat("─", 70)
-	m = m.appendActivity(m.styles.Prompt.Render(header), m.styles.Separator.Render(sep))
-
-	for _, a := range agents {
-		elapsed := time.Since(a.StartTime).Truncate(time.Second)
-		line := fmt.Sprintf("%-8d %-30s %-10s %s",
-			a.IssueNumber,
-			truncate(a.IssueTitle, 30),
-			string(a.Status),
-			elapsed)
-		m = m.appendActivity(line)
+		for _, a := range agents {
+			elapsed := time.Since(a.StartTime).Truncate(time.Second)
+			line := fmt.Sprintf("%-8d %-30s %-10s %s",
+				a.IssueNumber,
+				truncate(a.IssueTitle, 30),
+				string(a.Status),
+				elapsed)
+			content = append(content, line)
+		}
 	}
+	
+	m = m.activateOverlay(overlayStatus, "Agent Status", content)
 	return m, nil
 }
 
@@ -96,7 +99,7 @@ func (m model) handleStop(issueStr string) (model, tea.Cmd) {
 }
 
 func (m model) handleHelp() (model, tea.Cmd) {
-	help := []string{
+	content := []string{
 		m.styles.Prompt.Render("Available commands:"),
 		"  watch start    - Start watching for labeled issues",
 		"  watch stop     - Stop watching",
@@ -112,7 +115,8 @@ func (m model) handleHelp() (model, tea.Cmd) {
 		m.styles.Prompt.Render("Hotkeys:"),
 		"  Ctrl+Alt+P     - Toggle between console and planning modes",
 	}
-	m = m.appendActivity(help...)
+	
+	m = m.activateOverlay(overlayHelp, "Help", content)
 	return m, nil
 }
 
@@ -200,23 +204,22 @@ func truncate(s string, max int) string {
 func (m model) handleAbout() (model, tea.Cmd) {
 	info := version.Info()
 
-	m = m.appendActivity(
-		m.styles.Prompt.Render("Kiro-Krew Version Information:"),
+	content := []string{
 		fmt.Sprintf("  Version:    %s", info["version"]),
 		fmt.Sprintf("  Build Date: %s", info["build_date"]),
 		fmt.Sprintf("  Go Version: %s", info["go_version"]),
 		fmt.Sprintf("  Arch:       %s", info["arch"]),
 		"",
 		"Checking for updates...",
-	)
+	}
 
+	m = m.activateOverlay(overlayAbout, "Kiro-Krew Version Information", content)
 	return m, checkForUpdateCmd()
 }
 
 func (m model) handleTheme(args []string) (model, tea.Cmd) {
 	if len(args) == 0 {
-		// Display current theme
-		m = m.appendActivity(m.styles.Success.Render(fmt.Sprintf("Current theme: %s", m.config.Theme)))
+		// No longer show overlay for current theme - persistent display handles this
 		return m, nil
 	}
 
