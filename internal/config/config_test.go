@@ -37,7 +37,6 @@ enable_copilot_review: false`,
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create temp config directory and file
-			// Create temp config directory and file
 			tmpDir := t.TempDir()
 			configDir := tmpDir + string(os.PathSeparator) + ".kiro-krew"
 			if err := os.Mkdir(configDir, 0755); err != nil {
@@ -48,15 +47,17 @@ enable_copilot_review: false`,
 			if err := os.WriteFile(configFile, []byte(tt.configContent), 0644); err != nil {
 				t.Fatalf("Failed to write config file: %v", err)
 			}
-				t.Fatalf("Failed to write config file: %v", err)
-			}
 			
 			// Change to temp directory
 			oldDir, err := os.Getwd()
 			if err != nil {
 				t.Fatalf("Failed to get working directory: %v", err)
 			}
-			t.Cleanup(func() { _ = os.Chdir(oldDir) })
+			t.Cleanup(func() {
+				if err := os.Chdir(oldDir); err != nil {
+					t.Errorf("Failed to restore working directory: %v", err)
+				}
+			})
 			if err := os.Chdir(tmpDir); err != nil {
 				t.Fatalf("Failed to change directory: %v", err)
 			}
@@ -76,7 +77,6 @@ enable_copilot_review: false`,
 
 func TestLoad_AllDefaultValues(t *testing.T) {
 	// Test that all default values are set correctly
-	// Test that all default values are set correctly
 	tmpDir := t.TempDir()
 	configDir := tmpDir + string(os.PathSeparator) + ".kiro-krew"
 	if err := os.Mkdir(configDir, 0755); err != nil {
@@ -93,7 +93,11 @@ func TestLoad_AllDefaultValues(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get working directory: %v", err)
 	}
-	t.Cleanup(func() { _ = os.Chdir(oldDir) })
+	t.Cleanup(func() {
+		if err := os.Chdir(oldDir); err != nil {
+			t.Errorf("Failed to restore working directory: %v", err)
+		}
+	})
 	if err := os.Chdir(tmpDir); err != nil {
 		t.Fatalf("Failed to change directory: %v", err)
 	}
