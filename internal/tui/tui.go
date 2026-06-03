@@ -19,8 +19,6 @@ import (
 	"github.com/jbrinkman/kiro-krew/internal/watcher"
 )
 
-
-
 type logMsg string
 
 type tickMsg struct{}
@@ -288,6 +286,12 @@ func (m model) executeCommand(input string) (model, tea.Cmd) {
 		return m.handleAbout()
 	case "help":
 		return m.handleHelp()
+	case "theme":
+		args := []string{}
+		if len(parts) > 1 {
+			args = parts[1:]
+		}
+		return m.handleTheme(args)
 	default:
 		m = m.appendActivity(m.styles.Error.Render(fmt.Sprintf("Unknown command: %s", cmd)))
 		return m, nil

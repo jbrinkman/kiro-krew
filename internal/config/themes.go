@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -44,11 +45,11 @@ func validateColor(color, field string) error {
 	if color == "" {
 		return fmt.Errorf("color field '%s' is required but empty", field)
 	}
-	
+
 	if !validColorPattern.MatchString(color) {
 		return fmt.Errorf("invalid color format for '%s': %s (expected hex #RRGGBB, #RGB, ANSI code 0-255, or named color)", field, color)
 	}
-	
+
 	// Validate ANSI codes (0-255)
 	if regexp.MustCompile(`^\d+$`).MatchString(color) {
 		if len(color) > 3 {
@@ -65,14 +66,14 @@ func validateColor(color, field string) error {
 		}
 		return nil
 	}
-	
+
 	// Validate named colors
 	if !strings.HasPrefix(color, "#") {
 		if !namedColors[strings.ToLower(color)] {
 			return fmt.Errorf("unknown named color for '%s': %s", field, color)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -80,7 +81,7 @@ func validateTheme(theme *Theme) error {
 	if theme.Name == "" {
 		return fmt.Errorf("theme name is required")
 	}
-	
+
 	// Validate all required color fields
 	colorFields := map[string]string{
 		"primary":        theme.Colors.Primary,
@@ -97,13 +98,13 @@ func validateTheme(theme *Theme) error {
 		"background":     theme.Colors.Background,
 		"surface":        theme.Colors.Surface,
 	}
-	
+
 	for field, value := range colorFields {
 		if err := validateColor(value, field); err != nil {
 			return err
 		}
 	}
-	
+
 	return nil
 }
 
@@ -163,4 +164,23 @@ func LoadTheme(name string) (*Theme, error) {
 	}
 
 	return &theme, nil
+}
+
+func GetAvailableThemes() []string {
+	var themes []string
+
+	entries, err := os.ReadDir(".kiro-krew/themes")
+	if err != nil {
+		return themes
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".yaml") {
+			name := strings.TrimSuffix(entry.Name(), ".yaml")
+			themes = append(themes, name)
+		}
+	}
+
+	sort.Strings(themes)
+	return themes
 }

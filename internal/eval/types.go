@@ -2,7 +2,7 @@ package eval
 
 // Rubric defines scoring criteria for an agent.
 type Rubric struct {
-	Agent    string     `yaml:"agent" json:"agent"`
+	Agent    string      `yaml:"agent" json:"agent"`
 	Criteria []Criterion `yaml:"criteria" json:"criteria"`
 }
 
@@ -10,9 +10,9 @@ type Rubric struct {
 type Criterion struct {
 	Name          string `yaml:"name" json:"name"`
 	Description   string `yaml:"description" json:"description"`
-	Scoring       string `yaml:"scoring" json:"scoring"`                 // e.g. "1-5"
+	Scoring       string `yaml:"scoring" json:"scoring"` // e.g. "1-5"
 	Deterministic bool   `yaml:"deterministic,omitempty" json:"deterministic,omitempty"`
-	Type          string `yaml:"type,omitempty" json:"type,omitempty"`   // e.g. "cost"
+	Type          string `yaml:"type,omitempty" json:"type,omitempty"` // e.g. "cost"
 }
 
 // TestCase defines input and expected characteristics for an agent evaluation.
@@ -57,7 +57,7 @@ type AgentResult struct {
 
 // Summary holds aggregate results for an eval run.
 type Summary struct {
-	GitHash    string            `json:"git_hash"`
-	TotalCost  CostInfo          `json:"total_cost"`
+	GitHash     string             `json:"git_hash"`
+	TotalCost   CostInfo           `json:"total_cost"`
 	AgentScores map[string]float64 `json:"agent_scores"` // agent -> average score
 }

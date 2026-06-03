@@ -1,15 +1,18 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
+	"reflect"
 	"testing"
 )
 
 func TestValidateColor(t *testing.T) {
 	tests := []struct {
-		color    string
-		field    string
-		wantErr  bool
-		errMsg   string
+		color   string
+		field   string
+		wantErr bool
+		errMsg  string
 	}{
 		{"#FF0000", "primary", false, ""},
 		{"#FFF", "primary", false, ""},
@@ -133,5 +136,42 @@ func TestGetDefaultTheme(t *testing.T) {
 	}
 	if err := validateTheme(theme); err != nil {
 		t.Errorf("getDefaultTheme() should return valid theme: %v", err)
+	}
+}
+
+func TestGetAvailableThemes(t *testing.T) {
+	originalWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get current directory: %v", err)
+	}
+
+	t.Cleanup(func() {
+		if chdirErr := os.Chdir(originalWD); chdirErr != nil {
+			t.Fatalf("failed to restore working directory: %v", chdirErr)
+		}
+	})
+
+	tempDir := t.TempDir()
+	themesDir := filepath.Join(tempDir, ".kiro-krew", "themes")
+	if err := os.MkdirAll(themesDir, 0o755); err != nil {
+		t.Fatalf("failed to create themes directory: %v", err)
+	}
+
+	files := []string{"zebra.yaml", "alpha.yaml", "notes.txt"}
+	for _, file := range files {
+		path := filepath.Join(themesDir, file)
+		if err := os.WriteFile(path, []byte("name: test\n"), 0o644); err != nil {
+			t.Fatalf("failed to write theme fixture %s: %v", file, err)
+		}
+	}
+
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatalf("failed to change directory to temp dir: %v", err)
+	}
+
+	got := GetAvailableThemes()
+	want := []string{"alpha", "zebra"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("GetAvailableThemes() = %v, want %v", got, want)
 	}
 }
