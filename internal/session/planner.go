@@ -135,9 +135,8 @@ func (p *PlannerProcess) Stop() error {
 	
 	// Wait for process to finish
 	_ = p.cmd.Wait()
-	
-	close(p.output)
-	
+
+	// p.output is closed by captureOutput once stdout/stderr readers have exited.
 	return nil
 }
 
