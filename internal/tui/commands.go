@@ -299,17 +299,11 @@ func (m model) switchToPlanningMode() (model, tea.Cmd) {
 	}
 
 	var sessionMsg string
-	if planningSessionID != "" {
-		sessionMsg = fmt.Sprintf("Resuming planning session %s...", planningSessionID[:8])
-	} else {
-		// Try to create new session
-		newSessionID, err := m.sessionManager.Create(session.Planning)
-		if err != nil {
-			m = m.appendActivity(m.styles.Error.Render(fmt.Sprintf("Failed to create planning session: %v", err)))
-			return m, nil
-		}
-		sessionMsg = fmt.Sprintf("Starting new planning session %s...", newSessionID[:8])
+	if planningSessionID == "" {
+		m = m.appendActivity(m.styles.Warning.Render("No active planning session"))
+		return m, nil
 	}
+	sessionMsg = fmt.Sprintf("Resuming planning session %s...", planningSessionID[:8])
 
 	m = m.appendActivity(m.styles.Success.Render(sessionMsg))
 	m.currentMode = session.Planning
