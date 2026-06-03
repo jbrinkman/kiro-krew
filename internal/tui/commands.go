@@ -309,27 +309,7 @@ func (m model) switchToPlanningMode() (model, tea.Cmd) {
 	m.currentMode = session.Planning
 	m.input.Blur()
 
-	// Execute planning mode with banner
-	banner := `cols=$(tput cols 2>/dev/null || echo 80)
-art1="  _  ___              _  __                   "
-art2=" | |/ (_)_ __ ___    | |/ /_ __ _____      __"
-art3=" | ' /| | '__/ _ \   | ' /| '__/ _ \ \ /\ / /"
-art4=" | . \| | | | (_) |  | . \| | |  __/\ V  V / "
-art5=" |_|\_\_|_|  \___/   |_|\_\_|  \___| \_/\_/  "
-pad() { w=${#1}; p=$(( (cols - w) / 2 )); [ "$p" -lt 0 ] && p=0; printf "%*s%s\n" "$p" "" "$1"; }
-echo ""
-pad "$art1"
-pad "$art2"
-pad "$art3"
-pad "$art4"
-pad "$art5"
-echo ""`
-	script := "clear && " + banner + " && exec kiro-cli chat --classic --agent planner"
-	cmd := exec.Command("sh", "-c", script)
-	
-	return m, tea.ExecProcess(cmd, func(err error) tea.Msg {
-		return execDoneMsg{err: err}
-	})
+	return m, tea.ClearScreen
 }
 
 // switchToConsoleMode switches from planning to console mode while preserving planning state
