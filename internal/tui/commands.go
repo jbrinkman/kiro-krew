@@ -225,7 +225,17 @@ func (m model) getOverlayContentWidth() int {
 	if overlayWidth < 40 {
 		overlayWidth = 40
 	}
-	return overlayWidth - 6 // Account for border and padding
+
+	// Ensure overlay doesn't exceed screen bounds (mirrors renderOverlay()).
+	if overlayWidth >= m.width {
+		overlayWidth = m.width - 2
+	}
+
+	contentWidth := overlayWidth - 6 // Account for border and padding
+	if contentWidth < 1 {
+		contentWidth = 1
+	}
+	return contentWidth
 }
 
 func (m model) handleAbout() (model, tea.Cmd) {
