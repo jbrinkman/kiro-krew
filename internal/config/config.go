@@ -20,6 +20,10 @@ type Config struct {
 	LoadedTheme      *Theme        `yaml:"-"`
 }
 
+func extractLeadingWhitespace(line string) string {
+	return line[:len(line)-len(strings.TrimLeft(line, " \t"))]
+}
+
 func Load() (*Config, error) {
 	cfg := &Config{
 		Label:            "kiro-krew",
@@ -71,7 +75,7 @@ func (c *Config) Save() error {
 	themeUpdated := false
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		leadingWhitespace := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
+		leadingWhitespace := extractLeadingWhitespace(line)
 		if strings.HasPrefix(trimmed, "theme:") {
 			lines[i] = fmt.Sprintf("%stheme: %q", leadingWhitespace, c.Theme)
 			themeUpdated = true
@@ -92,7 +96,7 @@ func (c *Config) Save() error {
 
 	// Write back to file
 	content := strings.Join(lines, "\n")
-	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte(content), 0o644); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
