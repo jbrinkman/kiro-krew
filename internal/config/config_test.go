@@ -89,8 +89,11 @@ func TestLoad_AllDefaultValues(t *testing.T) {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 	
-	oldDir, _ := os.Getwd()
-	defer os.Chdir(oldDir)
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get working directory: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(oldDir) })
 	if err := os.Chdir(tmpDir); err != nil {
 		t.Fatalf("Failed to change directory: %v", err)
 	}
