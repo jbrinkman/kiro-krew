@@ -7,9 +7,11 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"github.com/jbrinkman/kiro-krew/internal/config"
 	"github.com/jbrinkman/kiro-krew/internal/github"
+	"github.com/jbrinkman/kiro-krew/internal/session"
 	"github.com/jbrinkman/kiro-krew/internal/version"
 )
 
@@ -106,17 +108,56 @@ func (m model) handleHelp() (model, tea.Cmd) {
 		"  about          - Show version information and check for updates",
 		"  exit           - Exit (Ctrl+C also works)",
 		"  help           - Show this help message",
+		"",
+		m.styles.Prompt.Render("Hotkeys:"),
+		"  Ctrl+Alt+P     - Toggle between console and planning modes",
 	}
 	m = m.appendActivity(help...)
 	return m, nil
 }
 
 func (m model) handlePlan(description string) (model, tea.Cmd) {
+	// Check for existing planning sessions
+	sessions, err := m.sessionManager.List()
+	if err != nil {
+		m = m.appendActivity(m.styles.Error.Render(fmt.Sprintf("Failed to check sessions: %v", err)))
+		return m, nil
+	}
+
+	// Look for existing planning sessions
+	var planningSessionID string
+	for _, sessionID := range sessions {
+		state, err := m.sessionManager.Load(sessionID)
+		if err != nil {
+			// Log corrupted session but continue
+			m = m.appendActivity(m.styles.Warning.Render(fmt.Sprintf("Skipping corrupted session %s", sessionID[:8])))
+			continue
+		}
+		if state.Type == session.Planning {
+			planningSessionID = sessionID
+			break
+		}
+	}
+
+	if planningSessionID != "" {
+		// Resume existing session
+		m = m.appendActivity(m.styles.Success.Render(fmt.Sprintf("Resuming planning session %s...", planningSessionID[:8])))
+	} else {
+		// Create new session
+		sessionID, err := m.sessionManager.Create(session.Planning)
+		if err != nil {
+			m = m.appendActivity(m.styles.Error.Render(fmt.Sprintf("Failed to create session: %v", err)))
+			return m, nil
+		}
+		m = m.appendActivity(m.styles.Success.Render(fmt.Sprintf("Created new planning session %s", sessionID[:8])))
+	}
+
 	args := []string{"chat", "--classic", "--agent", "planner"}
 	if description != "" {
 		args = append(args, description)
 	}
 	m.input.Blur()
+	
 	// Wrap in shell with clear and centered ASCII art banner
 	banner := `cols=$(tput cols 2>/dev/null || echo 80)
 art1="  _  ___              _  __                   "
@@ -224,4 +265,107 @@ func checkForUpdateCmd() tea.Cmd {
 		release, err := github.GetLatestRelease("jbrinkman/kiro-krew")
 		return updateCheckMsg{release: release, err: err}
 	}
+}
+
+// switchToPlanningMode switches from console to planning mode while preserving console state
+func (m model) switchToPlanningMode() (model, tea.Cmd) {
+	// Preserve current console state
+	m.consoleState.inputValue = m.input.Value()
+	m.consoleState.activityLines = make([]string, len(m.activityLines))
+	copy(m.consoleState.activityLines, m.activityLines)
+
+	// Check for existing planning sessions with error recovery
+	sessions, err := m.sessionManager.List()
+	if err != nil {
+		m = m.appendActivity(m.styles.Error.Render(fmt.Sprintf("Failed to check sessions: %v", err)))
+		return m, nil
+	}
+
+	// Look for existing planning session with corruption handling
+	var planningSessionID string
+	for _, sessionID := range sessions {
+		state, err := m.sessionManager.Load(sessionID)
+		if err != nil {
+			if strings.Contains(err.Error(), "corruption") {
+				m = m.appendActivity(m.styles.Warning.Render(fmt.Sprintf("Removing corrupted session %s", sessionID[:8])))
+				_ = m.sessionManager.Delete(sessionID)
+			}
+			continue
+		}
+		if state.Type == session.Planning {
+			planningSessionID = sessionID
+			break
+		}
+	}
+
+	var sessionMsg string
+	if planningSessionID != "" {
+		sessionMsg = fmt.Sprintf("Resuming planning session %s...", planningSessionID[:8])
+	} else {
+		// Try to create new session
+		newSessionID, err := m.sessionManager.Create(session.Planning)
+		if err != nil {
+			m = m.appendActivity(m.styles.Error.Render(fmt.Sprintf("Failed to create planning session: %v", err)))
+			return m, nil
+		}
+		sessionMsg = fmt.Sprintf("Starting new planning session %s...", newSessionID[:8])
+	}
+
+	m = m.appendActivity(m.styles.Success.Render(sessionMsg))
+	m.currentMode = session.Planning
+	m.input.Blur()
+
+	// Execute planning mode with banner
+	banner := `cols=$(tput cols 2>/dev/null || echo 80)
+art1="  _  ___              _  __                   "
+art2=" | |/ (_)_ __ ___    | |/ /_ __ _____      __"
+art3=" | ' /| | '__/ _ \   | ' /| '__/ _ \ \ /\ / /"
+art4=" | . \| | | | (_) |  | . \| | |  __/\ V  V / "
+art5=" |_|\_\_|_|  \___/   |_|\_\_|  \___| \_/\_/  "
+pad() { w=${#1}; p=$(( (cols - w) / 2 )); [ "$p" -lt 0 ] && p=0; printf "%*s%s\n" "$p" "" "$1"; }
+echo ""
+pad "$art1"
+pad "$art2"
+pad "$art3"
+pad "$art4"
+pad "$art5"
+echo ""`
+	script := "clear && " + banner + " && exec kiro-cli chat --classic --agent planner"
+	cmd := exec.Command("sh", "-c", script)
+	
+	return m, tea.ExecProcess(cmd, func(err error) tea.Msg {
+		return execDoneMsg{err: err}
+	})
+}
+
+// switchToConsoleMode switches from planning to console mode while preserving planning state
+func (m model) switchToConsoleMode() (model, tea.Cmd) {
+	if m.activePlanningSession != nil {
+		// Suspend and preserve planning session state with error handling
+		if err := m.activePlanningSession.SuspendAndDetach(); err != nil {
+			m = m.appendActivity(m.styles.Error.Render(fmt.Sprintf("Failed to suspend planning session: %v", err)))
+			// Continue anyway, don't block mode switch
+		} else {
+			m = m.appendActivity(m.styles.Success.Render("Planning session suspended, switching to console mode"))
+		}
+		m.activePlanningSession = nil
+	}
+
+	// Switch to console mode and restore console state
+	m.currentMode = session.Console
+	m = m.restoreConsoleState()
+	m.input.Focus()
+	
+	return m, tea.Batch(textinput.Blink, tea.ClearScreen)
+}
+
+// restoreConsoleState restores the console state after returning from planning mode
+func (m model) restoreConsoleState() model {
+	if m.consoleState != nil {
+		m.input.SetValue(m.consoleState.inputValue)
+		m.activityLines = make([]string, len(m.consoleState.activityLines))
+		copy(m.activityLines, m.consoleState.activityLines)
+	}
+	m.currentMode = session.Console
+	return m
 }

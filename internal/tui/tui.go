@@ -15,6 +15,8 @@ import (
 
 	"github.com/jbrinkman/kiro-krew/internal/agent"
 	"github.com/jbrinkman/kiro-krew/internal/config"
+	"github.com/jbrinkman/kiro-krew/internal/hotkey"
+	"github.com/jbrinkman/kiro-krew/internal/session"
 	"github.com/jbrinkman/kiro-krew/internal/version"
 	"github.com/jbrinkman/kiro-krew/internal/watcher"
 )
@@ -23,21 +25,32 @@ type logMsg string
 
 type tickMsg struct{}
 
+type planningHotkeyMsg struct{}
+
+type consoleState struct {
+	inputValue    string
+	activityLines []string
+}
+
 type model struct {
-	watcher          *watcher.Watcher
-	manager          *agent.Manager
-	config           *config.Config
-	styles           *Styles
-	input            textinput.Model
-	activityLines    []string
-	maxActivityLines int
-	width            int
-	height           int
-	confirmingExit   bool
-	logFile          *os.File
-	logReader        *os.File
-	lastLogPos       int64
-	quitting         bool
+	watcher            *watcher.Watcher
+	manager            *agent.Manager
+	sessionManager     *session.SessionManager
+	config             *config.Config
+	styles             *Styles
+	input              textinput.Model
+	activityLines      []string
+	maxActivityLines   int
+	width              int
+	height             int
+	confirmingExit     bool
+	logFile            *os.File
+	logReader          *os.File
+	lastLogPos         int64
+	quitting           bool
+	currentMode        session.SessionType
+	consoleState       *consoleState
+	activePlanningSession *session.PlanningSession
 }
 
 func newModel(w *watcher.Watcher, m *agent.Manager, cfg *config.Config, logFile *os.File, logReader *os.File) model {
@@ -50,12 +63,18 @@ func newModel(w *watcher.Watcher, m *agent.Manager, cfg *config.Config, logFile 
 	return model{
 		watcher:          w,
 		manager:          m,
+		sessionManager:   session.NewSessionManager(),
 		config:           cfg,
 		styles:           NewStyles(theme),
 		input:            ti,
 		logFile:          logFile,
 		logReader:        logReader,
 		maxActivityLines: cfg.MaxActivityLines,
+		currentMode:      session.Console,
+		consoleState: &consoleState{
+			inputValue:    "",
+			activityLines: make([]string, 0),
+		},
 	}
 }
 
@@ -91,6 +110,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m = m.appendActivity(m.styles.Success.Render("Planning session completed."))
 		}
+		
+		// Clean up planning session tracking
+		if m.activePlanningSession != nil {
+			m.activePlanningSession = nil
+		}
+		
+		m = m.restoreConsoleState()
 		m.input.Focus()
 		return m, tea.Batch(textinput.Blink, tea.ClearScreen)
 
@@ -132,7 +158,30 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.tickCmd()
 
+	case planningHotkeyMsg:
+		if m.currentMode == session.Planning {
+			return m.switchToConsoleMode()
+		}
+		return m, nil
+
+	case hotkey.HotkeyTriggeredMsg:
+		if m.currentMode == session.Console {
+			return m.switchToPlanningMode()
+		} else if m.currentMode == session.Planning && m.activePlanningSession != nil {
+			return m.switchToConsoleMode()
+		}
+		return m, nil
+
+	case hotkey.HotkeyErrorMsg:
+		m = m.appendActivity(m.styles.Error.Render(fmt.Sprintf("Hotkey error: %v", msg.Err)))
+		return m, nil
+
 	case tea.KeyPressMsg:
+		// Handle hotkey detection first
+		if hotkeyCmd := hotkey.HandleKeyMsg(msg); hotkeyCmd != nil {
+			return m, hotkeyCmd
+		}
+
 		if m.confirmingExit {
 			input := strings.ToLower(strings.TrimSpace(msg.String()))
 			switch input {
@@ -329,6 +378,13 @@ func Run(w *watcher.Watcher, m *agent.Manager, cfg *config.Config) error {
 
 	mdl := newModel(w, m, cfg, logFile, logReader)
 	mdl.lastLogPos = startPos
+
+	// Setup cleanup on exit
+	defer func() {
+		if err := mdl.sessionManager.CleanupOnExit(); err != nil {
+			log.Printf("Session cleanup error: %v", err)
+		}
+	}()
 
 	p := tea.NewProgram(mdl)
 	_, err = p.Run()

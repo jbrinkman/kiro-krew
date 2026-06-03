@@ -9,6 +9,12 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+type SessionConfig struct {
+	MaxHistoryMessages int           `yaml:"max_history_messages"`
+	MaxAge             time.Duration `yaml:"max_age"`
+	SessionsDir        string        `yaml:"sessions_dir"`
+}
+
 type Config struct {
 	Repo                string        `yaml:"repo"`
 	Label               string        `yaml:"label"`
@@ -18,6 +24,7 @@ type Config struct {
 	ConsoleLogging      bool          `yaml:"console_logging"`
 	Theme               string        `yaml:"theme"`
 	EnableCopilotReview bool          `yaml:"enable_copilot_review"`
+	Session             SessionConfig `yaml:"session"`
 	LoadedTheme         *Theme        `yaml:"-"`
 }
 
@@ -34,6 +41,11 @@ func Load() (*Config, error) {
 		ConsoleLogging:      false,
 		Theme:               "default",
 		EnableCopilotReview: true,
+		Session: SessionConfig{
+			MaxHistoryMessages: 100,
+			MaxAge:             24 * time.Hour,
+			SessionsDir:        ".kiro-krew/sessions",
+		},
 	}
 
 	data, err := os.ReadFile(".kiro-krew/config.yaml")
@@ -47,6 +59,17 @@ func Load() (*Config, error) {
 
 	if cfg.Repo == "" {
 		return nil, fmt.Errorf("repo field is required")
+	}
+
+	// Validate session config
+	if cfg.Session.MaxHistoryMessages <= 0 {
+		return nil, fmt.Errorf("session.max_history_messages must be greater than 0")
+	}
+	if cfg.Session.MaxAge <= 0 {
+		return nil, fmt.Errorf("session.max_age must be greater than 0")
+	}
+	if cfg.Session.SessionsDir == "" {
+		return nil, fmt.Errorf("session.sessions_dir cannot be empty")
 	}
 
 	// Load the specified theme
