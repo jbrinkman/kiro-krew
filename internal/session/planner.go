@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"sync"
 	"syscall"
 )
 
@@ -156,31 +157,32 @@ func (p *PlannerProcess) IsRunning() bool {
 
 // captureOutput reads from stdout/stderr and forwards to output channel
 func (p *PlannerProcess) captureOutput() {
-	defer func() {
-		close(p.output)
-	}()
-	
-	// Read stdout
-	go func() {
-		scanner := bufio.NewScanner(p.stdout)
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	forwardOutput := func(reader io.Reader, prefix string) {
+		defer wg.Done()
+
+		scanner := bufio.NewScanner(reader)
 		for scanner.Scan() {
+			line := scanner.Text()
+			if prefix != "" {
+				line = prefix + line
+			}
+
 			select {
-			case p.output <- scanner.Text():
+			case p.output <- line:
 			case <-p.ctx.Done():
 				return
 			}
 		}
-	}()
-	
-	// Read stderr
-	scanner := bufio.NewScanner(p.stderr)
-	for scanner.Scan() {
-		select {
-		case p.output <- "[ERROR] " + scanner.Text():
-		case <-p.ctx.Done():
-			return
-		}
 	}
+
+	go forwardOutput(p.stdout, "")
+	go forwardOutput(p.stderr, "[ERROR] ")
+
+	wg.Wait()
+	close(p.output)
 }
 
 // PlanningSession manages a complete planning session with subprocess and history
