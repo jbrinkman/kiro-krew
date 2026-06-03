@@ -100,8 +100,21 @@ kiro-krew
 | `watch stop` | Stop polling |
 | `status` | Show all agents with issue, status, and elapsed time |
 | `stop <issue>` | Stop the agent working on a specific issue number |
+| `plan [desc]` | Start interactive planning session |
+| `theme` | Show current theme |
+| `theme <name>` | Switch to theme |
+| `about` | Show version information and check for updates |
 | `exit` | Exit (confirms if agents are still running) |
 | `help` | Show available commands |
+
+### Hotkey Toggle
+
+Press **Ctrl+Alt+P** (or **Ctrl+Option+P** on macOS) to toggle between console and planning modes:
+
+- **Console Mode**: Main Kiro Krew interface for managing watchers and agents
+- **Planning Mode**: Interactive AI-assisted issue creation and planning
+
+Both modes preserve their state when you switch, allowing seamless workflow transitions. See [docs/hotkey-toggle.md](docs/hotkey-toggle.md) for detailed usage information.
 
 ## Architecture
 

@@ -16,6 +16,8 @@ import (
 
 	"github.com/jbrinkman/kiro-krew/internal/agent"
 	"github.com/jbrinkman/kiro-krew/internal/config"
+	"github.com/jbrinkman/kiro-krew/internal/hotkey"
+	"github.com/jbrinkman/kiro-krew/internal/session"
 	"github.com/jbrinkman/kiro-krew/internal/version"
 	"github.com/jbrinkman/kiro-krew/internal/watcher"
 )
@@ -24,6 +26,8 @@ type logMsg string
 
 type tickMsg struct{}
 
+type planningHotkeyMsg struct{}
+
 type overlayType int
 
 const (
@@ -31,7 +35,7 @@ const (
 	overlayStatus
 	overlayHelp
 	overlayAbout
-	
+
 	maxOverlayLines = 1000 // Prevent memory growth from very large overlay content
 )
 
@@ -40,22 +44,31 @@ type overlayContent struct {
 	content []string
 }
 
+type consoleState struct {
+	inputValue    string
+	activityLines []string
+}
+
 type model struct {
-	watcher          *watcher.Watcher
-	manager          *agent.Manager
-	config           *config.Config
-	styles           *Styles
-	input            textinput.Model
-	activityLines    []string
-	maxActivityLines int
-	width            int
-	height           int
-	confirmingExit   bool
-	logFile          *os.File
-	logReader        *os.File
-	lastLogPos       int64
-	quitting         bool
-	
+	watcher               *watcher.Watcher
+	manager               *agent.Manager
+	sessionManager        *session.SessionManager
+	config                *config.Config
+	styles                *Styles
+	input                 textinput.Model
+	activityLines         []string
+	maxActivityLines      int
+	width                 int
+	height                int
+	confirmingExit        bool
+	logFile               *os.File
+	logReader             *os.File
+	lastLogPos            int64
+	quitting              bool
+	currentMode           session.SessionType
+	consoleState          *consoleState
+	activePlanningSession *session.PlanningSession
+
 	// Overlay system
 	activeOverlay  overlayType
 	overlayContent overlayContent
@@ -73,12 +86,18 @@ func newModel(w *watcher.Watcher, m *agent.Manager, cfg *config.Config, logFile 
 	return model{
 		watcher:          w,
 		manager:          m,
+		sessionManager:   session.NewSessionManager(),
 		config:           cfg,
 		styles:           NewStyles(theme),
 		input:            ti,
 		logFile:          logFile,
 		logReader:        logReader,
 		maxActivityLines: cfg.MaxActivityLines,
+		currentMode:      session.Console,
+		consoleState: &consoleState{
+			inputValue:    "",
+			activityLines: make([]string, 0),
+		},
 	}
 }
 
@@ -125,6 +144,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m = m.appendActivity(m.styles.Success.Render("Planning session completed."))
 		}
+
+		// Clean up planning session tracking
+		if m.activePlanningSession != nil {
+			m.activePlanningSession = nil
+		}
+
+		m = m.restoreConsoleState()
 		m.input.Focus()
 		return m, tea.Batch(textinput.Blink, tea.ClearScreen)
 
@@ -190,7 +216,30 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.tickCmd()
 
+	case planningHotkeyMsg:
+		if m.currentMode == session.Planning {
+			return m.switchToConsoleMode()
+		}
+		return m, nil
+
+	case hotkey.HotkeyTriggeredMsg:
+		if m.currentMode == session.Console {
+			return m.switchToPlanningMode()
+		} else if m.currentMode == session.Planning {
+			return m.switchToConsoleMode()
+		}
+		return m, nil
+
+	case hotkey.HotkeyErrorMsg:
+		m = m.appendActivity(m.styles.Error.Render(fmt.Sprintf("Hotkey error: %v", msg.Err)))
+		return m, nil
+
 	case tea.KeyPressMsg:
+		// Handle hotkey detection first
+		if hotkeyCmd := hotkey.HandleKeyMsg(msg); hotkeyCmd != nil {
+			return m, hotkeyCmd
+		}
+
 		// Priority handling for overlay dismissal
 		if m.activeOverlay != overlayNone && msg.String() == "esc" {
 			m = m.clearOverlay()
@@ -245,7 +294,7 @@ func (m model) activateOverlay(overlay overlayType, title string, content []stri
 	if len(content) > maxOverlayLines {
 		content = content[len(content)-maxOverlayLines:]
 	}
-	
+
 	m.activeOverlay = overlay
 	m.overlayContent = overlayContent{
 		title:   title,
@@ -286,7 +335,7 @@ func (m model) renderBaseView() string {
 	activity := activityBuilder.String()
 
 	separator := m.styles.Separator.Render(strings.Repeat("─", m.width))
-	
+
 	// Create theme label
 	themeLabel := m.styles.ThemeLabel.Render(fmt.Sprintf("theme: %s", m.config.Theme))
 	themeLabelWidth := lipgloss.Width(themeLabel)
@@ -306,10 +355,9 @@ func (m model) renderBaseView() string {
 		promptWidth = 1
 	}
 	// Create prompt with adjusted width
-	// Create prompt with adjusted width
 	promptInput := m.input.View()
 	prompt := m.styles.Prompt.Width(promptWidth).Render(promptInput)
-	
+
 	// Join prompt and theme label horizontally
 	promptLine := lipgloss.JoinHorizontal(lipgloss.Top, prompt, themeLabel)
 
@@ -370,7 +418,7 @@ func (m model) renderOverlay() string {
 	// Calculate overlay dimensions (60% of screen, centered)
 	m.overlayWidth = int(float64(m.width) * 0.6)
 	m.overlayHeight = int(float64(m.height) * 0.6)
-	
+
 	// Ensure minimum dimensions
 	if m.overlayWidth < 40 {
 		m.overlayWidth = 40
@@ -378,7 +426,7 @@ func (m model) renderOverlay() string {
 	if m.overlayHeight < 10 {
 		m.overlayHeight = 10
 	}
-	
+
 	// Ensure overlay doesn't exceed screen bounds
 	if m.overlayWidth >= m.width {
 		m.overlayWidth = m.width - 2
@@ -386,25 +434,25 @@ func (m model) renderOverlay() string {
 	if m.overlayHeight >= m.height {
 		m.overlayHeight = m.height - 2
 	}
-	
+
 	// Create overlay content
 	title := m.styles.OverlayTitle.Render(m.overlayContent.title)
-	
+
 	contentHeight := m.overlayHeight - 4 // Account for border + title + padding
 	if contentHeight < 1 {
 		contentHeight = 1
 	}
-	
+
 	content := m.overlayContent.content
 	if len(content) > contentHeight {
 		content = content[len(content)-contentHeight:]
 	}
-	
+
 	// Pad content to fill overlay
 	for len(content) < contentHeight {
 		content = append(content, "")
 	}
-	
+
 	// Trim content lines to fit within overlay width
 	maxContentWidth := m.overlayWidth - 6 // Account for border + padding
 	if maxContentWidth < 1 {
@@ -416,15 +464,15 @@ func (m model) renderOverlay() string {
 			content[i] = truncateStyle.Render(line)
 		}
 	}
-	
+
 	contentStr := strings.Join(content, "\n")
-	
+
 	// Apply overlay styling with proper content rendering
 	overlayContent := lipgloss.JoinVertical(lipgloss.Left, title, "", m.styles.OverlayContent.Render(contentStr))
-	
+
 	return m.styles.OverlayBorder.
-		Width(m.overlayWidth-4). // Account for border
-		Height(m.overlayHeight-2).
+		Width(m.overlayWidth - 4). // Account for border
+		Height(m.overlayHeight - 2).
 		Render(overlayContent)
 }
 
@@ -455,23 +503,23 @@ func (m model) layerOverlay(base, overlay string) string {
 			startRow = 0
 		}
 	}
-	
+
 	// Create result with same length as base
 	result := make([]string, len(baseLines))
 	copy(result, baseLines)
-	
+
 	// Overlay the content
 	for i, overlayLine := range overlayLines {
 		targetRow := startRow + i
 		if targetRow >= 0 && targetRow < len(result) {
 			baseLine := result[targetRow]
 			overlayWidth := lipgloss.Width(overlayLine)
-			
+
 			// Pad base line if needed
 			if len(baseLine) < startCol {
 				baseLine += strings.Repeat(" ", startCol-len(baseLine))
 			}
-			
+
 			// Calculate portions of base line
 			beforeOverlay := ""
 			if startCol > 0 && len(baseLine) > 0 {
@@ -481,17 +529,17 @@ func (m model) layerOverlay(base, overlay string) string {
 				}
 				beforeOverlay = baseLine[:end]
 			}
-			
+
 			afterOverlay := ""
 			afterStart := startCol + overlayWidth
 			if afterStart < len(baseLine) {
 				afterOverlay = baseLine[afterStart:]
 			}
-			
+
 			result[targetRow] = beforeOverlay + overlayLine + afterOverlay
 		}
 	}
-	
+
 	return strings.Join(result, "\n")
 }
 
@@ -589,6 +637,13 @@ func Run(w *watcher.Watcher, m *agent.Manager, cfg *config.Config) error {
 
 	mdl := newModel(w, m, cfg, logFile, logReader)
 	mdl.lastLogPos = startPos
+
+	// Setup cleanup on exit
+	defer func() {
+		if err := mdl.sessionManager.CleanupOnExit(); err != nil {
+			log.Printf("Session cleanup error: %v", err)
+		}
+	}()
 
 	p := tea.NewProgram(mdl)
 	_, err = p.Run()

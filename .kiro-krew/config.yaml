@@ -8,3 +8,9 @@ enable_copilot_review: true
 # Theme selection (optional, defaults to 'default')
 # Available themes: default, high-contrast, light
 theme: "high-contrast"
+
+# Session configuration
+session:
+  max_history_messages: 100
+  max_age: 24h
+  sessions_dir: ".kiro-krew/sessions"
