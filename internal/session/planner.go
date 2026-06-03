@@ -275,6 +275,10 @@ func (ps *PlanningSession) SuspendAndDetach() error {
 	}
 	
 	ps.Suspended = true
+	if err := ps.Process.Suspend(); err != nil {
+		ps.Suspended = false
+		return fmt.Errorf("failed to suspend process: %w", err)
+	}
 	return nil
 }
 
