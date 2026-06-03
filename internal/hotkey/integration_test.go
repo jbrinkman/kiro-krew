@@ -236,9 +236,12 @@ func TestHotkeyIntegrationEndToEnd(t *testing.T) {
 	sm.Delete(planningID)
 }
 
-func TestProcessManagementAndCleanup(t *testing.T) {
-	sm := session.NewSessionManager()
+	tempDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	_ = os.Chdir(tempDir)
 
+	sm := session.NewSessionManager()
 	t.Run("Session Cleanup on Exit", func(t *testing.T) {
 		// Create multiple sessions
 		sessions := make([]string, 3)
