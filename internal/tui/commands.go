@@ -57,17 +57,23 @@ func (m model) handleStatus() (model, tea.Cmd) {
 	if len(agents) == 0 {
 		content = append(content, m.styles.Warning.Render("No agents running"))
 	} else {
-		header := fmt.Sprintf("%-8s %-30s %-10s %s", "Issue", "Title", "Status", "Elapsed")
-		sep := strings.Repeat("─", 70)
+		contentWidth := m.getOverlayContentWidth()
+		issueW := max(int(float64(contentWidth)*0.11), 5)
+		titleW := max(int(float64(contentWidth)*0.43), 10)
+		statusW := max(int(float64(contentWidth)*0.14), 7)
+		elapsedW := max(contentWidth-issueW-titleW-statusW-3, 7)
+
+		header := fmt.Sprintf("%-*s %-*s %-*s %-*s", issueW, "Issue", titleW, "Title", statusW, "Status", elapsedW, "Elapsed")
+		sep := strings.Repeat("-", contentWidth)
 		content = append(content, m.styles.Prompt.Render(header), m.styles.Separator.Render(sep))
 
 		for _, a := range agents {
 			elapsed := time.Since(a.StartTime).Truncate(time.Second)
-			line := fmt.Sprintf("%-8d %-30s %-10s %s",
-				a.IssueNumber,
-				truncate(a.IssueTitle, 30),
-				string(a.Status),
-				elapsed)
+			line := fmt.Sprintf("%-*d %-*s %-*s %-*s",
+				issueW, a.IssueNumber,
+				titleW, truncate(a.IssueTitle, titleW),
+				statusW, string(a.Status),
+				elapsedW, elapsed)
 			content = append(content, line)
 		}
 	}
@@ -195,10 +201,31 @@ type updateCheckMsg struct {
 }
 
 func truncate(s string, max int) string {
+	if max <= 0 {
+		return ""
+	}
 	if len(s) <= max {
 		return s
 	}
+	if max <= 3 {
+		return s[:max]
+	}
 	return s[:max-3] + "..."
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func (m model) getOverlayContentWidth() int {
+	overlayWidth := int(float64(m.width) * 0.6)
+	if overlayWidth < 40 {
+		overlayWidth = 40
+	}
+	return overlayWidth - 6 // Account for border and padding
 }
 
 func (m model) handleAbout() (model, tea.Cmd) {
