@@ -146,7 +146,7 @@ func (m *Manager) Spawn(issueNumber int, repo string) (*Agent, error) {
 		"--trust-all-tools",
 		fmt.Sprintf("Process issue #%d from repo %s. Worktree name: %s. You are already in the worktree directory — all file operations happen here. Skip worktree creation (step 2).", issueNumber, repo, worktreeName))
 	cmd.Dir = worktreePath
-	
+
 	// Create conditional writer based on console logging configuration
 	var outputWriter io.Writer
 	if m.config.ConsoleLogging {
@@ -402,7 +402,7 @@ func (m *Manager) retryAgent(agent *Agent) {
 		"--trust-all-tools",
 		fmt.Sprintf("Process issue #%d from repo %s. Worktree name: %s. You are already in the worktree directory — all file operations happen here. Skip worktree creation (step 2).", agent.IssueNumber, m.config.Repo, worktreeName))
 	cmd.Dir = worktreePath
-	
+
 	// Create conditional writer based on console logging configuration
 	var outputWriter io.Writer
 	if m.config.ConsoleLogging {
