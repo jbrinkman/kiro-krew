@@ -76,14 +76,15 @@ enable_copilot_review: false`,
 
 func TestLoad_AllDefaultValues(t *testing.T) {
 	// Test that all default values are set correctly
+	// Test that all default values are set correctly
 	tmpDir := t.TempDir()
-	configDir := tmpDir + "/.kiro-krew"
+	configDir := tmpDir + string(os.PathSeparator) + ".kiro-krew"
 	if err := os.Mkdir(configDir, 0755); err != nil {
 		t.Fatalf("Failed to create config dir: %v", err)
 	}
-	
+
 	configContent := `repo: test/repo`
-	configFile := configDir + "/config.yaml"
+	configFile := configDir + string(os.PathSeparator) + "config.yaml"
 	if err := os.WriteFile(configFile, []byte(configContent), 0644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
