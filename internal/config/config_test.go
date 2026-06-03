@@ -37,14 +37,17 @@ enable_copilot_review: false`,
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create temp config directory and file
+			// Create temp config directory and file
 			tmpDir := t.TempDir()
-			configDir := tmpDir + "/.kiro-krew"
+			configDir := tmpDir + string(os.PathSeparator) + ".kiro-krew"
 			if err := os.Mkdir(configDir, 0755); err != nil {
 				t.Fatalf("Failed to create config dir: %v", err)
 			}
-			
-			configFile := configDir + "/config.yaml"
+
+			configFile := configDir + string(os.PathSeparator) + "config.yaml"
 			if err := os.WriteFile(configFile, []byte(tt.configContent), 0644); err != nil {
+				t.Fatalf("Failed to write config file: %v", err)
+			}
 				t.Fatalf("Failed to write config file: %v", err)
 			}
 			
