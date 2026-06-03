@@ -423,10 +423,16 @@ func (m model) layerOverlay(base, overlay string) string {
 	// Center overlay on base view
 	baseLines := strings.Split(base, "\n")
 	overlayLines := strings.Split(overlay, "\n")
-	
+
+	overlayW := 0
+	for _, l := range overlayLines {
+		if w := lipgloss.Width(l); w > overlayW {
+			overlayW = w
+		}
+	}
+
 	startRow := (m.height - len(overlayLines)) / 2
-	startCol := (m.width - m.overlayWidth) / 2
-	
+	startCol := (m.width - overlayW) / 2
 	// Ensure overlay stays within bounds
 	if startRow < 0 {
 		startRow = 0
