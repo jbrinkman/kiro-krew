@@ -58,10 +58,26 @@ func (m model) handleStatus() (model, tea.Cmd) {
 		content = append(content, m.styles.Warning.Render("No agents running"))
 	} else {
 		contentWidth := m.getOverlayContentWidth()
+
 		issueW := max(int(float64(contentWidth)*0.11), 5)
 		titleW := max(int(float64(contentWidth)*0.43), 10)
 		statusW := max(int(float64(contentWidth)*0.14), 7)
-		elapsedW := max(contentWidth-issueW-titleW-statusW-3, 7)
+
+		// Ensure column widths fit within contentWidth (3 spaces between columns).
+		minColW := 1
+		for issueW+titleW+statusW+minColW+3 > contentWidth && titleW > minColW {
+			titleW--
+		}
+		for issueW+titleW+statusW+minColW+3 > contentWidth && statusW > minColW {
+			statusW--
+		}
+		for issueW+titleW+statusW+minColW+3 > contentWidth && issueW > minColW {
+			issueW--
+		}
+		elapsedW := contentWidth - issueW - titleW - statusW - 3
+		if elapsedW < minColW {
+			elapsedW = minColW
+		}
 
 		header := fmt.Sprintf("%-*s %-*s %-*s %-*s", issueW, "Issue", titleW, "Title", statusW, "Status", elapsedW, "Elapsed")
 		sep := strings.Repeat("-", contentWidth)
