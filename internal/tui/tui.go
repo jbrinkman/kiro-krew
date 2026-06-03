@@ -167,7 +167,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case hotkey.HotkeyTriggeredMsg:
 		if m.currentMode == session.Console {
 			return m.switchToPlanningMode()
-		} else if m.currentMode == session.Planning && m.activePlanningSession != nil {
+		} else if m.currentMode == session.Planning {
 			return m.switchToConsoleMode()
 		}
 		return m, nil
