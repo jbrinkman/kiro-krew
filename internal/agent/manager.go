@@ -36,15 +36,17 @@ type Agent struct {
 }
 
 type Manager struct {
-	mu     sync.RWMutex
-	agents map[string]*Agent
-	config *config.Config
+	mu            sync.RWMutex
+	agents        map[string]*Agent
+	config        *config.Config
+	outputCapture *OutputCapture
 }
 
 func NewManager(cfg *config.Config) *Manager {
 	return &Manager{
-		agents: make(map[string]*Agent),
-		config: cfg,
+		agents:        make(map[string]*Agent),
+		config:        cfg,
+		outputCapture: NewOutputCapture(1000), // Buffer 1000 lines
 	}
 }
 
@@ -104,10 +106,25 @@ func (pw *prefixedWriter) Write(p []byte) (n int, err error) {
 
 func (m *Manager) createPrefixedWriter(issueNumber int) io.Writer {
 	prefix := fmt.Sprintf("[agent issue-%d] ", issueNumber)
-	return &prefixedWriter{
+	pw := &prefixedWriter{
 		prefix:      []byte(prefix),
 		writer:      os.Stderr,
 		atLineStart: true,
+	}
+	return NewCaptureWriter(pw, m.outputCapture)
+}
+
+// SuspendOutputCapture suspends capturing agent output
+func (m *Manager) SuspendOutputCapture() {
+	if m.outputCapture != nil {
+		m.outputCapture.Suspend()
+	}
+}
+
+// ResumeOutputCapture resumes capturing agent output
+func (m *Manager) ResumeOutputCapture() {
+	if m.outputCapture != nil {
+		m.outputCapture.Resume()
 	}
 }
 

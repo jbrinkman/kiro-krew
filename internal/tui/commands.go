@@ -53,7 +53,7 @@ func (m model) handleWatch(action string) (model, tea.Cmd) {
 func (m model) handleStatus() (model, tea.Cmd) {
 	agents := m.manager.List()
 	content := []string{}
-	
+
 	if len(agents) == 0 {
 		content = append(content, m.styles.Warning.Render("No agents running"))
 	} else {
@@ -93,7 +93,7 @@ func (m model) handleStatus() (model, tea.Cmd) {
 			content = append(content, line)
 		}
 	}
-	
+
 	m = m.activateOverlay(overlayStatus, "Agent Status", content)
 	return m, nil
 }
@@ -135,14 +135,18 @@ func (m model) handleHelp() (model, tea.Cmd) {
 		"  help           - Show this help message",
 		"",
 		m.styles.Prompt.Render("Hotkeys:"),
+		"  F2, o          - Toggle between console and agent output views",
 		"  Ctrl+Alt+P     - Toggle between console and planning modes",
 	}
-	
+
 	m = m.activateOverlay(overlayHelp, "Help", content)
 	return m, nil
 }
 
 func (m model) handlePlan(description string) (model, tea.Cmd) {
+	// Suspend agent output capture before starting planning mode
+	m.manager.SuspendOutputCapture()
+
 	// Check for existing planning sessions
 	sessions, err := m.sessionManager.List()
 	if err != nil {
@@ -183,7 +187,7 @@ func (m model) handlePlan(description string) (model, tea.Cmd) {
 		args = append(args, description)
 	}
 	m.input.Blur()
-	
+
 	// Wrap in shell with clear and centered ASCII art banner
 	banner := `cols=$(tput cols 2>/dev/null || echo 80)
 art1="  _  ___              _  __                   "
@@ -325,6 +329,9 @@ func checkForUpdateCmd() tea.Cmd {
 
 // switchToPlanningMode switches from console to planning mode while preserving console state
 func (m model) switchToPlanningMode() (model, tea.Cmd) {
+	// Suspend agent output capture before entering planning mode
+	m.manager.SuspendOutputCapture()
+
 	// Preserve current console state
 	m.consoleState.inputValue = m.input.Value()
 	m.consoleState.activityLines = make([]string, len(m.activityLines))
@@ -381,11 +388,14 @@ func (m model) switchToConsoleMode() (model, tea.Cmd) {
 		m.activePlanningSession = nil
 	}
 
+	// Resume agent output capture when returning to console mode
+	m.manager.ResumeOutputCapture()
+
 	// Switch to console mode and restore console state
 	m.currentMode = session.Console
 	m = m.restoreConsoleState()
 	m.input.Focus()
-	
+
 	return m, tea.Batch(textinput.Blink, tea.ClearScreen)
 }
 
