@@ -290,13 +290,21 @@ func (m model) renderBaseView() string {
 	// Create theme label
 	themeLabel := m.styles.ThemeLabel.Render(fmt.Sprintf("theme: %s", m.config.Theme))
 	themeLabelWidth := lipgloss.Width(themeLabel)
-	
-	// Calculate available width for prompt (minimum 20 columns)
+
+	// If the terminal is too narrow to fit both prompt + theme label, hide the theme label.
+	if m.width > 0 && themeLabelWidth+20 > m.width {
+		themeLabel = ""
+		themeLabelWidth = 0
+	}
+
+	// Calculate available width for prompt (minimum 20 columns when possible)
 	promptWidth := m.width - themeLabelWidth
-	if promptWidth < 20 {
+	if m.width >= 20 && promptWidth < 20 {
 		promptWidth = 20
 	}
-	
+	if promptWidth < 1 {
+		promptWidth = 1
+	}
 	// Create prompt with adjusted width
 	promptInput := m.input.View()
 	if lipgloss.Width(promptInput) > promptWidth {
