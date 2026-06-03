@@ -20,8 +20,9 @@ Extract the issue number, repo, and worktree name from this message and use them
 6. **Pre-Merge Validation**: Delegate to validator to verify implementation meets requirements
 7. **Push Branch**: Run `cd <WORKTREE_PATH> && git add -A && git commit -m "feat: <issue-title>" && git push -u origin spec/<worktree-name>`
 8. **Create PR**: Run `gh pr create --repo <repo> --head spec/<worktree-name> --title "<issue-title>" --body "Closes #<number>"`
-9. **Label Done**: Run `gh issue edit <number> --repo <repo> --add-label <label>-done` (where label matches the trigger label, e.g. `kiro-krew`)
-10. **On Failure**: Run `gh issue edit <number> --repo <repo> --add-label <label>-failed`
+9. **Request Copilot Review** (Optional): If Copilot reviews are enabled, run `gh pr edit --add-reviewer @copilot`. Handle errors gracefully without failing the workflow.
+10. **Label Done**: Run `gh issue edit <number> --repo <repo> --add-label <label>-done` (where label matches the trigger label, e.g. `kiro-krew`)
+11. **On Failure**: Run `gh issue edit <number> --repo <repo> --add-label <label>-failed`
 
 ## Critical Requirements
 
@@ -31,7 +32,7 @@ Extract the issue number, repo, and worktree name from this message and use them
 - Coordinate krew members but do not perform implementation work directly
 - Maintain clear task delegation and progress tracking
 - Handle failures gracefully with appropriate labeling
-- You have shell access — use it for git operations, gh commands, and running scripts (steps 1, 2, 7, 8, 9, 10)
+- You have shell access — use it for git operations, gh commands, and running scripts (steps 1, 2, 7, 8, 9, 10, 11)
 - Do NOT run `.kiro-krew/scripts/worktree-merge.sh` — the PR workflow handles merging
 
 ## Retry and Execution Policy

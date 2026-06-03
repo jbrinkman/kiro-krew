@@ -10,14 +10,15 @@ import (
 )
 
 type Config struct {
-	Repo             string        `yaml:"repo"`
-	Label            string        `yaml:"label"`
-	PollInterval     time.Duration `yaml:"poll_interval"`
-	MaxRetries       int           `yaml:"max_retries"`
-	MaxActivityLines int           `yaml:"max_activity_lines"`
-	ConsoleLogging   bool          `yaml:"console_logging"`
-	Theme            string        `yaml:"theme"`
-	LoadedTheme      *Theme        `yaml:"-"`
+	Repo                string        `yaml:"repo"`
+	Label               string        `yaml:"label"`
+	PollInterval        time.Duration `yaml:"poll_interval"`
+	MaxRetries          int           `yaml:"max_retries"`
+	MaxActivityLines    int           `yaml:"max_activity_lines"`
+	ConsoleLogging      bool          `yaml:"console_logging"`
+	Theme               string        `yaml:"theme"`
+	EnableCopilotReview bool          `yaml:"enable_copilot_review"`
+	LoadedTheme         *Theme        `yaml:"-"`
 }
 
 func extractLeadingWhitespace(line string) string {
@@ -26,12 +27,13 @@ func extractLeadingWhitespace(line string) string {
 
 func Load() (*Config, error) {
 	cfg := &Config{
-		Label:            "kiro-krew",
-		PollInterval:     5 * time.Minute,
-		MaxRetries:       3,
-		MaxActivityLines: 1000,
-		ConsoleLogging:   false,
-		Theme:            "default",
+		Label:               "kiro-krew",
+		PollInterval:        5 * time.Minute,
+		MaxRetries:          3,
+		MaxActivityLines:    1000,
+		ConsoleLogging:      false,
+		Theme:               "default",
+		EnableCopilotReview: true,
 	}
 
 	data, err := os.ReadFile(".kiro-krew/config.yaml")
