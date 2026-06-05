@@ -1,0 +1,46 @@
+{
+  "agent": "documenter",
+  "git_hash": "6a131f0",
+  "cases": [
+    {
+      "case_name": "document-new-feature",
+      "scores": [
+        {
+          "name": "documentation_completeness",
+          "score": 2,
+          "max_score": 5,
+          "deterministic": true,
+          "reasoning": "found 1/2 expected structural elements"
+        },
+        {
+          "name": "accuracy",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "LLM judge not configured — criterion skipped"
+        },
+        {
+          "name": "file_naming_convention",
+          "score": 5,
+          "max_score": 5,
+          "deterministic": true,
+          "reasoning": "output references correct app_docs/feature-* path"
+        },
+        {
+          "name": "practical_usage_guidance",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "LLM judge not configured — criterion skipped"
+        }
+      ],
+      "cost": {
+        "tokens_in": 140,
+        "tokens_out": 320,
+        "estimated_usd": 0.00522
+      }
+    }
+  ]
+}

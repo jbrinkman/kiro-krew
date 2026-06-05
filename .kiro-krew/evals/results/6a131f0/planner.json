@@ -1,0 +1,48 @@
+{
+  "agent": "planner",
+  "git_hash": "6a131f0",
+  "cases": [
+    {
+      "case_name": "plan-feature-request",
+      "scores": [
+        {
+          "name": "requirement_clarity",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "LLM judge not configured — criterion skipped"
+        },
+        {
+          "name": "scope_appropriateness",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "LLM judge not configured — criterion skipped"
+        },
+        {
+          "name": "acceptance_criteria_quality",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": true,
+          "skipped": true,
+          "reasoning": "no deterministic checker implemented for \"acceptance_criteria_quality\""
+        },
+        {
+          "name": "constraint_identification",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "LLM judge not configured — criterion skipped"
+        }
+      ],
+      "cost": {
+        "tokens_in": 28,
+        "tokens_out": 318,
+        "estimated_usd": 0.004854
+      }
+    }
+  ]
+}
