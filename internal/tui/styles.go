@@ -40,7 +40,8 @@ func NewStyles(theme *config.Theme) *Styles {
 			Foreground(lipgloss.Color(theme.Colors.Primary)).
 			Bold(true),
 		OverlayContent: lipgloss.NewStyle().
-			Foreground(lipgloss.Color(theme.Colors.TextPrimary)),
+			Foreground(lipgloss.Color(theme.Colors.TextPrimary)).
+			Background(lipgloss.Color(theme.Colors.Surface)),
 		OverlayBackground: lipgloss.NewStyle().
 			Background(lipgloss.Color(theme.Colors.Surface)),
 		ThemeLabel: lipgloss.NewStyle().
