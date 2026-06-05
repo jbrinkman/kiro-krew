@@ -16,6 +16,9 @@ type OutputCapture struct {
 
 // NewOutputCapture creates a new output capture with specified buffer size
 func NewOutputCapture(maxSize int) *OutputCapture {
+	if maxSize <= 0 {
+		maxSize = 1
+	}
 	return &OutputCapture{
 		buffer:    make([]string, 0, maxSize),
 		maxSize:   maxSize,
