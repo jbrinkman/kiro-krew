@@ -74,6 +74,9 @@ type model struct {
 	overlayContent overlayContent
 	overlayWidth   int
 	overlayHeight  int
+
+	// View state management
+	viewManager *ViewManager
 }
 
 func newModel(w *watcher.Watcher, m *agent.Manager, cfg *config.Config, logFile *os.File, logReader *os.File) model {
@@ -83,12 +86,16 @@ func newModel(w *watcher.Watcher, m *agent.Manager, cfg *config.Config, logFile 
 
 	theme := cfg.LoadedTheme
 
+	viewManager := NewViewManager()
+	styles := NewStyles(theme)
+	viewManager.InitOutputView(m, styles)
+
 	return model{
 		watcher:          w,
 		manager:          m,
 		sessionManager:   session.NewSessionManager(),
 		config:           cfg,
-		styles:           NewStyles(theme),
+		styles:           styles,
 		input:            ti,
 		logFile:          logFile,
 		logReader:        logReader,
@@ -98,6 +105,7 @@ func newModel(w *watcher.Watcher, m *agent.Manager, cfg *config.Config, logFile 
 			inputValue:    "",
 			activityLines: make([]string, 0),
 		},
+		viewManager: viewManager,
 	}
 }
 
@@ -125,6 +133,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		// Forward to view manager
+		if cmd := m.viewManager.Update(msg); cmd != nil {
+			return m, cmd
+		}
 		// Recalculate overlay dimensions on resize
 		if m.activeOverlay != overlayNone {
 			m.overlayWidth = int(float64(m.width) * 0.6)
@@ -139,6 +151,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case execDoneMsg:
+		// Resume agent output capture when planning mode exits
+		m.manager.ResumeOutputCapture()
+
 		if msg.err != nil {
 			m = m.appendActivity(m.styles.Error.Render(fmt.Sprintf("Planning session exited with error: %v", msg.err)))
 		} else {
@@ -269,18 +284,33 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c":
 			return m.tryExit()
+		case "f2", "o":
+			// Toggle between console and agent output views
+			m.viewManager.ToggleView()
+			return m, nil
 		case "enter":
+			// Only handle enter in console view
+			if m.viewManager.CurrentView() != ViewConsole {
+				return m, nil
+			}
 			input := strings.TrimSpace(m.input.Value())
 			m.input.SetValue("")
 			if input == "" {
 				return m, nil
 			}
 			return m.executeCommand(input)
+		default:
+			// Forward key messages to view manager for agent output view navigation
+			if m.viewManager.CurrentView() == ViewAgentOutput {
+				if cmd := m.viewManager.Update(msg); cmd != nil {
+					return m, cmd
+				}
+			}
 		}
 	}
 
-	// Only update input when no overlay is active
-	if m.activeOverlay == overlayNone {
+	// Only update input when no overlay is active and in console view
+	if m.activeOverlay == overlayNone && m.viewManager.CurrentView() == ViewConsole {
 		var cmd tea.Cmd
 		m.input, cmd = m.input.Update(msg)
 		return m, cmd
@@ -378,13 +408,16 @@ func (m model) View() tea.View {
 
 	base := m.renderBaseView()
 
-	// Compose overlay if active
+	// Let view manager handle rendering based on current view
+	content := m.viewManager.RenderCurrentView(base)
+
+	// Compose overlay if active (overlays work on any view)
 	if m.activeOverlay != overlayNone {
 		overlay := m.renderOverlay()
-		base = m.layerOverlay(base, overlay)
+		content = m.layerOverlay(content, overlay)
 	}
 
-	v := tea.NewView(base)
+	v := tea.NewView(content)
 	v.AltScreen = true
 	return v
 }

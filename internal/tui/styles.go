@@ -13,7 +13,7 @@ type Styles struct {
 	Success   lipgloss.Style
 	Warning   lipgloss.Style
 	Error     lipgloss.Style
-	
+
 	// Overlay styles
 	OverlayBorder     lipgloss.Style
 	OverlayTitle      lipgloss.Style
@@ -30,7 +30,7 @@ func NewStyles(theme *config.Theme) *Styles {
 		Success:   lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Colors.Success)),
 		Warning:   lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Colors.Warning)),
 		Error:     lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Colors.Error)),
-		
+
 		OverlayBorder: lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color(theme.Colors.Primary)).
