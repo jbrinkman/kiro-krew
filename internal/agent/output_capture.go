@@ -1,15 +1,17 @@
 package agent
 
 import (
+	"bytes"
+	"io"
 	"regexp"
 	"sync"
 )
 
 // OutputCapture captures and stores agent output with ANSI stripping
 type OutputCapture struct {
-	mu     sync.RWMutex
-	buffer []string
-	maxSize int
+	mu        sync.RWMutex
+	buffer    []string
+	maxSize   int
 	ansiRegex *regexp.Regexp
 	suspended bool
 }
@@ -30,14 +32,14 @@ func NewOutputCapture(maxSize int) *OutputCapture {
 func (oc *OutputCapture) AddLine(line string) {
 	oc.mu.Lock()
 	defer oc.mu.Unlock()
-	
+
 	// Skip capturing if suspended
 	if oc.suspended {
 		return
 	}
-	
+
 	stripped := oc.ansiRegex.ReplaceAllString(line, "")
-	
+
 	if len(oc.buffer) >= oc.maxSize {
 		copy(oc.buffer, oc.buffer[1:])
 		oc.buffer[len(oc.buffer)-1] = stripped
@@ -64,7 +66,7 @@ func (oc *OutputCapture) Resume() {
 func (oc *OutputCapture) GetLines() []string {
 	oc.mu.RLock()
 	defer oc.mu.RUnlock()
-	
+
 	result := make([]string, len(oc.buffer))
 	copy(result, oc.buffer)
 	return result
@@ -72,36 +74,47 @@ func (oc *OutputCapture) GetLines() []string {
 
 // CaptureWriter wraps prefixedWriter to capture output
 type CaptureWriter struct {
-	*prefixedWriter
+	mu      sync.Mutex
+	writer  io.Writer
 	capture *OutputCapture
 	lineBuf []byte
+	prefix  string
 }
 
 // NewCaptureWriter creates a writer that captures output while preserving existing behavior
-func NewCaptureWriter(pw *prefixedWriter, capture *OutputCapture) *CaptureWriter {
+func NewCaptureWriter(writer io.Writer, capture *OutputCapture, prefix string) *CaptureWriter {
 	return &CaptureWriter{
-		prefixedWriter: pw,
-		capture:        capture,
-		lineBuf:        make([]byte, 0, 256),
+		writer:  writer,
+		capture: capture,
+		lineBuf: make([]byte, 0, 256),
+		prefix:  prefix,
 	}
 }
 
 // Write implements io.Writer, capturing lines while delegating to prefixedWriter
 func (cw *CaptureWriter) Write(p []byte) (int, error) {
-	// First write to the original prefixedWriter
-	n, err := cw.prefixedWriter.Write(p)
-	
-	// Then capture the output for the buffer
-	for _, b := range p {
-		if b == '\n' {
-			if len(cw.lineBuf) > 0 {
-				cw.capture.AddLine(string(cw.lineBuf))
-				cw.lineBuf = cw.lineBuf[:0]
-			}
-		} else {
-			cw.lineBuf = append(cw.lineBuf, b)
+	cw.mu.Lock()
+	defer cw.mu.Unlock()
+
+	if cw.writer != nil {
+		n, err := cw.writer.Write(p)
+		if err != nil {
+			return n, err
 		}
 	}
-	
-	return n, err
+
+	for _, chunk := range bytes.SplitAfter(p, []byte("\n")) {
+		if len(chunk) == 0 {
+			continue
+		}
+
+		cw.lineBuf = append(cw.lineBuf, chunk...)
+		if cw.lineBuf[len(cw.lineBuf)-1] == '\n' {
+			line := bytes.TrimSuffix(cw.lineBuf, []byte("\n"))
+			cw.capture.AddLine(cw.prefix + string(line))
+			cw.lineBuf = cw.lineBuf[:0]
+		}
+	}
+
+	return len(p), nil
 }

@@ -22,6 +22,11 @@ type OutputView struct {
 	cachedOutput []string
 }
 
+// SetStyles updates the styles used by this view.
+func (ov *OutputView) SetStyles(styles *Styles) {
+	ov.styles = styles
+}
+
 // NewOutputView creates a new output view
 func NewOutputView(manager *agent.Manager, styles *Styles) *OutputView {
 	vp := viewport.New(viewport.WithWidth(80), viewport.WithHeight(24))
@@ -89,9 +94,16 @@ func (ov *OutputView) Resize(width, height int) {
 // refreshContent updates the viewport content with latest agent output
 func (ov *OutputView) refreshContent() {
 	agents := ov.manager.List()
+	capturedLines := ov.manager.GetOutputLines()
 
 	if len(agents) == 0 {
-		content := ov.styles.Warning.Render("No agents running. Use 'watch start' to begin monitoring issues.")
+		if len(capturedLines) == 0 {
+			content := ov.styles.Warning.Render("No agents running. Use 'watch start' to begin monitoring issues.")
+			ov.viewport.SetContent(content)
+			return
+		}
+
+		content := strings.Join(capturedLines, "\n")
 		ov.viewport.SetContent(content)
 		return
 	}
@@ -119,12 +131,17 @@ func (ov *OutputView) refreshContent() {
 
 		output = append(output, header)
 
-		// Get agent output if available
-		// Note: This assumes OutputCapture will be added to Agent struct in the future
-		// For now, we'll show a placeholder
-		agentOutput := []string{
-			"  Agent output will appear here...",
-			"  (Output capture integration pending)",
+		agentPrefix := fmt.Sprintf("[agent issue-%d] ", agentItem.IssueNumber)
+		agentOutput := make([]string, 0)
+		for _, line := range capturedLines {
+			if strings.HasPrefix(line, agentPrefix) {
+				agentOutput = append(agentOutput, strings.TrimPrefix(line, agentPrefix))
+			}
+		}
+		if len(agentOutput) == 0 {
+			agentOutput = []string{
+				"No captured output yet.",
+			}
 		}
 
 		// Wrap and indent agent output

@@ -315,6 +315,7 @@ func (m model) handleTheme(args []string) (model, tea.Cmd) {
 
 	// Update styles with new theme
 	m.styles = NewStyles(theme)
+	m.viewManager.UpdateOutputViewStyles(m.styles)
 
 	m = m.appendActivity(m.styles.Success.Render(fmt.Sprintf("Theme changed to: %s", themeName)))
 	return m, tea.ClearScreen

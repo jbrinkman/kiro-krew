@@ -9,18 +9,19 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/jbrinkman/kiro-krew/internal/agent"
+	"github.com/jbrinkman/kiro-krew/internal/config"
 )
 
 func TestMultipleAgentsOutputCapture(t *testing.T) {
 	capture := agent.NewOutputCapture(1000)
-	
+
 	// Simulate multiple agents producing output
 	var wg sync.WaitGroup
 	for i := 0; i < 5; i++ {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			
+
 			// Simulate agent output
 			for j := 0; j < 10; j++ {
 				output := fmt.Sprintf("Agent %d output line %d", id, j)
@@ -29,7 +30,7 @@ func TestMultipleAgentsOutputCapture(t *testing.T) {
 			}
 		}(i)
 	}
-	
+
 	wg.Wait()
 
 	// Verify output was captured
@@ -47,7 +48,7 @@ func TestMultipleAgentsOutputCapture(t *testing.T) {
 			}
 		}
 	}
-	
+
 	if len(found) < 3 { // At least 3 agents should have output
 		t.Errorf("Expected output from at least 3 agents, found %d", len(found))
 	}
@@ -70,7 +71,7 @@ func TestANSIStripping(t *testing.T) {
 	for _, tc := range testCases {
 		capture.AddLine(tc.input)
 	}
-	
+
 	lines := capture.GetLines()
 	for i, tc := range testCases {
 		if i < len(lines) {
@@ -83,24 +84,24 @@ func TestANSIStripping(t *testing.T) {
 
 func TestViewManagerTransitions(t *testing.T) {
 	vm := NewViewManager()
-	
+
 	// Test initial state
 	if vm.CurrentView() != ViewConsole {
 		t.Error("Expected initial view to be console")
 	}
-	
+
 	// Test toggle to agent output
 	vm.ToggleView()
 	if vm.CurrentView() != ViewAgentOutput {
 		t.Error("Failed to toggle to agent output view")
 	}
-	
+
 	// Test toggle back to console
 	vm.ToggleView()
 	if vm.CurrentView() != ViewConsole {
 		t.Error("Failed to toggle back to console view")
 	}
-	
+
 	// Test explicit set
 	vm.SetView(ViewAgentOutput)
 	if vm.CurrentView() != ViewAgentOutput {
@@ -110,19 +111,19 @@ func TestViewManagerTransitions(t *testing.T) {
 
 func TestHighVolumeOutput(t *testing.T) {
 	capture := agent.NewOutputCapture(500) // Smaller buffer for test
-	
+
 	// Generate high volume output
 	for i := 0; i < 1000; i++ {
 		output := fmt.Sprintf("Line %d: %s", i, strings.Repeat("x", 50))
 		capture.AddLine(output)
 	}
-	
+
 	// Verify buffer size is maintained
 	lines := capture.GetLines()
 	if len(lines) > 500 {
 		t.Errorf("Buffer exceeded max size: %d > 500", len(lines))
 	}
-	
+
 	// Verify we have the most recent lines (buffer rotates)
 	if len(lines) == 500 {
 		lastLine := lines[len(lines)-1]
@@ -134,11 +135,11 @@ func TestHighVolumeOutput(t *testing.T) {
 
 func TestTerminalResizeHandling(t *testing.T) {
 	vm := NewViewManager()
-	
+
 	// Test resize message
 	resizeMsg := tea.WindowSizeMsg{Width: 120, Height: 30}
 	_ = vm.Update(resizeMsg)
-	
+
 	// Verify dimensions are stored (indirectly through no panic/error)
 	// The actual width/height are private, so we test the behavior works
 	if vm.CurrentView() != ViewConsole {
@@ -148,34 +149,34 @@ func TestTerminalResizeHandling(t *testing.T) {
 
 func TestOutputSuspendResume(t *testing.T) {
 	capture := agent.NewOutputCapture(100)
-	
+
 	// Add some initial output
 	capture.AddLine("Before suspend")
-	
+
 	// Suspend and try to add more
 	capture.Suspend()
 	capture.AddLine("During suspend - should not appear")
-	
+
 	// Resume and add more
 	capture.Resume()
 	capture.AddLine("After resume")
-	
+
 	lines := capture.GetLines()
-	
+
 	// Should have first and last line, but not the middle one
 	found := make(map[string]bool)
 	for _, line := range lines {
 		found[line] = true
 	}
-	
+
 	if !found["Before suspend"] {
 		t.Error("Expected 'Before suspend' line not found")
 	}
-	
+
 	if found["During suspend - should not appear"] {
 		t.Error("Line added during suspend was captured")
 	}
-	
+
 	if !found["After resume"] {
 		t.Error("Expected 'After resume' line not found")
 	}
@@ -183,7 +184,7 @@ func TestOutputSuspendResume(t *testing.T) {
 
 func BenchmarkConcurrentOutput(b *testing.B) {
 	capture := agent.NewOutputCapture(10000)
-	
+
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		lineNum := 0
@@ -193,4 +194,39 @@ func BenchmarkConcurrentOutput(b *testing.B) {
 			lineNum++
 		}
 	})
+}
+
+func TestOutputViewRendersCapturedManagerOutput(t *testing.T) {
+	cfg := &config.Config{LoadedTheme: &config.Theme{}}
+	cfg.LoadedTheme.Colors.Primary = "#ffffff"
+	cfg.LoadedTheme.Colors.Secondary = "#cccccc"
+	cfg.LoadedTheme.Colors.Success = "#00ff00"
+	cfg.LoadedTheme.Colors.Warning = "#ffff00"
+	cfg.LoadedTheme.Colors.Error = "#ff0000"
+	cfg.LoadedTheme.Colors.TextPrimary = "#ffffff"
+	cfg.LoadedTheme.Colors.TextSecondary = "#cccccc"
+	cfg.LoadedTheme.Colors.TextMuted = "#999999"
+	cfg.LoadedTheme.Colors.Prompt = "#ffffff"
+	cfg.LoadedTheme.Colors.Separator = "#666666"
+	cfg.LoadedTheme.Colors.Activity = "#00ffff"
+	cfg.LoadedTheme.Colors.Background = "#000000"
+	cfg.LoadedTheme.Colors.Surface = "#111111"
+	manager := agent.NewManager(cfg)
+	for i := 0; i < 30; i++ {
+		manager.CaptureOutputLine(42, fmt.Sprintf("captured line %d", i))
+	}
+
+	view := NewOutputView(manager, NewStyles(cfg.LoadedTheme))
+	view.Resize(80, 6)
+
+	rendered := view.View()
+	if !strings.Contains(rendered, "captured line") {
+		t.Fatalf("expected rendered output to include captured lines, got %q", rendered)
+	}
+
+	view.viewport.ScrollDown(1)
+	scrolled := view.View()
+	if rendered == scrolled {
+		t.Fatal("expected view content to change after scrolling")
+	}
 }

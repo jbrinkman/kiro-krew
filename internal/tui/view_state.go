@@ -85,12 +85,17 @@ func (vm *ViewManager) Update(msg tea.Msg) tea.Cmd {
 }
 
 // InitOutputView initializes the agent output view with manager and styles
-func (vm *ViewManager) InitOutputView(manager interface{}, styles *Styles) {
-	if agentManager, ok := manager.(*agent.Manager); ok {
-		vm.state.outputViewState = NewOutputView(agentManager, styles)
-		if vm.width > 0 && vm.height > 0 {
-			vm.state.outputViewState.Resize(vm.width, vm.height)
-		}
+func (vm *ViewManager) InitOutputView(manager *agent.Manager, styles *Styles) {
+	vm.state.outputViewState = NewOutputView(manager, styles)
+	if vm.width > 0 && vm.height > 0 {
+		vm.state.outputViewState.Resize(vm.width, vm.height)
+	}
+}
+
+// UpdateOutputViewStyles updates output view styles.
+func (vm *ViewManager) UpdateOutputViewStyles(styles *Styles) {
+	if vm.state.outputViewState != nil {
+		vm.state.outputViewState.SetStyles(styles)
 	}
 }
 

@@ -36,10 +36,11 @@ type Agent struct {
 }
 
 type Manager struct {
-	mu            sync.RWMutex
-	agents        map[string]*Agent
-	config        *config.Config
-	outputCapture *OutputCapture
+	mu                   sync.RWMutex
+	agents               map[string]*Agent
+	config               *config.Config
+	outputCapture        *OutputCapture
+	terminalOutputPaused bool
 }
 
 func NewManager(cfg *config.Config) *Manager {
@@ -104,14 +105,53 @@ func (pw *prefixedWriter) Write(p []byte) (n int, err error) {
 	return origLen, nil
 }
 
+type conditionalWriter struct {
+	writer  io.Writer
+	enabled func() bool
+}
+
+func (w *conditionalWriter) Write(p []byte) (int, error) {
+	if !w.enabled() {
+		return len(p), nil
+	}
+	return w.writer.Write(p)
+}
+
+func (m *Manager) terminalOutputEnabled() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return !m.terminalOutputPaused
+}
+
 func (m *Manager) createPrefixedWriter(issueNumber int) io.Writer {
 	prefix := fmt.Sprintf("[agent issue-%d] ", issueNumber)
 	pw := &prefixedWriter{
 		prefix:      []byte(prefix),
-		writer:      os.Stderr,
+		writer:      &conditionalWriter{writer: os.Stderr, enabled: m.terminalOutputEnabled},
 		atLineStart: true,
 	}
-	return NewCaptureWriter(pw, m.outputCapture)
+	return pw
+}
+
+func (m *Manager) createCaptureWriter(issueNumber int) io.Writer {
+	prefix := fmt.Sprintf("[agent issue-%d] ", issueNumber)
+	return NewCaptureWriter(nil, m.outputCapture, prefix)
+}
+
+// GetOutputLines returns captured agent output lines
+func (m *Manager) GetOutputLines() []string {
+	if m.outputCapture == nil {
+		return nil
+	}
+	return m.outputCapture.GetLines()
+}
+
+// CaptureOutputLine stores a single output line for an issue.
+func (m *Manager) CaptureOutputLine(issueNumber int, line string) {
+	if m.outputCapture == nil {
+		return
+	}
+	m.outputCapture.AddLine(fmt.Sprintf("[agent issue-%d] %s", issueNumber, line))
 }
 
 // SuspendOutputCapture suspends capturing agent output
@@ -119,6 +159,9 @@ func (m *Manager) SuspendOutputCapture() {
 	if m.outputCapture != nil {
 		m.outputCapture.Suspend()
 	}
+	m.mu.Lock()
+	m.terminalOutputPaused = true
+	m.mu.Unlock()
 }
 
 // ResumeOutputCapture resumes capturing agent output
@@ -126,6 +169,9 @@ func (m *Manager) ResumeOutputCapture() {
 	if m.outputCapture != nil {
 		m.outputCapture.Resume()
 	}
+	m.mu.Lock()
+	m.terminalOutputPaused = false
+	m.mu.Unlock()
 }
 
 func (m *Manager) Spawn(issueNumber int, repo string) (*Agent, error) {
@@ -164,13 +210,12 @@ func (m *Manager) Spawn(issueNumber int, repo string) (*Agent, error) {
 		fmt.Sprintf("Process issue #%d from repo %s. Worktree name: %s. You are already in the worktree directory — all file operations happen here. Skip worktree creation (step 2).", issueNumber, repo, worktreeName))
 	cmd.Dir = worktreePath
 
-	// Create conditional writer based on console logging configuration
-	var outputWriter io.Writer
+	// Always capture output for TUI output view; terminal logging is optional.
+	writers := []io.Writer{agentLogFile, m.createCaptureWriter(issueNumber)}
 	if m.config.ConsoleLogging {
-		outputWriter = io.MultiWriter(agentLogFile, m.createPrefixedWriter(issueNumber))
-	} else {
-		outputWriter = agentLogFile
+		writers = append(writers, m.createPrefixedWriter(issueNumber))
 	}
+	outputWriter := io.MultiWriter(writers...)
 	cmd.Stdout = outputWriter
 	cmd.Stderr = outputWriter
 	cmd.Env = append(os.Environ(),
@@ -420,13 +465,12 @@ func (m *Manager) retryAgent(agent *Agent) {
 		fmt.Sprintf("Process issue #%d from repo %s. Worktree name: %s. You are already in the worktree directory — all file operations happen here. Skip worktree creation (step 2).", agent.IssueNumber, m.config.Repo, worktreeName))
 	cmd.Dir = worktreePath
 
-	// Create conditional writer based on console logging configuration
-	var outputWriter io.Writer
+	// Always capture output for TUI output view; terminal logging is optional.
+	writers := []io.Writer{agentLogFile, m.createCaptureWriter(agent.IssueNumber)}
 	if m.config.ConsoleLogging {
-		outputWriter = io.MultiWriter(agentLogFile, m.createPrefixedWriter(agent.IssueNumber))
-	} else {
-		outputWriter = agentLogFile
+		writers = append(writers, m.createPrefixedWriter(agent.IssueNumber))
 	}
+	outputWriter := io.MultiWriter(writers...)
 	cmd.Stdout = outputWriter
 	cmd.Stderr = outputWriter
 	cmd.Env = append(os.Environ(),
