@@ -79,6 +79,11 @@ type model struct {
 
 	// View state management
 	viewManager *ViewManager
+	tabManager  *TabManager
+	mainTab     *MainTab
+	
+	// Agent lifecycle tracking
+	knownAgents map[string]bool
 }
 
 func newModel(w *watcher.Watcher, m *agent.Manager, cfg *config.Config, logFile *os.File, logReader *os.File) model {
@@ -95,6 +100,11 @@ func newModel(w *watcher.Watcher, m *agent.Manager, cfg *config.Config, logFile 
 	consoleViewport := viewport.New(viewport.WithWidth(80), viewport.WithHeight(24))
 	// Disable built-in key bindings — we handle scrolling explicitly
 	consoleViewport.KeyMap = viewport.KeyMap{}
+
+	// Initialize tab system
+	tabManager := NewTabManager()
+	mainTab := NewMainTab()
+	tabManager.AddTab(mainTab)
 
 	return model{
 		watcher:          w,
@@ -113,6 +123,9 @@ func newModel(w *watcher.Watcher, m *agent.Manager, cfg *config.Config, logFile 
 			activityLines: make([]string, 0),
 		},
 		viewManager: viewManager,
+		tabManager:  tabManager,
+		mainTab:     mainTab,
+		knownAgents: make(map[string]bool),
 	}
 }
 
@@ -157,6 +170,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if cmd := m.viewManager.Update(msg); cmd != nil {
 			return m, cmd
 		}
+		// Forward to tab manager
+		m.tabManager.Resize(msg.Width, msg.Height)
 		// Recalculate overlay dimensions on resize
 		if m.activeOverlay != overlayNone {
 			m.overlayWidth = int(float64(m.width) * 0.6)
@@ -249,6 +264,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.lastLogPos = newPos
 			m = m.appendActivity(newLines...)
 		}
+		
+		// Check for agent lifecycle changes
+		m = m.updateAgentTabs()
+		
 		return m, m.tickCmd()
 
 	case planningHotkeyMsg:
@@ -322,8 +341,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c":
 			return m.tryExit()
 		case "f2", "o":
-			// Toggle between console and agent output views
-			m.viewManager.ToggleView()
+			// Toggle between main and agent tabs
+			m.tabManager.ToggleView()
+			return m, nil
+		case "ctrl+tab":
+			// Next tab
+			m.tabManager.NextTab()
+			return m, nil
+		case "ctrl+shift+tab":
+			// Previous tab
+			m.tabManager.PreviousTab()
+			return m, nil
+		case "ctrl+w":
+			// Close current tab (if closable)
+			m.tabManager.CloseCurrentTab()
 			return m, nil
 		case "up", "down", "pgup", "pgdown", "home", "end":
 			// Handle console scroll events when in console view
@@ -350,8 +381,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "enter":
-			// Only handle enter in console view
-			if m.viewManager.CurrentView() != ViewConsole {
+			// Only handle enter in main tab (console view)
+			activeTab := m.tabManager.GetActiveTab()
+			if activeTab == nil || activeTab.Type() != TabTypeMain {
 				return m, nil
 			}
 			input := strings.TrimSpace(m.input.Value())
@@ -361,17 +393,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m.executeCommand(input)
 		default:
-			// Forward key messages to view manager for agent output view navigation
-			if m.viewManager.CurrentView() == ViewAgentOutput {
-				if cmd := m.viewManager.Update(msg); cmd != nil {
+			// Forward key messages to active tab
+			activeTab := m.tabManager.GetActiveTab()
+			if activeTab != nil && activeTab.Type() == TabTypeAgent {
+				if cmd := m.tabManager.Update(msg); cmd != nil {
 					return m, cmd
 				}
 			}
 		}
 	}
 
-	// Only update input when no overlay is active and in console view
-	if m.activeOverlay == overlayNone && m.viewManager.CurrentView() == ViewConsole {
+	// Only update input when no overlay is active and in main tab
+	activeTab := m.tabManager.GetActiveTab()
+	if m.activeOverlay == overlayNone && activeTab != nil && activeTab.Type() == TabTypeMain {
 		var cmd tea.Cmd
 		m.input, cmd = m.input.Update(msg)
 		return m, cmd
@@ -454,8 +488,20 @@ func (m model) View() tea.View {
 
 	base := m.renderBaseView()
 
-	// Let view manager handle rendering based on current view
-	content := m.viewManager.RenderCurrentView(base)
+	// Update main tab with base view content
+	if m.mainTab != nil {
+		m.mainTab.SetBaseView(base)
+	}
+
+	// Use TabManager to render active tab content
+	var content string
+	activeTab := m.tabManager.GetActiveTab()
+	if activeTab != nil {
+		content = activeTab.View()
+	} else {
+		// Fallback to base view if no active tab
+		content = base
+	}
 
 	// Compose overlay if active (overlays work on any view)
 	if m.activeOverlay != overlayNone {
@@ -686,6 +732,38 @@ func (m model) executeCommand(input string) (model, tea.Cmd) {
 }
 
 // Run starts the TUI, redirecting log output to a file.
+func (m model) updateAgentTabs() model {
+	agents := m.manager.List()
+	
+	// Track current agent IDs
+	currentAgents := make(map[string]bool)
+	for _, ag := range agents {
+		currentAgents[ag.ID] = true
+		
+		// Create tab for new agents when they start
+		if !m.knownAgents[ag.ID] {
+			agentTab := NewAgentTab(ag.ID, m.manager, m.styles)
+			m.tabManager.AddTab(agentTab)
+			m.knownAgents[ag.ID] = true
+			
+			// Auto-switch to new agent tab
+			if tabIndex := m.tabManager.FindTabByAgentID(ag.ID); tabIndex != -1 {
+				m.tabManager.SetActiveTab(tabIndex)
+			}
+		}
+	}
+	
+	// Clean up tracking for agents that no longer exist
+	for agentID := range m.knownAgents {
+		if !currentAgents[agentID] {
+			delete(m.knownAgents, agentID)
+			m.tabManager.RemoveTab("agent-" + agentID)
+		}
+	}
+	
+	return m
+}
+
 func Run(w *watcher.Watcher, m *agent.Manager, cfg *config.Config) error {
 	logPath := ".kiro-krew/kiro-krew.log"
 	if err := os.MkdirAll(".kiro-krew", 0755); err != nil {
