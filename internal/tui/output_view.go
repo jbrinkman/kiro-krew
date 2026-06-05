@@ -146,8 +146,7 @@ func (ov *OutputView) refreshContent() {
 	content := strings.Join(output, "\n")
 	ov.viewport.SetContent(content)
 
-	// Auto-scroll to bottom for new content
-	ov.viewport.GotoBottom()
+	// Intentionally do not force-scroll here; preserve the user's scroll position.
 }
 
 // wrapText wraps text to fit within the specified width
