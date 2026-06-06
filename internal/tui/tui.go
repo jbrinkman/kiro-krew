@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"charm.land/bubbles/v2/textinput"
+	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
@@ -56,6 +57,7 @@ type model struct {
 	config                *config.Config
 	styles                *Styles
 	input                 textinput.Model
+	consoleViewport       viewport.Model
 	activityLines         []string
 	maxActivityLines      int
 	width                 int
@@ -90,6 +92,10 @@ func newModel(w *watcher.Watcher, m *agent.Manager, cfg *config.Config, logFile 
 	styles := NewStyles(theme)
 	viewManager.InitOutputView(m, styles)
 
+	consoleViewport := viewport.New(viewport.WithWidth(80), viewport.WithHeight(24))
+	// Disable built-in key bindings — we handle scrolling explicitly
+	consoleViewport.KeyMap = viewport.KeyMap{}
+
 	return model{
 		watcher:          w,
 		manager:          m,
@@ -97,6 +103,7 @@ func newModel(w *watcher.Watcher, m *agent.Manager, cfg *config.Config, logFile 
 		config:           cfg,
 		styles:           styles,
 		input:            ti,
+		consoleViewport:  consoleViewport,
 		logFile:          logFile,
 		logReader:        logReader,
 		maxActivityLines: cfg.MaxActivityLines,
@@ -125,6 +132,12 @@ func (m model) appendActivity(lines ...string) model {
 	if m.maxActivityLines > 0 && len(m.activityLines) > m.maxActivityLines {
 		m.activityLines = m.activityLines[len(m.activityLines)-m.maxActivityLines:]
 	}
+	// Sync viewport content and auto-scroll if user is near the bottom
+	content := strings.Join(m.activityLines, "\n")
+	m.consoleViewport.SetContent(content)
+	if m.consoleViewport.ScrollPercent() >= 0.95 {
+		m.consoleViewport.GotoBottom()
+	}
 	return m
 }
 
@@ -133,6 +146,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		// Resize console viewport (preserve scroll position)
+		activityHeight := m.height - 2 // Reserve 2 lines for prompt area
+		if activityHeight < 1 {
+			activityHeight = 1
+		}
+		m.consoleViewport.SetWidth(msg.Width)
+		m.consoleViewport.SetHeight(activityHeight)
 		// Forward to view manager
 		if cmd := m.viewManager.Update(msg); cmd != nil {
 			return m, cmd
@@ -249,6 +269,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m = m.appendActivity(m.styles.Error.Render(fmt.Sprintf("Hotkey error: %v", msg.Err)))
 		return m, nil
 
+	case tea.MouseWheelMsg:
+		// Handle mouse wheel scrolling in console view when no overlay active
+		if m.activeOverlay == overlayNone && m.viewManager.CurrentView() == ViewConsole {
+			mouse := msg.Mouse()
+			if mouse.Button == tea.MouseWheelUp {
+				m.consoleViewport.ScrollUp(3)
+			} else if mouse.Button == tea.MouseWheelDown {
+				m.consoleViewport.ScrollDown(3)
+			}
+			return m, nil
+		}
+		// Forward to view manager for agent output view
+		if cmd := m.viewManager.Update(msg); cmd != nil {
+			return m, cmd
+		}
+		return m, nil
+
 	case tea.KeyPressMsg:
 		// Handle hotkey detection first
 		if hotkeyCmd := hotkey.HandleKeyMsg(msg); hotkeyCmd != nil {
@@ -287,6 +324,30 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "f2", "o":
 			// Toggle between console and agent output views
 			m.viewManager.ToggleView()
+			return m, nil
+		case "up", "down", "pgup", "pgdown", "home", "end":
+			// Handle console scroll events when in console view
+			if m.viewManager.CurrentView() == ViewConsole {
+				switch msg.String() {
+				case "up":
+					m.consoleViewport.ScrollUp(1)
+				case "down":
+					m.consoleViewport.ScrollDown(1)
+				case "pgup":
+					m.consoleViewport.HalfPageUp()
+				case "pgdown":
+					m.consoleViewport.HalfPageDown()
+				case "home":
+					m.consoleViewport.GotoTop()
+				case "end":
+					m.consoleViewport.GotoBottom()
+				}
+				return m, nil
+			}
+			// Forward to view manager for agent output view
+			if cmd := m.viewManager.Update(msg); cmd != nil {
+				return m, cmd
+			}
 			return m, nil
 		case "enter":
 			// Only handle enter in console view
@@ -346,23 +407,8 @@ func (m model) renderBaseView() string {
 		activityHeight = 1
 	}
 
-	// Get visible activity lines
-	lines := m.activityLines
-	if len(lines) > activityHeight {
-		lines = lines[len(lines)-activityHeight:]
-	}
-
-	// Build activity pane padded to exactly activityHeight lines
-	var activityBuilder strings.Builder
-	for i := 0; i < activityHeight; i++ {
-		if i < len(lines) {
-			activityBuilder.WriteString(lines[i])
-		}
-		if i < activityHeight-1 {
-			activityBuilder.WriteByte('\n')
-		}
-	}
-	activity := activityBuilder.String()
+	// Use console viewport for scrollable content
+	activity := m.consoleViewport.View()
 
 	separator := m.styles.Separator.Render(strings.Repeat("─", m.width))
 
