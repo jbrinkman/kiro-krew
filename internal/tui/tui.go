@@ -93,6 +93,8 @@ func newModel(w *watcher.Watcher, m *agent.Manager, cfg *config.Config, logFile 
 	viewManager.InitOutputView(m, styles)
 
 	consoleViewport := viewport.New(viewport.WithWidth(80), viewport.WithHeight(24))
+	// Disable built-in key bindings — we handle scrolling explicitly
+	consoleViewport.KeyMap = viewport.KeyMap{}
 
 	return model{
 		watcher:          w,
@@ -130,17 +132,13 @@ func (m model) appendActivity(lines ...string) model {
 	if m.maxActivityLines > 0 && len(m.activityLines) > m.maxActivityLines {
 		m.activityLines = m.activityLines[len(m.activityLines)-m.maxActivityLines:]
 	}
-	return m
-}
-
-// updateConsoleViewport updates the console viewport with current activity lines
-func (m *model) updateConsoleViewport() {
+	// Sync viewport content and auto-scroll if user is near the bottom
 	content := strings.Join(m.activityLines, "\n")
 	m.consoleViewport.SetContent(content)
-	// Auto-scroll to bottom if at bottom (within 3 lines)
 	if m.consoleViewport.ScrollPercent() >= 0.95 {
 		m.consoleViewport.GotoBottom()
 	}
+	return m
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -148,13 +146,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		// Resize console viewport
+		// Resize console viewport (preserve scroll position)
 		activityHeight := m.height - 2 // Reserve 2 lines for prompt area
 		if activityHeight < 1 {
 			activityHeight = 1
 		}
-		m.consoleViewport = viewport.New(viewport.WithWidth(msg.Width), viewport.WithHeight(activityHeight))
-		(&m).updateConsoleViewport()
+		m.consoleViewport.SetWidth(msg.Width)
+		m.consoleViewport.SetHeight(activityHeight)
 		// Forward to view manager
 		if cmd := m.viewManager.Update(msg); cmd != nil {
 			return m, cmd
@@ -250,7 +248,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if len(newLines) > 0 {
 			m.lastLogPos = newPos
 			m = m.appendActivity(newLines...)
-			(&m).updateConsoleViewport()
 		}
 		return m, m.tickCmd()
 
@@ -351,6 +348,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if cmd := m.viewManager.Update(msg); cmd != nil {
 				return m, cmd
 			}
+			return m, nil
 		case "enter":
 			// Only handle enter in console view
 			if m.viewManager.CurrentView() != ViewConsole {
@@ -369,15 +367,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, cmd
 				}
 			}
-		}
-	}
-
-	// Forward all messages to console viewport when in console view and no overlay
-	if m.activeOverlay == overlayNone && m.viewManager.CurrentView() == ViewConsole {
-		var cmd tea.Cmd
-		m.consoleViewport, cmd = m.consoleViewport.Update(msg)
-		if cmd != nil {
-			return m, cmd
 		}
 	}
 
@@ -418,8 +407,7 @@ func (m model) renderBaseView() string {
 		activityHeight = 1
 	}
 
-	// Update console viewport content and dimensions
-	(&m).updateConsoleViewport()
+	// Use console viewport for scrollable content
 	activity := m.consoleViewport.View()
 
 	separator := m.styles.Separator.Render(strings.Repeat("─", m.width))
