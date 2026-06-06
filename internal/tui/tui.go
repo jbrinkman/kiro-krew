@@ -78,7 +78,6 @@ type model struct {
 	overlayHeight  int
 
 	// View state management
-	viewManager *ViewManager
 	tabManager  *TabManager
 	mainTab     *MainTab
 	
@@ -92,10 +91,7 @@ func newModel(w *watcher.Watcher, m *agent.Manager, cfg *config.Config, logFile 
 	ti.Focus()
 
 	theme := cfg.LoadedTheme
-
-	viewManager := NewViewManager()
 	styles := NewStyles(theme)
-	viewManager.InitOutputView(m, styles)
 
 	consoleViewport := viewport.New(viewport.WithWidth(80), viewport.WithHeight(24))
 	// Disable built-in key bindings — we handle scrolling explicitly
@@ -122,7 +118,6 @@ func newModel(w *watcher.Watcher, m *agent.Manager, cfg *config.Config, logFile 
 			inputValue:    "",
 			activityLines: make([]string, 0),
 		},
-		viewManager: viewManager,
 		tabManager:  tabManager,
 		mainTab:     mainTab,
 		knownAgents: make(map[string]bool),
@@ -166,10 +161,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.consoleViewport.SetWidth(msg.Width)
 		m.consoleViewport.SetHeight(activityHeight)
-		// Forward to view manager
-		if cmd := m.viewManager.Update(msg); cmd != nil {
-			return m, cmd
-		}
 		// Forward to tab manager
 		m.tabManager.Resize(msg.Width, msg.Height)
 		// Recalculate overlay dimensions on resize
@@ -289,8 +280,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.MouseWheelMsg:
-		// Handle mouse wheel scrolling in console view when no overlay active
-		if m.activeOverlay == overlayNone && m.viewManager.CurrentView() == ViewConsole {
+		// Handle mouse wheel scrolling in main tab when no overlay active
+		activeTab := m.tabManager.GetActiveTab()
+		if m.activeOverlay == overlayNone && activeTab != nil && activeTab.Type() == TabTypeMain {
 			mouse := msg.Mouse()
 			if mouse.Button == tea.MouseWheelUp {
 				m.consoleViewport.ScrollUp(3)
@@ -299,8 +291,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		// Forward to view manager for agent output view
-		if cmd := m.viewManager.Update(msg); cmd != nil {
+		// Forward to tab manager for agent tabs
+		if cmd := m.tabManager.Update(msg); cmd != nil {
 			return m, cmd
 		}
 		return m, nil
@@ -344,21 +336,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Toggle between main and agent tabs
 			m.tabManager.ToggleView()
 			return m, nil
-		case "ctrl+tab":
-			// Next tab
-			m.tabManager.NextTab()
-			return m, nil
-		case "ctrl+shift+tab":
+		case "[":
 			// Previous tab
 			m.tabManager.PreviousTab()
+			return m, nil
+		case "]":
+			// Next tab
+			m.tabManager.NextTab()
 			return m, nil
 		case "ctrl+w":
 			// Close current tab (if closable)
 			m.tabManager.CloseCurrentTab()
 			return m, nil
 		case "up", "down", "pgup", "pgdown", "home", "end":
-			// Handle console scroll events when in console view
-			if m.viewManager.CurrentView() == ViewConsole {
+			// Handle console scroll events when in main tab
+			activeTab := m.tabManager.GetActiveTab()
+			if activeTab != nil && activeTab.Type() == TabTypeMain {
 				switch msg.String() {
 				case "up":
 					m.consoleViewport.ScrollUp(1)
@@ -375,8 +368,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			}
-			// Forward to view manager for agent output view
-			if cmd := m.viewManager.Update(msg); cmd != nil {
+			// Forward to tab manager for agent tabs
+			if cmd := m.tabManager.Update(msg); cmd != nil {
 				return m, cmd
 			}
 			return m, nil
@@ -488,18 +481,12 @@ func (m model) View() tea.View {
 
 	base := m.renderBaseView()
 
-	// Update main tab with base view content
-	if m.mainTab != nil {
-		m.mainTab.SetBaseView(base)
-	}
-
-	// Use TabManager to render active tab content
+	// Render active tab content (use base view directly for main tab)
 	var content string
 	activeTab := m.tabManager.GetActiveTab()
-	if activeTab != nil {
+	if activeTab != nil && activeTab.Type() != TabTypeMain {
 		content = activeTab.View()
 	} else {
-		// Fallback to base view if no active tab
 		content = base
 	}
 
@@ -734,33 +721,20 @@ func (m model) executeCommand(input string) (model, tea.Cmd) {
 // Run starts the TUI, redirecting log output to a file.
 func (m model) updateAgentTabs() model {
 	agents := m.manager.List()
-	
+
 	// Track current agent IDs
 	currentAgents := make(map[string]bool)
 	for _, ag := range agents {
 		currentAgents[ag.ID] = true
-		
-		// Create tab for new agents when they start
+
+		// Create tab for new agents when they start (no auto-switch)
 		if !m.knownAgents[ag.ID] {
 			agentTab := NewAgentTab(ag.ID, m.manager, m.styles)
 			m.tabManager.AddTab(agentTab)
 			m.knownAgents[ag.ID] = true
-			
-			// Auto-switch to new agent tab
-			if tabIndex := m.tabManager.FindTabByAgentID(ag.ID); tabIndex != -1 {
-				m.tabManager.SetActiveTab(tabIndex)
-			}
 		}
 	}
-	
-	// Clean up tracking for agents that no longer exist
-	for agentID := range m.knownAgents {
-		if !currentAgents[agentID] {
-			delete(m.knownAgents, agentID)
-			m.tabManager.RemoveTab("agent-" + agentID)
-		}
-	}
-	
+
 	return m
 }
 

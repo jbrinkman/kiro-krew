@@ -86,8 +86,8 @@ func (m model) handleStatus() (model, tea.Cmd) {
 		content = append(content, "")
 		content = append(content, m.styles.Prompt.Render("Navigation"))
 		content = append(content, "  F2 - Toggle between main and first agent tab")
-		content = append(content, "  Ctrl+Tab - Next tab")
-		content = append(content, "  Ctrl+Shift+Tab - Previous tab")
+		content = append(content, "  [ - Previous tab")
+		content = append(content, "  ] - Next tab")
 	}
 
 	if len(agents) == 0 {
@@ -353,7 +353,6 @@ func (m model) handleTheme(args []string) (model, tea.Cmd) {
 
 	// Update styles with new theme
 	m.styles = NewStyles(theme)
-	m.viewManager.UpdateOutputViewStyles(m.styles)
 
 	m = m.appendActivity(m.styles.Success.Render(fmt.Sprintf("Theme changed to: %s", themeName)))
 	return m, tea.ClearScreen
