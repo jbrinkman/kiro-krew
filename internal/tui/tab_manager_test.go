@@ -201,7 +201,7 @@ func TestRenderTabHeaders(t *testing.T) {
 	styles := NewStyles(theme)
 	
 	// Test empty tab manager
-	result := tm.RenderTabHeaders(styles)
+	result := tm.RenderTabHeaders(80, styles)
 	if result != "" {
 		t.Errorf("Expected empty string for no tabs, got '%s'", result)
 	}
@@ -210,7 +210,7 @@ func TestRenderTabHeaders(t *testing.T) {
 	mainTab := NewMainTab()
 	tm.AddTab(mainTab)
 	
-	result = tm.RenderTabHeaders(styles)
+	result = tm.RenderTabHeaders(80, styles)
 	if !strings.Contains(result, "Main TUI") {
 		t.Errorf("Expected tab header to contain 'Main TUI', got '%s'", result)
 	}
@@ -219,7 +219,7 @@ func TestRenderTabHeaders(t *testing.T) {
 	mockAgent := &mockAgentTab{id: "agent-test", agentID: "test"}
 	tm.AddTab(mockAgent)
 	
-	result = tm.RenderTabHeaders(styles)
+	result = tm.RenderTabHeaders(80, styles)
 	if !strings.Contains(result, "Main TUI") {
 		t.Errorf("Expected tab header to contain 'Main TUI', got '%s'", result)
 	}
@@ -234,41 +234,80 @@ func TestRenderTabHeaders(t *testing.T) {
 	longTitleTab := &mockAgentTab{id: "agent-long", agentID: "verylongagentname"}
 	tm.AddTab(longTitleTab)
 	
-	result = tm.RenderTabHeaders(styles)
+	result = tm.RenderTabHeaders(80, styles)
 	// Should truncate long titles
 	if strings.Contains(result, "verylongagentname") {
 		t.Errorf("Expected long title to be truncated, got '%s'", result)
 	}
+
+	// Test width overflow — narrow terminal should not render all tabs
+	result = tm.RenderTabHeaders(20, styles)
+	// With 20 chars, only the first tab (8 + 2 padding = 10) should fit
+	if strings.Contains(result, "Agent test") {
+		t.Errorf("Expected narrow width to omit later tabs, got '%s'", result)
+	}
+}
+
+// tabClickPos calculates the click x-position for a tab at the given index.
+// Accounts for padding (tabPadding) and separator width (1) between tabs.
+func tabClickPos(tabs []Tab, targetIndex int, inCloseBtn bool) int {
+	pos := 0
+	for i, tab := range tabs {
+		if i >= targetIndex {
+			break
+		}
+		title := tab.Title()
+		if len(title) > 15 {
+			title = title[:12] + "..."
+		}
+		w := len(title) + tabPadding
+		if tab.IsClosable() {
+			w += len(closeBtnText)
+		}
+		pos += w + 1 // +1 for separator
+	}
+	if inCloseBtn {
+		title := tabs[targetIndex].Title()
+		if len(title) > 15 {
+			title = title[:12] + "..."
+		}
+		pos += len(title) + tabPadding // jump past title+padding to close btn area
+	} else {
+		pos += 1 // click inside the padding/title area
+	}
+	return pos
 }
 
 func TestTabManager_HandleTabHeaderClick(t *testing.T) {
 	tm := NewTabManager()
 	
 	// Add test tabs
-	mainTab := NewMainTab() // "Main TUI" = 8 chars
-	agentTab := &mockAgentTab{id: "agent-1", agentID: "test"} // "Agent test" = 10 chars, closable
+	mainTab := NewMainTab()                                    // "Main TUI" = 8 chars + 2 padding = 10 rendered
+	agentTab := &mockAgentTab{id: "agent-1", agentID: "test"} // "Agent test" = 10 chars + 2 padding + 2 close = 14 rendered
 	
 	tm.AddTab(mainTab)
 	tm.AddTab(agentTab)
+
+	tabs := tm.GetTabs()
 	
-	// Test clicking on first tab
-	tm.HandleTabHeaderClick(4) // Click in middle of "Main TUI" 
+	// Test clicking on first tab (inside title area)
+	clickPos := tabClickPos(tabs, 0, false)
+	tm.HandleTabHeaderClick(clickPos)
 	if tm.GetActiveTabIndex() != 0 {
 		t.Errorf("Expected active tab 0, got %d", tm.GetActiveTabIndex())
 	}
 	
 	// Test clicking on second tab content (not close button)
-	// First tab: 8 chars + separator = 9
-	// Second tab starts at position 9, title is 10 chars
-	tm.HandleTabHeaderClick(15) // Click in middle of "Agent test" content
+	clickPos = tabClickPos(tabs, 1, false)
+	tm.HandleTabHeaderClick(clickPos)
 	if tm.GetActiveTabIndex() != 1 {
 		t.Errorf("Expected active tab 1, got %d", tm.GetActiveTabIndex())
 	}
 	
-	// Test clicking on close button area
-	// Second tab: position 9, title "Agent test" (10 chars), close starts at 19, ends at 21
+	// Test clicking on close button area of second tab
 	initialCount := len(tm.GetTabs())
-	tm.HandleTabHeaderClick(20) // Click on close button " ×"
+	clickPos = tabClickPos(tabs, 1, true)
+	tm.HandleTabHeaderClick(clickPos)
 	if len(tm.GetTabs()) >= initialCount {
 		t.Error("Expected closable tab to be closed when clicking close button")
 	}

@@ -179,76 +179,101 @@ func (tm *TabManager) ToggleView() {
 	}
 }
 
-// RenderTabHeaders renders visual tab headers showing all tabs with active highlighting and close buttons
-func (tm *TabManager) RenderTabHeaders(styles *Styles) string {
+// tabPadding is the horizontal padding applied to each tab by lipgloss (Padding(0, 1) = 1 char each side)
+const tabPadding = 2
+
+// closeBtnText is the close button suffix for closable tabs
+const closeBtnText = " ×"
+
+// RenderTabHeaders renders visual tab headers showing all tabs with active highlighting and close buttons.
+// The width parameter controls overflow — tabs exceeding width are truncated with an indicator.
+func (tm *TabManager) RenderTabHeaders(width int, styles *Styles) string {
 	if len(tm.tabs) == 0 {
 		return ""
 	}
 
 	var tabHeaders []string
-	
+	usedWidth := 0
+	separatorWidth := 1 // "│"
+
 	for i, tab := range tm.tabs {
 		title := tab.Title()
-		
+
 		// Truncate long titles
 		if len(title) > 15 {
 			title = title[:12] + "..."
 		}
-		
-		var tabContent string
+
+		// Calculate rendered width of this tab: title + optional close btn + padding
+		renderedWidth := len(title) + tabPadding
 		if tab.IsClosable() {
-			// Add close button for closable tabs
-			closeBtn := styles.TabClose.Render(" ×")
-			tabContent = title + closeBtn
-		} else {
-			tabContent = title
+			renderedWidth += len(closeBtnText)
 		}
-		
-		// Style based on active state
+
+		// Check if adding this tab would overflow terminal width
+		needed := renderedWidth
+		if len(tabHeaders) > 0 {
+			needed += separatorWidth
+		}
+		if width > 0 && usedWidth+needed > width {
+			break
+		}
+
+		// Render tab title with style, close button rendered separately to preserve its color
+		var styledTab string
 		if i == tm.activeTab {
-			tabHeaders = append(tabHeaders, styles.TabActive.Render(tabContent))
+			styledTab = styles.TabActive.Render(title)
 		} else {
-			tabHeaders = append(tabHeaders, styles.TabInactive.Render(tabContent))
+			styledTab = styles.TabInactive.Render(title)
 		}
+
+		if tab.IsClosable() {
+			styledTab += styles.TabClose.Render(closeBtnText)
+		}
+
+		tabHeaders = append(tabHeaders, styledTab)
+		usedWidth += needed
 	}
-	
+
 	return strings.Join(tabHeaders, styles.Separator.Render("│"))
 }
 
-// HandleTabHeaderClick handles mouse clicks on tab headers
+// HandleTabHeaderClick handles mouse clicks on tab headers.
+// Positions account for lipgloss padding applied during rendering.
 func (tm *TabManager) HandleTabHeaderClick(x int) bool {
 	if len(tm.tabs) == 0 {
 		return false
 	}
 
 	position := 0
+	separatorWidth := 1 // "│"
+
 	for i, tab := range tm.tabs {
 		title := tab.Title()
 		if len(title) > 15 {
 			title = title[:12] + "..."
 		}
-		
-		tabWidth := len(title)
+
+		// Each tab has padding (1 char each side) around the title
+		tabWidth := len(title) + tabPadding
 		closeButtonStart := position + tabWidth
-		
+
 		if tab.IsClosable() {
-			tabWidth += 2 // " ×"
+			tabWidth += len(closeBtnText)
 		}
-		
+
 		// Check if click is within this tab
 		if x >= position && x < position+tabWidth {
 			if tab.IsClosable() && x >= closeButtonStart {
-				// Clicked on close button area
 				tm.CloseTab(i)
 			} else {
-				// Clicked on tab content, switch to this tab
 				tm.SetActiveTab(i)
 			}
 			return true
 		}
-		
-		position += tabWidth + 1 // +1 for separator
+
+		position += tabWidth + separatorWidth
 	}
-	
+
 	return false
 }
