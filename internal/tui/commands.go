@@ -85,7 +85,7 @@ func (m model) handleStatus() (model, tea.Cmd) {
 	if len(tabs) > 1 {
 		content = append(content, "")
 		content = append(content, m.styles.Prompt.Render("Navigation"))
-		content = append(content, "  F2 - Toggle between main and first agent tab")
+		content = append(content, "  F2/Tab - Toggle between main and first agent tab")
 		content = append(content, "  [ - Previous tab")
 		content = append(content, "  ] - Next tab")
 	}
@@ -173,7 +173,7 @@ func (m model) handleHelp() (model, tea.Cmd) {
 		"  help           - Show this help message",
 		"",
 		m.styles.Prompt.Render("Hotkeys:"),
-		"  F2, o          - Toggle between console and agent output views",
+		"  F2, Tab        - Toggle between console and agent output views",
 		"  Ctrl+Alt+P     - Toggle between console and planning modes",
 	}
 

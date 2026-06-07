@@ -53,17 +53,17 @@ func (ov *OutputView) Update(msg tea.Msg) (*OutputView, tea.Cmd) {
 		ov.refreshContent()
 	case tea.KeyPressMsg:
 		switch msg.String() {
-		case "up", "k":
+		case "up":
 			ov.viewport.ScrollUp(1)
-		case "down", "j":
+		case "down":
 			ov.viewport.ScrollDown(1)
 		case "pgup":
 			ov.viewport.HalfPageUp()
 		case "pgdown":
 			ov.viewport.HalfPageDown()
-		case "home", "g":
+		case "home":
 			ov.viewport.GotoTop()
-		case "end", "G":
+		case "end":
 			ov.viewport.GotoBottom()
 		}
 	}
