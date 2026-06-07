@@ -1,0 +1,22 @@
+package tui
+
+import tea "charm.land/bubbletea/v2"
+
+// TabType represents the different types of tabs
+type TabType int
+
+const (
+	TabTypeMain TabType = iota
+	TabTypeAgent
+)
+
+// Tab interface defines the contract for all tab implementations
+type Tab interface {
+	ID() string
+	Type() TabType
+	Title() string
+	IsClosable() bool
+	View() string
+	Update(tea.Msg) (Tab, tea.Cmd)
+	Resize(width, height int)
+}

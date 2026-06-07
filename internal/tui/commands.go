@@ -54,9 +54,47 @@ func (m model) handleStatus() (model, tea.Cmd) {
 	agents := m.manager.List()
 	content := []string{}
 
-	if len(agents) == 0 {
-		content = append(content, m.styles.Warning.Render("No agents running"))
+	// Add tab information section
+	tabs := m.tabManager.GetTabs()
+	activeTabIndex := m.tabManager.GetActiveTabIndex()
+	
+	content = append(content, m.styles.Prompt.Render("Active Tab"))
+	if len(tabs) > 0 {
+		activeTab := m.tabManager.GetActiveTab()
+		content = append(content, fmt.Sprintf("  Current: %s", activeTab.Title()))
+		content = append(content, fmt.Sprintf("  Type: %s", getTabTypeName(activeTab.Type())))
 	} else {
+		content = append(content, "  No tabs")
+	}
+	
+	content = append(content, "")
+	content = append(content, m.styles.Prompt.Render(fmt.Sprintf("Tabs (%d open)", len(tabs))))
+	
+	for i, tab := range tabs {
+		indicator := "  "
+		if i == activeTabIndex {
+			indicator = "* "
+		}
+		closable := ""
+		if tab.IsClosable() {
+			closable = " (closable)"
+		}
+		content = append(content, fmt.Sprintf("%s%s%s", indicator, tab.Title(), closable))
+	}
+	
+	if len(tabs) > 1 {
+		content = append(content, "")
+		content = append(content, m.styles.Prompt.Render("Navigation"))
+		content = append(content, "  F2 - Toggle between main and first agent tab")
+		content = append(content, "  [ - Previous tab")
+		content = append(content, "  ] - Next tab")
+	}
+
+	if len(agents) == 0 {
+		content = append(content, "", m.styles.Warning.Render("No agents running"))
+	} else {
+		content = append(content, "", m.styles.Prompt.Render("Agents"))
+		
 		contentWidth := m.getOverlayContentWidth()
 
 		issueW := max(int(float64(contentWidth)*0.11), 5)
@@ -81,7 +119,7 @@ func (m model) handleStatus() (model, tea.Cmd) {
 
 		header := fmt.Sprintf("%-*s %-*s %-*s %-*s", issueW, "Issue", titleW, "Title", statusW, "Status", elapsedW, "Elapsed")
 		sep := strings.Repeat("-", contentWidth)
-		content = append(content, m.styles.Prompt.Render(header), m.styles.Separator.Render(sep))
+		content = append(content, m.styles.Separator.Render(sep), header, m.styles.Separator.Render(sep))
 
 		for _, a := range agents {
 			elapsed := time.Since(a.StartTime).Truncate(time.Second)
@@ -94,7 +132,7 @@ func (m model) handleStatus() (model, tea.Cmd) {
 		}
 	}
 
-	m = m.activateOverlay(overlayStatus, "Agent Status", content)
+	m = m.activateOverlay(overlayStatus, "System Status", content)
 	return m, nil
 }
 
@@ -315,7 +353,6 @@ func (m model) handleTheme(args []string) (model, tea.Cmd) {
 
 	// Update styles with new theme
 	m.styles = NewStyles(theme)
-	m.viewManager.UpdateOutputViewStyles(m.styles)
 
 	m = m.appendActivity(m.styles.Success.Render(fmt.Sprintf("Theme changed to: %s", themeName)))
 	return m, tea.ClearScreen
@@ -325,6 +362,18 @@ func checkForUpdateCmd() tea.Cmd {
 	return func() tea.Msg {
 		release, err := github.GetLatestRelease("jbrinkman/kiro-krew")
 		return updateCheckMsg{release: release, err: err}
+	}
+}
+
+// getTabTypeName converts TabType enum to readable string
+func getTabTypeName(tabType TabType) string {
+	switch tabType {
+	case TabTypeMain:
+		return "Main Console"
+	case TabTypeAgent:
+		return "Agent Output"
+	default:
+		return "Unknown"
 	}
 }
 
