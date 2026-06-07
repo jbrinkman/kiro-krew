@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"strings"
+
 	tea "charm.land/bubbletea/v2"
 )
 
@@ -175,4 +177,78 @@ func (tm *TabManager) ToggleView() {
 		// Switch back to main tab
 		tm.activeTab = 0
 	}
+}
+
+// RenderTabHeaders renders visual tab headers showing all tabs with active highlighting and close buttons
+func (tm *TabManager) RenderTabHeaders(styles *Styles) string {
+	if len(tm.tabs) == 0 {
+		return ""
+	}
+
+	var tabHeaders []string
+	
+	for i, tab := range tm.tabs {
+		title := tab.Title()
+		
+		// Truncate long titles
+		if len(title) > 15 {
+			title = title[:12] + "..."
+		}
+		
+		var tabContent string
+		if tab.IsClosable() {
+			// Add close button for closable tabs
+			closeBtn := styles.TabClose.Render(" ×")
+			tabContent = title + closeBtn
+		} else {
+			tabContent = title
+		}
+		
+		// Style based on active state
+		if i == tm.activeTab {
+			tabHeaders = append(tabHeaders, styles.TabActive.Render(tabContent))
+		} else {
+			tabHeaders = append(tabHeaders, styles.TabInactive.Render(tabContent))
+		}
+	}
+	
+	return strings.Join(tabHeaders, styles.Separator.Render("│"))
+}
+
+// HandleTabHeaderClick handles mouse clicks on tab headers
+func (tm *TabManager) HandleTabHeaderClick(x int) bool {
+	if len(tm.tabs) == 0 {
+		return false
+	}
+
+	position := 0
+	for i, tab := range tm.tabs {
+		title := tab.Title()
+		if len(title) > 15 {
+			title = title[:12] + "..."
+		}
+		
+		tabWidth := len(title)
+		closeButtonStart := position + tabWidth
+		
+		if tab.IsClosable() {
+			tabWidth += 2 // " ×"
+		}
+		
+		// Check if click is within this tab
+		if x >= position && x < position+tabWidth {
+			if tab.IsClosable() && x >= closeButtonStart {
+				// Clicked on close button area
+				tm.CloseTab(i)
+			} else {
+				// Clicked on tab content, switch to this tab
+				tm.SetActiveTab(i)
+			}
+			return true
+		}
+		
+		position += tabWidth + 1 // +1 for separator
+	}
+	
+	return false
 }
