@@ -38,6 +38,9 @@ const (
 	overlayAbout
 
 	maxOverlayLines = 1000 // Prevent memory growth from very large overlay content
+
+	// tabHeaderHeight is the number of lines the tab header occupies in the view
+	tabHeaderHeight = 1
 )
 
 type overlayContent struct {
@@ -154,8 +157,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		// Resize console viewport (preserve scroll position)
-		activityHeight := m.height - 2 // Reserve 2 lines for prompt area
+		// Resize console viewport — account for tab header + separator + input
+		activityHeight := m.height - 2 - tabHeaderHeight
 		if activityHeight < 1 {
 			activityHeight = 1
 		}
@@ -297,6 +300,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case tea.MouseClickMsg:
+		// Handle mouse clicks on tab headers when no overlay active
+		if m.activeOverlay == overlayNone {
+			mouse := msg.Mouse()
+			// Check if click is in the tab header area (first line)
+			if mouse.Y < tabHeaderHeight {
+				m.tabManager.HandleTabHeaderClick(mouse.X)
+				return m, nil
+			}
+		}
+		// Forward to active tab
+		if cmd := m.tabManager.Update(msg); cmd != nil {
+			return m, cmd
+		}
+		return m, nil
+
 	case tea.KeyPressMsg:
 		// Handle hotkey detection first
 		if hotkeyCmd := hotkey.HandleKeyMsg(msg); hotkeyCmd != nil {
@@ -428,8 +447,8 @@ func (m model) clearOverlay() model {
 }
 
 func (m model) renderBaseView() string {
-	// Reserve 2 lines for prompt area (separator + input)
-	activityHeight := m.height - 2
+	// Reserve 2 lines for prompt area (separator + input); tab header accounted for in viewport height
+	activityHeight := m.height - 2 - tabHeaderHeight
 	if activityHeight < 1 {
 		activityHeight = 1
 	}
@@ -479,6 +498,9 @@ func (m model) View() tea.View {
 		return v
 	}
 
+	// Render tab headers at the top
+	tabHeaders := m.tabManager.RenderTabHeaders(m.width, m.styles)
+	
 	base := m.renderBaseView()
 
 	// Render active tab content (use base view directly for main tab)
@@ -489,6 +511,9 @@ func (m model) View() tea.View {
 	} else {
 		content = base
 	}
+
+	// Combine tab headers with content
+	content = tabHeaders + "\n" + content
 
 	// Compose overlay if active (overlays work on any view)
 	if m.activeOverlay != overlayNone {
