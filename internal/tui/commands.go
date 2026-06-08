@@ -173,7 +173,7 @@ func (m model) handleHelp() (model, tea.Cmd) {
 		"  help           - Show this help message",
 		"",
 		m.styles.Prompt.Render("Hotkeys:"),
-		"  F2, o          - Toggle between console and agent output views",
+		"  F2             - Toggle between console and agent output views",
 		"  Ctrl+Alt+P     - Toggle between console and planning modes",
 	}
 

@@ -351,7 +351,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c":
 			return m.tryExit()
-		case "f2", "o":
+		case "f2":
 			// Toggle between main and agent tabs
 			m.tabManager.ToggleView()
 			return m, nil
