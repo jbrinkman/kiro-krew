@@ -16,7 +16,7 @@ type AgentTab struct {
 func NewAgentTab(agentID string, manager *agent.Manager, styles *Styles) *AgentTab {
 	return &AgentTab{
 		agentID:    agentID,
-		outputView: NewOutputView(manager, styles),
+		outputView: NewOutputViewForAgent(agentID, manager, styles),
 	}
 }
 

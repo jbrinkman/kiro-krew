@@ -20,6 +20,7 @@ type OutputView struct {
 	height       int
 	lastUpdate   time.Time
 	cachedOutput []string
+	agentID      string // Filter output by this agent ID, empty string shows all
 }
 
 // SetStyles updates the styles used by this view.
@@ -27,7 +28,7 @@ func (ov *OutputView) SetStyles(styles *Styles) {
 	ov.styles = styles
 }
 
-// NewOutputView creates a new output view
+// NewOutputView creates a new output view for all agents
 func NewOutputView(manager *agent.Manager, styles *Styles) *OutputView {
 	vp := viewport.New(viewport.WithWidth(80), viewport.WithHeight(24))
 	return &OutputView{
@@ -35,6 +36,19 @@ func NewOutputView(manager *agent.Manager, styles *Styles) *OutputView {
 		manager:    manager,
 		styles:     styles,
 		lastUpdate: time.Now(),
+		agentID:    "", // Empty means show all agents
+	}
+}
+
+// NewOutputViewForAgent creates a new output view filtered to a specific agent
+func NewOutputViewForAgent(agentID string, manager *agent.Manager, styles *Styles) *OutputView {
+	vp := viewport.New(viewport.WithWidth(80), viewport.WithHeight(24))
+	return &OutputView{
+		viewport:   vp,
+		manager:    manager,
+		styles:     styles,
+		lastUpdate: time.Now(),
+		agentID:    agentID,
 	}
 }
 
@@ -96,9 +110,28 @@ func (ov *OutputView) refreshContent() {
 	agents := ov.manager.List()
 	capturedLines := ov.manager.GetOutputLines()
 
+	// If filtering by agent ID, only show that agent
+	if ov.agentID != "" {
+		var filteredAgents []*agent.Agent
+		for _, agentItem := range agents {
+			if agentItem.ID == ov.agentID {
+				filteredAgents = []*agent.Agent{agentItem}
+				break
+			}
+		}
+		agents = filteredAgents
+	}
+
 	if len(agents) == 0 {
 		if len(capturedLines) == 0 {
 			content := ov.styles.Warning.Render("No agents running. Use 'watch start' to begin monitoring issues.")
+			ov.viewport.SetContent(content)
+			return
+		}
+
+		// If filtering by agent ID but agent not found, show appropriate message
+		if ov.agentID != "" {
+			content := ov.styles.Warning.Render(fmt.Sprintf("Agent %s not found or no longer running.", ov.agentID))
 			ov.viewport.SetContent(content)
 			return
 		}
@@ -152,7 +185,7 @@ func (ov *OutputView) refreshContent() {
 			}
 		}
 
-		// Add separator between agents
+		// Add separator between agents (only when showing multiple agents)
 		if len(agents) > 1 {
 			output = append(output, "")
 			output = append(output, ov.styles.Separator.Render(strings.Repeat("─", ov.width)))
