@@ -36,6 +36,7 @@ const (
 	overlayStatus
 	overlayHelp
 	overlayAbout
+	overlayLogs
 
 	maxOverlayLines = 1000 // Prevent memory growth from very large overlay content
 
@@ -737,6 +738,8 @@ func (m model) executeCommand(input string) (model, tea.Cmd) {
 			args = parts[1:]
 		}
 		return m.handleTheme(args)
+	case "logs":
+		return m.handleLogs()
 	default:
 		m = m.appendActivity(m.styles.Error.Render(fmt.Sprintf("Unknown command: %s", cmd)))
 		return m, nil

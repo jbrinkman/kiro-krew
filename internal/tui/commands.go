@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/jbrinkman/kiro-krew/internal/config"
 	"github.com/jbrinkman/kiro-krew/internal/github"
+	"github.com/jbrinkman/kiro-krew/internal/incidents"
 	"github.com/jbrinkman/kiro-krew/internal/session"
 	"github.com/jbrinkman/kiro-krew/internal/version"
 )
@@ -166,6 +167,7 @@ func (m model) handleHelp() (model, tea.Cmd) {
 		"  status         - List all agents with details",
 		"  stop <issue>   - Stop agent for specific issue number",
 		"  plan [desc]    - Start interactive planning session",
+		"  logs           - View incident logs",
 		"  theme          - Show current theme",
 		"  theme <name>   - Switch to theme",
 		"  about          - Show version information and check for updates",
@@ -458,4 +460,39 @@ func (m model) restoreConsoleState() model {
 	}
 	m.currentMode = session.Console
 	return m
+}
+
+func (m model) handleLogs() (model, tea.Cmd) {
+	logger, err := incidents.NewIncidentLogger()
+	if err != nil {
+		m = m.appendActivity(m.styles.Error.Render(fmt.Sprintf("Failed to initialize logger: %v", err)))
+		return m, nil
+	}
+
+	incidents, err := logger.ListIncidents()
+	if err != nil {
+		m = m.appendActivity(m.styles.Error.Render(fmt.Sprintf("Failed to list incidents: %v", err)))
+		return m, nil
+	}
+
+	content := []string{}
+	if len(incidents) == 0 {
+		content = append(content, m.styles.Warning.Render("No incident logs found"))
+	} else {
+		content = append(content, m.styles.Prompt.Render(fmt.Sprintf("Found %d incident logs:", len(incidents))))
+		content = append(content, "")
+		
+		for _, incident := range incidents {
+			timestamp := incident.Timestamp.Format("Jan 02 15:04:05")
+			line := fmt.Sprintf("Issue #%d (attempt %d) - %s", incident.IssueNumber, incident.Attempt, timestamp)
+			content = append(content, line)
+		}
+		
+		content = append(content, "")
+		content = append(content, m.styles.Prompt.Render("Log files location:"))
+		content = append(content, fmt.Sprintf("~/.kiro-krew/logs/%s/incidents/", logger.RepoName()))
+	}
+
+	m = m.activateOverlay(overlayLogs, "Incident Logs", content)
+	return m, nil
 }
