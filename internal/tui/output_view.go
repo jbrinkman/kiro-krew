@@ -186,7 +186,7 @@ func (ov *OutputView) refreshContent() {
 		}
 
 		// Add separator between agents (only when showing multiple agents)
-		if len(agents) > 1 && ov.agentID == "" {
+		if len(agents) > 1 {
 			output = append(output, "")
 			output = append(output, ov.styles.Separator.Render(strings.Repeat("─", ov.width)))
 			output = append(output, "")
