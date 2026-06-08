@@ -180,9 +180,36 @@ func scoreDeterministic(criterion Criterion, tc TestCase) (int, string, bool) {
 }
 
 func scoreLLMJudge(criterion Criterion, tc TestCase) (int, string, bool) {
-	// LLM judge not yet configured — skip criterion to avoid false signal
-	return 0, "LLM judge not configured — criterion skipped", true
+	prompt := fmt.Sprintf(`Evaluate this output against the criterion. Respond with JSON only:
+{"score": <number>, "reasoning": "<explanation>", "pass": <boolean>}
+
+CRITERION: %s
+DESCRIPTION: %s  
+SCORING: %s
+
+OUTPUT TO EVALUATE:
+%s`, criterion.Name, criterion.Description, criterion.Scoring, tc.Output)
+
+	cmd := exec.Command("kiro", "chat", prompt)
+	output, err := cmd.Output()
+	if err != nil {
+		return 0, fmt.Sprintf("kiro chat failed: %v", err), true
+	}
+
+	var response struct {
+		Score     int    `json:"score"`
+		Reasoning string `json:"reasoning"`
+		Pass      bool   `json:"pass"`
+	}
+
+	if err := json.Unmarshal(output, &response); err != nil {
+		return 0, fmt.Sprintf("JSON parse error: %v", err), true
+	}
+
+	return response.Score, response.Reasoning, false
 }
+
+
 
 func estimateCost(input, output string) CostInfo {
 	// Rough estimate: ~4 chars per token

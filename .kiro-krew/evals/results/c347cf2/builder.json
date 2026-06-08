@@ -1,0 +1,48 @@
+{
+  "agent": "builder",
+  "git_hash": "c347cf2",
+  "cases": [
+    {
+      "case_name": "implement-from-spec",
+      "scores": [
+        {
+          "name": "code_correctness",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": true,
+          "skipped": true,
+          "reasoning": "no deterministic checker implemented for \"code_correctness\""
+        },
+        {
+          "name": "spec_adherence",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "JSON parse error: unexpected end of JSON input"
+        },
+        {
+          "name": "code_quality",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "JSON parse error: unexpected end of JSON input"
+        },
+        {
+          "name": "test_coverage",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": true,
+          "skipped": true,
+          "reasoning": "no deterministic checker implemented for \"test_coverage\""
+        }
+      ],
+      "cost": {
+        "tokens_in": 63,
+        "tokens_out": 248,
+        "estimated_usd": 0.003909
+      }
+    }
+  ]
+}
