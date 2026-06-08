@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -326,6 +327,51 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.activeOverlay != overlayNone && msg.String() == "esc" {
 			m = m.clearOverlay()
 			return m, nil
+		}
+
+		// Handle number key selection in status overlay for agent restoration
+		if m.activeOverlay == overlayStatus {
+			switch msg.String() {
+			case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+				agentIndex, _ := strconv.Atoi(msg.String())
+				agentIndex-- // Convert to 0-based index
+				
+				// Get running agents (same logic as in handleStatus)
+				agents := m.manager.List()
+				runningAgents := []*agent.Agent{}
+				for _, a := range agents {
+					if a.Status == agent.StatusRunning {
+						runningAgents = append(runningAgents, a)
+					}
+				}
+				
+				// Check if selection is valid
+				if agentIndex >= 0 && agentIndex < len(runningAgents) && agentIndex < 9 {
+					selectedAgent := runningAgents[agentIndex]
+					m = m.clearOverlay()
+					
+					// Validate agent is still running before creating/focusing tab
+					currentAgents := m.manager.List()
+					agentStillRunning := false
+					for _, currentAgent := range currentAgents {
+						if currentAgent.ID == selectedAgent.ID && currentAgent.Status == agent.StatusRunning {
+							agentStillRunning = true
+							break
+						}
+					}
+					
+					if agentStillRunning {
+						// Use TabManager method to restore or focus agent tab
+						m.tabManager.RestoreOrFocusAgentTab(selectedAgent.ID, m.manager, m.styles)
+						m.knownAgents[selectedAgent.ID] = true
+					} else {
+						m = m.appendActivity(m.styles.Warning.Render("Agent no longer running"))
+					}
+					return m, nil
+				}
+				// Invalid selection - just ignore
+				return m, nil
+			}
 		}
 
 		// Block other input when overlay is active

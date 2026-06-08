@@ -9,6 +9,7 @@ import (
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"github.com/jbrinkman/kiro-krew/internal/agent"
 	"github.com/jbrinkman/kiro-krew/internal/config"
 	"github.com/jbrinkman/kiro-krew/internal/github"
 	"github.com/jbrinkman/kiro-krew/internal/session"
@@ -90,46 +91,50 @@ func (m model) handleStatus() (model, tea.Cmd) {
 		content = append(content, "  ] - Next tab")
 	}
 
-	if len(agents) == 0 {
-		content = append(content, "", m.styles.Warning.Render("No agents running"))
-	} else {
-		content = append(content, "", m.styles.Prompt.Render("Agents"))
+	// Filter running agents for interactive selection
+	runningAgents := []*agent.Agent{}
+	stoppedAgents := []*agent.Agent{}
+	for _, a := range agents {
+		if a.Status == agent.StatusRunning {
+			runningAgents = append(runningAgents, a)
+		} else {
+			stoppedAgents = append(stoppedAgents, a)
+		}
+	}
+
+	if len(runningAgents) > 0 {
+		content = append(content, "", m.styles.Prompt.Render("Running Agents"))
+		content = append(content, "Press number to open view:")
+		content = append(content, "")
 		
-		contentWidth := m.getOverlayContentWidth()
-
-		issueW := max(int(float64(contentWidth)*0.11), 5)
-		titleW := max(int(float64(contentWidth)*0.43), 10)
-		statusW := max(int(float64(contentWidth)*0.14), 7)
-
-		// Ensure column widths fit within contentWidth (3 spaces between columns).
-		minColW := 1
-		for issueW+titleW+statusW+minColW+3 > contentWidth && titleW > minColW {
-			titleW--
-		}
-		for issueW+titleW+statusW+minColW+3 > contentWidth && statusW > minColW {
-			statusW--
-		}
-		for issueW+titleW+statusW+minColW+3 > contentWidth && issueW > minColW {
-			issueW--
-		}
-		elapsedW := contentWidth - issueW - titleW - statusW - 3
-		if elapsedW < minColW {
-			elapsedW = minColW
-		}
-
-		header := fmt.Sprintf("%-*s %-*s %-*s %-*s", issueW, "Issue", titleW, "Title", statusW, "Status", elapsedW, "Elapsed")
-		sep := strings.Repeat("-", contentWidth)
-		content = append(content, m.styles.Separator.Render(sep), header, m.styles.Separator.Render(sep))
-
-		for _, a := range agents {
+		// Display up to 9 running agents with numbers
+		for i, a := range runningAgents {
+			if i >= 9 { // Only support 1-9 for simplicity
+				break
+			}
 			elapsed := time.Since(a.StartTime).Truncate(time.Second)
-			line := fmt.Sprintf("%-*d %-*s %-*s %-*s",
-				issueW, a.IssueNumber,
-				titleW, truncate(a.IssueTitle, titleW),
-				statusW, string(a.Status),
-				elapsedW, elapsed)
+			line := fmt.Sprintf("  %d. Issue #%d: %s (%s, %s)", 
+				i+1, a.IssueNumber, truncate(a.IssueTitle, 40), string(a.Status), elapsed)
 			content = append(content, line)
 		}
+		
+		if len(runningAgents) > 9 {
+			content = append(content, fmt.Sprintf("  ... and %d more", len(runningAgents)-9))
+		}
+	}
+
+	if len(stoppedAgents) > 0 {
+		content = append(content, "", m.styles.Prompt.Render("Stopped Agents:"))
+		for _, a := range stoppedAgents {
+			elapsed := time.Since(a.StartTime).Truncate(time.Second)
+			line := fmt.Sprintf("   Issue #%d: %s (%s, %s)", 
+				a.IssueNumber, truncate(a.IssueTitle, 40), string(a.Status), elapsed)
+			content = append(content, line)
+		}
+	}
+
+	if len(agents) == 0 {
+		content = append(content, "", m.styles.Warning.Render("No agents running"))
 	}
 
 	m = m.activateOverlay(overlayStatus, "System Status", content)
