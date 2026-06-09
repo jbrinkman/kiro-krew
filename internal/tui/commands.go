@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -102,11 +103,25 @@ func (m model) handleStatus() (model, tea.Cmd) {
 		}
 	}
 
+	// Sort running agents by issue number for deterministic ordering
+	sort.Slice(runningAgents, func(i, j int) bool {
+		return runningAgents[i].IssueNumber < runningAgents[j].IssueNumber
+	})
+
+	// Store snapshot so number key selection references the same order
+	m.statusRunningAgents = runningAgents
+
 	if len(runningAgents) > 0 {
 		content = append(content, "", m.styles.Prompt.Render("Running Agents"))
 		content = append(content, "Press number to open view:")
 		content = append(content, "")
 		
+		// Scale title truncation to available overlay width
+		titleMax := m.getOverlayContentWidth() - 25 // Reserve space for number, issue#, status, elapsed
+		if titleMax < 15 {
+			titleMax = 15
+		}
+
 		// Display up to 9 running agents with numbers
 		for i, a := range runningAgents {
 			if i >= 9 { // Only support 1-9 for simplicity
@@ -114,7 +129,7 @@ func (m model) handleStatus() (model, tea.Cmd) {
 			}
 			elapsed := time.Since(a.StartTime).Truncate(time.Second)
 			line := fmt.Sprintf("  %d. Issue #%d: %s (%s, %s)", 
-				i+1, a.IssueNumber, truncate(a.IssueTitle, 40), string(a.Status), elapsed)
+				i+1, a.IssueNumber, truncate(a.IssueTitle, titleMax), string(a.Status), elapsed)
 			content = append(content, line)
 		}
 		
@@ -125,10 +140,14 @@ func (m model) handleStatus() (model, tea.Cmd) {
 
 	if len(stoppedAgents) > 0 {
 		content = append(content, "", m.styles.Prompt.Render("Stopped Agents:"))
+		titleMax := m.getOverlayContentWidth() - 22 // Reserve space for issue#, status, elapsed
+		if titleMax < 15 {
+			titleMax = 15
+		}
 		for _, a := range stoppedAgents {
 			elapsed := time.Since(a.StartTime).Truncate(time.Second)
 			line := fmt.Sprintf("   Issue #%d: %s (%s, %s)", 
-				a.IssueNumber, truncate(a.IssueTitle, 40), string(a.Status), elapsed)
+				a.IssueNumber, truncate(a.IssueTitle, titleMax), string(a.Status), elapsed)
 			content = append(content, line)
 		}
 	}
@@ -274,13 +293,6 @@ func truncate(s string, max int) string {
 		return s[:max]
 	}
 	return s[:max-3] + "..."
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }
 
 func (m model) getOverlayContentWidth() int {

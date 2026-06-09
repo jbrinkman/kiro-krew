@@ -122,11 +122,6 @@ func (tm *TabManager) FindTabByAgentID(agentID string) int {
 	return -1
 }
 
-// HasAgentTab checks if an agent tab exists for the given agent ID
-func (tm *TabManager) HasAgentTab(agentID string) bool {
-	return tm.FindTabByAgentID(agentID) >= 0
-}
-
 // CloseTab closes tab at index
 func (tm *TabManager) CloseTab(index int) bool {
 	if index < 0 || index >= len(tm.tabs) || !tm.tabs[index].IsClosable() {

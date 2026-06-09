@@ -86,7 +86,8 @@ type model struct {
 	mainTab     *MainTab
 	
 	// Agent lifecycle tracking
-	knownAgents map[string]bool
+	knownAgents        map[string]bool
+	statusRunningAgents []*agent.Agent // Snapshot for deterministic number key selection
 }
 
 func newModel(w *watcher.Watcher, m *agent.Manager, cfg *config.Config, logFile *os.File, logReader *os.File) model {
@@ -336,18 +337,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				agentIndex, _ := strconv.Atoi(msg.String())
 				agentIndex-- // Convert to 0-based index
 				
-				// Get running agents (same logic as in handleStatus)
-				agents := m.manager.List()
-				runningAgents := []*agent.Agent{}
-				for _, a := range agents {
-					if a.Status == agent.StatusRunning {
-						runningAgents = append(runningAgents, a)
-					}
-				}
-				
-				// Check if selection is valid
-				if agentIndex >= 0 && agentIndex < len(runningAgents) && agentIndex < 9 {
-					selectedAgent := runningAgents[agentIndex]
+				// Use snapshot stored when overlay was created
+				if agentIndex >= 0 && agentIndex < len(m.statusRunningAgents) && agentIndex < 9 {
+					selectedAgent := m.statusRunningAgents[agentIndex]
 					m = m.clearOverlay()
 					
 					// Validate agent is still running before creating/focusing tab
@@ -361,7 +353,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					
 					if agentStillRunning {
-						// Use TabManager method to restore or focus agent tab
 						m.tabManager.RestoreOrFocusAgentTab(selectedAgent.ID, m.manager, m.styles)
 						m.knownAgents[selectedAgent.ID] = true
 					} else {
@@ -803,6 +794,13 @@ func (m model) updateAgentTabs() model {
 			agentTab := NewAgentTab(ag.ID, m.manager, m.styles)
 			m.tabManager.AddTab(agentTab)
 			m.knownAgents[ag.ID] = true
+		}
+	}
+
+	// Prune knownAgents entries for agents no longer in the manager
+	for id := range m.knownAgents {
+		if !currentAgents[id] {
+			delete(m.knownAgents, id)
 		}
 	}
 
