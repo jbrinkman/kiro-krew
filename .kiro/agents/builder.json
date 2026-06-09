@@ -5,5 +5,6 @@
   "tools": ["read", "write", "shell"],
   "allowedTools": ["read", "write", "shell"],
   "model": "claude-sonnet-4",
-  "welcomeMessage": "Builder ready. What task should I execute?"
+  "welcomeMessage": "Builder ready. What task should I execute?",
+  "expectedArtifacts": ["**/*.go", "**/*.js", "**/*.ts", "**/*.py", "**/*.md", "go.mod", "package.json", "Makefile"]
 }

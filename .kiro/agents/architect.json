@@ -3,5 +3,6 @@
   "prompt": "file://./architect-prompt.md",
   "tools": ["read", "write", "shell"],
   "allowedTools": ["read", "write", "shell"],
-  "model": "claude-sonnet-4"
+  "model": "claude-sonnet-4",
+  "expectedArtifacts": [".kiro-krew/specs/issue-*-*.md"]
 }
