@@ -1,12 +1,14 @@
 package eval
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -179,22 +181,49 @@ func scoreDeterministic(criterion Criterion, tc TestCase) (int, string, bool) {
 	}
 }
 
+func runKiroCLI(prompt string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "kiro-cli", "chat", "--no-interactive")
+	cmd.Stdin = strings.NewReader(prompt)
+	return cmd.Output()
+}
+
 func scoreLLMJudge(criterion Criterion, tc TestCase) (int, string, bool) {
-	prompt := fmt.Sprintf(`Evaluate this output against the criterion. Respond with JSON only:
-{"score": <number>, "reasoning": "<explanation>", "pass": <boolean>}
+	prompt := fmt.Sprintf(`Evaluate this output against the criterion.
+Wrap your JSON response between ===JSON_START=== and ===JSON_END=== delimiters.
+
+{"score": <number 1-5>, "reasoning": "<explanation>", "pass": <boolean>}
 
 CRITERION: %s
-DESCRIPTION: %s  
-SCORING: %s
+DESCRIPTION: %s
+
+SCORING SCALE:
+1 = Does not meet the criterion at all
+2 = Minimally addresses the criterion with major gaps
+3 = Partially meets the criterion with notable room for improvement
+4 = Mostly meets the criterion with minor gaps
+5 = Fully satisfies the criterion
+
+INPUT/CONTEXT:
+%s
 
 OUTPUT TO EVALUATE:
-%s`, criterion.Name, criterion.Description, criterion.Scoring, tc.Output)
+%s`, criterion.Name, criterion.Description, tc.Input, tc.Output)
 
-	cmd := exec.Command("kiro", "chat", prompt)
-	output, err := cmd.Output()
+	output, err := runKiroCLI(prompt)
 	if err != nil {
-		return 0, fmt.Sprintf("kiro chat failed: %v", err), true
+		return 0, fmt.Sprintf("kiro-cli chat failed: %v", err), true
 	}
+
+	raw := string(output)
+	start := strings.Index(raw, "===JSON_START===")
+	end := strings.Index(raw, "===JSON_END===")
+	if start == -1 || end == -1 || end <= start {
+		return 0, fmt.Sprintf("JSON delimiters not found in output"), true
+	}
+	jsonStr := raw[start+len("===JSON_START===") : end]
 
 	var response struct {
 		Score     int    `json:"score"`
@@ -202,14 +231,13 @@ OUTPUT TO EVALUATE:
 		Pass      bool   `json:"pass"`
 	}
 
-	if err := json.Unmarshal(output, &response); err != nil {
+	if err := json.Unmarshal([]byte(strings.TrimSpace(jsonStr)), &response); err != nil {
 		return 0, fmt.Sprintf("JSON parse error: %v", err), true
 	}
 
-	return response.Score, response.Reasoning, false
+	score := max(1, min(response.Score, 5))
+	return score, response.Reasoning, false
 }
-
-
 
 func estimateCost(input, output string) CostInfo {
 	// Rough estimate: ~4 chars per token
