@@ -3,7 +3,6 @@ package incidents
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -73,8 +72,8 @@ func (il *IncidentLogger) ListIncidents() ([]IncidentInfo, error) {
 	return incidents, nil
 }
 
-func (il *IncidentLogger) GetIncident(filepath string) (string, error) {
-	content, err := os.ReadFile(filepath)
+func (il *IncidentLogger) GetIncident(filePath string) (string, error) {
+	content, err := os.ReadFile(filePath)
 	if err != nil {
 		return "", fmt.Errorf("failed to read incident file: %w", err)
 	}
@@ -111,21 +110,22 @@ func parseIncidentFilename(filename string) (IncidentInfo, error) {
 }
 
 func getRepoName() (string, error) {
-	cmd := exec.Command("git", "config", "--get", "remote.origin.url")
-	output, err := cmd.Output()
+	data, err := os.ReadFile(".kiro-krew/config.yaml")
 	if err != nil {
-		return "", fmt.Errorf("failed to get git remote origin: %w", err)
+		return "", fmt.Errorf("failed to read config: %w", err)
 	}
 
-	url := strings.TrimSpace(string(output))
-	
-	// Extract repo name from various URL formats
-	if strings.Contains(url, "/") {
-		parts := strings.Split(url, "/")
-		repoName := parts[len(parts)-1]
-		repoName = strings.TrimSuffix(repoName, ".git")
-		return repoName, nil
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "repo:") {
+			repo := strings.TrimSpace(strings.TrimPrefix(line, "repo:"))
+			repo = strings.Trim(repo, "\"'")
+			if parts := strings.Split(repo, "/"); len(parts) == 2 {
+				return parts[1], nil
+			}
+			return repo, nil
+		}
 	}
 
-	return "unknown-repo", nil
+	return "", fmt.Errorf("repo field not found in config")
 }

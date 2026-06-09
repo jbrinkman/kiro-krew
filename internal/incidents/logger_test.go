@@ -75,3 +75,40 @@ func TestGenerateFilename(t *testing.T) {
 		t.Errorf("Filename should end with '.md', got: %s", filename)
 	}
 }
+
+func TestParseIncidentFilename(t *testing.T) {
+	tests := []struct {
+		name      string
+		filename  string
+		wantErr   bool
+		wantIssue int
+		wantAtmpt int
+	}{
+		{"valid", "incident-42-1-20240101-120000.md", false, 42, 1},
+		{"multi-digit", "incident-999-12-20240315-083045.md", false, 999, 12},
+		{"empty string", "", true, 0, 0},
+		{"no prefix", "report-1-2-20240101-120000.md", true, 0, 0},
+		{"too few parts", "incident-1.md", true, 0, 0},
+		{"non-numeric issue", "incident-abc-1-20240101-120000.md", true, 0, 0},
+		{"non-numeric attempt", "incident-1-xyz-20240101-120000.md", true, 0, 0},
+		{"bad timestamp", "incident-1-1-notadate.md", true, 0, 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			info, err := parseIncidentFilename(tt.filename)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("parseIncidentFilename(%q) error = %v, wantErr %v", tt.filename, err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr {
+				if info.IssueNumber != tt.wantIssue {
+					t.Errorf("IssueNumber = %d, want %d", info.IssueNumber, tt.wantIssue)
+				}
+				if info.Attempt != tt.wantAtmpt {
+					t.Errorf("Attempt = %d, want %d", info.Attempt, tt.wantAtmpt)
+				}
+			}
+		})
+	}
+}
