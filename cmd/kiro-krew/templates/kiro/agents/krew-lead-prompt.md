@@ -18,7 +18,28 @@ Extract the issue number, repo, and worktree name from this message and use them
 4. **Read Architect's Spec**: Review the design specification created by architect
 5. **Execute Tasks**: Delegate implementation tasks to appropriate krew members per spec. Always include the WORKTREE_PATH so they know where to work.
 6. **Pre-Merge Validation**: Delegate to validator to verify implementation meets requirements
-7. **Push Branch**: Run `cd <WORKTREE_PATH> && git add -A && git commit -m "feat: <issue-title>" && git push -u origin spec/<worktree-name>`
+7. **Push Branch**: Before committing, check for binary files and remove them:
+   ```bash
+   # Check for newly added binary files
+   cd <WORKTREE_PATH>
+   if binary_files=$(git diff --cached --name-only --diff-filter=A | while read -r file; do
+     if [[ -f "$file" ]] && ([[ -x "$file" ]] || [[ "$file" =~ \.(exe|so|dylib|dll|o|a)$ ]] || [[ "$file" =~ ^kiro-krew ]] || [[ "$file" =~ -test$ ]] || [[ "$file" =~ -validate$ ]]); then
+       echo "$file"
+     fi
+   done); then
+     if [[ -n "$binary_files" ]]; then
+       echo "Binary files detected, removing from staging and worktree:"
+       echo "$binary_files" | while read -r file; do
+         echo "Removing binary file: $file"
+         git reset HEAD "$file" || { echo "Failed to unstage $file"; exit 1; }
+         rm -f "$file" || { echo "Failed to remove $file"; exit 1; }
+       done
+     fi
+   fi
+   
+   # Proceed with commit and push
+   git add -A && git commit -m "feat: <issue-title>" && git push -u origin spec/<worktree-name>
+   ```
 8. **Create PR**: Run `gh pr create --repo <repo> --head spec/<worktree-name> --title "<issue-title>" --body "Closes #<number>"`
 9. **Request Copilot Review** (Optional): If Copilot reviews are enabled, run `gh pr edit --add-reviewer @copilot`. Handle errors gracefully without failing the workflow.
 10. **Label Done**: Run `gh issue edit <number> --repo <repo> --add-label <label>-done` (where label matches the trigger label, e.g. `kiro-krew`)
