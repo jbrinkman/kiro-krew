@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -85,7 +86,8 @@ type model struct {
 	mainTab     *MainTab
 	
 	// Agent lifecycle tracking
-	knownAgents map[string]bool
+	knownAgents        map[string]bool
+	statusRunningAgents []*agent.Agent // Snapshot for deterministic number key selection
 }
 
 func newModel(w *watcher.Watcher, m *agent.Manager, cfg *config.Config, logFile *os.File, logReader *os.File) model {
@@ -326,6 +328,41 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.activeOverlay != overlayNone && msg.String() == "esc" {
 			m = m.clearOverlay()
 			return m, nil
+		}
+
+		// Handle number key selection in status overlay for agent restoration
+		if m.activeOverlay == overlayStatus {
+			switch msg.String() {
+			case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+				agentIndex, _ := strconv.Atoi(msg.String())
+				agentIndex-- // Convert to 0-based index
+				
+				// Use snapshot stored when overlay was created
+				if agentIndex >= 0 && agentIndex < len(m.statusRunningAgents) && agentIndex < 9 {
+					selectedAgent := m.statusRunningAgents[agentIndex]
+					m = m.clearOverlay()
+					
+					// Validate agent is still running before creating/focusing tab
+					currentAgents := m.manager.List()
+					agentStillRunning := false
+					for _, currentAgent := range currentAgents {
+						if currentAgent.ID == selectedAgent.ID && currentAgent.Status == agent.StatusRunning {
+							agentStillRunning = true
+							break
+						}
+					}
+					
+					if agentStillRunning {
+						m.tabManager.RestoreOrFocusAgentTab(selectedAgent.ID, m.manager, m.styles)
+						m.knownAgents[selectedAgent.ID] = true
+					} else {
+						m = m.appendActivity(m.styles.Warning.Render("Agent no longer running"))
+					}
+					return m, nil
+				}
+				// Invalid selection - just ignore
+				return m, nil
+			}
 		}
 
 		// Block other input when overlay is active
@@ -757,6 +794,13 @@ func (m model) updateAgentTabs() model {
 			agentTab := NewAgentTab(ag.ID, m.manager, m.styles)
 			m.tabManager.AddTab(agentTab)
 			m.knownAgents[ag.ID] = true
+		}
+	}
+
+	// Prune knownAgents entries for agents no longer in the manager
+	for id := range m.knownAgents {
+		if !currentAgents[id] {
+			delete(m.knownAgents, id)
 		}
 	}
 

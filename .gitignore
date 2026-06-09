@@ -11,3 +11,4 @@ test-results/
 cmd/kiro-krew/kiro-krew
 /specs/
 .kiro-krew/retries/
+/test-build

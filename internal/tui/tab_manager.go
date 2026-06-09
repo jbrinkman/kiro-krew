@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/jbrinkman/kiro-krew/internal/agent"
 )
 
 // TabManager manages the lifecycle and state of all tabs
@@ -236,6 +237,23 @@ func (tm *TabManager) RenderTabHeaders(width int, styles *Styles) string {
 	}
 
 	return strings.Join(tabHeaders, styles.Separator.Render("│"))
+}
+
+// RestoreOrFocusAgentTab creates a new agent tab if one doesn't exist, or focuses existing tab
+func (tm *TabManager) RestoreOrFocusAgentTab(agentID string, manager *agent.Manager, styles *Styles) bool {
+	// Check if tab already exists
+	existingIndex := tm.FindTabByAgentID(agentID)
+	if existingIndex >= 0 {
+		tm.SetActiveTab(existingIndex)
+		return true
+	}
+	
+	// Create new agent tab
+	agentTab := NewAgentTab(agentID, manager, styles)
+	tm.AddTab(agentTab)
+	// Set the new tab as active (it will be the last one added)
+	tm.SetActiveTab(len(tm.tabs) - 1)
+	return true
 }
 
 // HandleTabHeaderClick handles mouse clicks on tab headers.
