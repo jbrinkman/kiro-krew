@@ -1,5 +1,8 @@
 {
   "name": "architect",
+  "description": "Analyzes issues and creates design specifications.",
+  "prompt": "file://./architect-prompt.md",
   "tools": ["read", "write", "shell"],
+  "allowedTools": ["read", "write", "shell"],
   "model": "claude-sonnet-4"
 }

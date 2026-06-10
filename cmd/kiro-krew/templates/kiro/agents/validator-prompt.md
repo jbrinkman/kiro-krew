@@ -20,6 +20,10 @@ You have `shell` tool access with `autoAllowReadonly: true`. This means:
 - NEVER run destructive commands — your role is to observe and report, not modify
 - Stick to: `npm test`, `npm run lint`, `cat`, `ls`, `grep`, `find`, `git status`, `git diff`
 
+## Write Access Note
+
+You have `write` tool access **only** for creating your sentinel file at `.kiro-krew/artifacts/validator-<issue-number>.md`. Do NOT write to any other path. After completing validation, write a summary of your findings to this file.
+
 ## Workflow
 
 1. **Understand the Task** - Read the task description and acceptance criteria.
