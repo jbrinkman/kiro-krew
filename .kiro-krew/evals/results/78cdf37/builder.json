@@ -1,0 +1,44 @@
+{
+  "agent": "builder",
+  "git_hash": "78cdf37",
+  "cases": [
+    {
+      "case_name": "implement-from-spec",
+      "scores": [
+        {
+          "name": "code_correctness",
+          "score": 5,
+          "max_score": 5,
+          "deterministic": true,
+          "reasoning": "code appears to compile/run successfully"
+        },
+        {
+          "name": "spec_adherence",
+          "score": 4,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The implementation closely follows the specification. It adds a status command to the TUI, modifies the two specified files (internal/tui/commands.go and internal/tui/tui.go), and displays output in a table format. The table includes Issue, Status, and Elapsed columns as specified, plus an additional Title column. The spec called for 'Issue | Agent | Elapsed' but the implementation uses 'Issue | Title | Status | Elapsed' — replacing 'Agent' with 'Title' and 'Status'. This is a minor deviation from the exact column specification. The build and tests pass, and the overall approach is correct, but the column mismatch prevents a perfect score."
+        },
+        {
+          "name": "code_quality",
+          "score": 4,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The code is well-structured and readable. It uses proper formatting with fmt.Sprintf and aligned columns, handles the empty state gracefully, truncates long titles to maintain table alignment, and uses idiomatic Go patterns (range, time.Since, Truncate). The function naming follows Go conventions (handleStatus, camelCase). The table format matches the spec (Issue | Agent/Title | Elapsed) with an additional Status column which is a reasonable enhancement. Minor gaps: the spec asked for 'Agent' column but the implementation shows 'Title' and 'Status' instead — this is a slight deviation from spec but arguably more useful. The helper function truncate is referenced but not shown, though it's likely a simple utility. The separation of the handler logic in commands.go from the routing in tui.go follows good separation of concerns. Build and tests pass."
+        },
+        {
+          "name": "test_coverage",
+          "score": 2,
+          "max_score": 5,
+          "deterministic": true,
+          "reasoning": "found 1 test coverage indicators"
+        }
+      ],
+      "cost": {
+        "tokens_in": 63,
+        "tokens_out": 248,
+        "estimated_usd": 0.003909
+      }
+    }
+  ]
+}
