@@ -21,6 +21,10 @@ Create design spec at `.kiro-krew/specs/issue-<number>-<slug>.md` (relative to c
 - **Step-by-Step Task Breakdown**: Detailed tasks with acceptance criteria
 - **Validation Commands**: Commands to verify the implementation works correctly
 
+## Sentinel File
+
+After completing your design spec, write a sentinel file at `.kiro-krew/artifacts/architect-<issue>.md` (replacing `<issue>` with the issue number). Include a brief summary of the design spec produced. This signals successful completion to krew-lead.
+
 ## Critical Requirements
 
 - Create the `.kiro-krew/specs/` directory if it doesn't exist

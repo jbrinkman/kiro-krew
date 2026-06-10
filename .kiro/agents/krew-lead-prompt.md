@@ -107,3 +107,27 @@ Brief description of the failed task
 ## Recommended Actions
 [Suggested steps for human intervention]
 ```
+
+### TEMPORARY WORKAROUND: Empty Response Sentinel File Detection
+<!-- TODO: Remove this section when Kiro CLI empty response bug is fixed -->
+
+When a subagent returns an empty response, before escalating to the next retry stage:
+
+1. **Check for Sentinel File**: Check if the agent wrote its sentinel file:
+   ```bash
+   # For architect on issue 42:
+   test -f .kiro-krew/artifacts/architect-42.md
+   # For builder on issue 42:
+   test -f .kiro-krew/artifacts/builder-42.md
+   # For validator on issue 42:
+   test -f .kiro-krew/artifacts/validator-42.md
+   # For documenter on issue 42:
+   test -f .kiro-krew/artifacts/documenter-42.md
+   ```
+   The pattern is `.kiro-krew/artifacts/<agent-name>-<issue-number>.md`.
+
+2. **If sentinel file exists**: Read its contents with `cat .kiro-krew/artifacts/<agent>-<issue>.md` to recover the agent's summary, then continue the workflow normally. Log that the empty-response workaround was triggered.
+
+3. **If sentinel file missing**: The agent did not complete successfully. Proceed with normal retry escalation.
+
+Each subagent writes its sentinel file upon successful completion, including a summary of work performed. This avoids false positives from pre-existing files and makes detection unambiguous across concurrent workflow runs.
