@@ -33,7 +33,7 @@ Any configuration options or environment variables (if applicable).
 
 ## Sentinel File
 
-After completing documentation, write a sentinel file at `.kiro-krew/artifacts/documenter-<issue>.md` (replacing `<issue>` with the issue number). Include a brief summary of what was documented. This signals successful completion to krew-lead.
+After completing documentation, write a sentinel file at `.kiro-krew/artifacts/documenter-<issue-number>.md` (replacing `<issue-number>` with the issue number). Include a brief summary of what was documented. This signals successful completion to krew-lead.
 
 ## Rules
 - Do NOT modify any implementation code — only create documentation files

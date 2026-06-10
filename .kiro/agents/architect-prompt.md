@@ -23,7 +23,7 @@ Create design spec at `.kiro-krew/specs/issue-<number>-<slug>.md` (relative to c
 
 ## Sentinel File
 
-After completing your design spec, write a sentinel file at `.kiro-krew/artifacts/architect-<issue>.md` (replacing `<issue>` with the issue number). Include a brief summary of the design spec produced. This signals successful completion to krew-lead.
+After completing your design spec, write a sentinel file at `.kiro-krew/artifacts/architect-<issue-number>.md` (replacing `<issue-number>` with the issue number). Include a brief summary of the design spec produced. This signals successful completion to krew-lead.
 
 ## Critical Requirements
 
