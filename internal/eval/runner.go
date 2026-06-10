@@ -175,6 +175,73 @@ func scoreDeterministic(criterion Criterion, tc TestCase) (int, string, bool) {
 		}
 		return 1, "no app_docs/feature-* path found in output", false
 
+	case strings.Contains(criterion.Name, "acceptance_criteria_quality"):
+		// Check for testable acceptance criteria patterns
+		testablePatterns := []string{"- [ ]", "- [x]", "```", "go test", "go build", "curl ", "exit code", "status code", "returns ", "outputs "}
+		found := 0
+		for _, pattern := range testablePatterns {
+			if strings.Contains(strings.ToLower(tc.Output), pattern) {
+				found++
+			}
+		}
+		if found >= 3 {
+			return maxScore, fmt.Sprintf("found %d testable criteria indicators", found), false
+		}
+		return max(1, (found*maxScore)/3), fmt.Sprintf("found %d testable criteria indicators", found), false
+
+	case strings.Contains(criterion.Name, "test_execution"):
+		// Check for evidence of actual command execution and results
+		executionIndicators := []string{"exit code", "$ ", "PASS", "FAIL", "ok  \t", "--- FAIL", "--- PASS", "go test", "npm test", "pytest"}
+		found := 0
+		for _, indicator := range executionIndicators {
+			if strings.Contains(tc.Output, indicator) {
+				found++
+			}
+		}
+		if found >= 2 {
+			return maxScore, fmt.Sprintf("found %d execution evidence indicators", found), false
+		}
+		return max(1, (found*maxScore)/2), fmt.Sprintf("found %d execution evidence indicators", found), false
+
+	case strings.Contains(criterion.Name, "code_correctness"):
+		// Check for code compilation/execution success indicators
+		lowerOutput := strings.ToLower(tc.Output)
+		successIndicators := []string{"build passes", "compiled successfully", "no errors", "exit code 0", "ok  \t"}
+		errorIndicators := []string{"compilation error", "syntax error", "build failed", "does not compile"}
+		successCount := 0
+		errorCount := 0
+		for _, indicator := range successIndicators {
+			if strings.Contains(lowerOutput, indicator) {
+				successCount++
+			}
+		}
+		for _, indicator := range errorIndicators {
+			if strings.Contains(lowerOutput, indicator) {
+				errorCount++
+			}
+		}
+		if successCount > 0 && errorCount == 0 {
+			return maxScore, "code appears to compile/run successfully", false
+		}
+		if errorCount > 0 {
+			return 1, "compilation or runtime errors detected", false
+		}
+		return maxScore/2, "no clear success or error indicators", false
+
+	case strings.Contains(criterion.Name, "test_coverage"):
+		// Check for test file references and test execution
+		testPatterns := []string{"_test.go", ".test.js", ".spec.ts", "func Test", "go test", "npm test", "pytest", "describe(", "it("}
+		found := 0
+		for _, pattern := range testPatterns {
+			if strings.Contains(tc.Output, pattern) {
+				found++
+			}
+		}
+		if found >= 2 {
+			return maxScore, fmt.Sprintf("found %d test coverage indicators", found), false
+		}
+		return max(1, (found*maxScore)/2), fmt.Sprintf("found %d test coverage indicators", found), false
+
 	default:
 		// Unknown deterministic criterion — skip rather than award false credit
 		return 0, fmt.Sprintf("no deterministic checker implemented for %q", criterion.Name), true
