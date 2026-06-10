@@ -254,6 +254,7 @@ func TestScoreDeterministic_ExistingCheckers(t *testing.T) {
 		})
 	}
 }
+
 func TestScoreLLMJudge_ANSISequences(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -276,6 +277,9 @@ func TestScoreLLMJudge_ANSISequences(t *testing.T) {
 			expectError: false,
 		},
 		{
+			// Verifies ANSI sequences inside JSON string values are also stripped.
+			// This intentionally mutates content—acceptable since ANSI codes in
+			// LLM output are rendering artifacts, not meaningful data.
 			name: "ANSI sequences within JSON string values",
 			rawResponse: "===JSON_START===\n{\"score\": 2, \"reasoning\": \"\x1B[31mNeeds improvement\x1B[0m\", \"pass\": false}\n===JSON_END===",
 			expectError: false,

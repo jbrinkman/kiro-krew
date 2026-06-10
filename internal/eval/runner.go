@@ -14,6 +14,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// ansiRegex matches all CSI (Control Sequence Introducer) escape sequences.
+var ansiRegex = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
+
 // Run executes the evaluation for all agents (or a specific agent) and writes results.
 func Run(agent string) error {
 	gitHash, err := getGitShortHash()
@@ -424,7 +427,6 @@ func loadCases(agent string) ([]TestCase, error) {
 }
 
 func stripANSISequences(s string) string {
-	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*m`)
 	return ansiRegex.ReplaceAllString(s, "")
 }
 

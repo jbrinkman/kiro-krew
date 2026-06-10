@@ -158,7 +158,6 @@ func TestHotkeyIntegrationEndToEnd(t *testing.T) {
 }
 
 func TestSessionIntegration(t *testing.T) {
-
 	tempDir := t.TempDir()
 	origDir, _ := os.Getwd()
 	defer os.Chdir(origDir)
