@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -291,6 +292,7 @@ OUTPUT TO EVALUATE:
 		return 0, fmt.Sprintf("JSON delimiters not found in output"), true
 	}
 	jsonStr := raw[start+len("===JSON_START===") : end]
+	jsonStr = stripANSISequences(strings.TrimSpace(jsonStr))
 
 	var response struct {
 		Score     int    `json:"score"`
@@ -419,6 +421,11 @@ func loadCases(agent string) ([]TestCase, error) {
 	}
 
 	return cases, nil
+}
+
+func stripANSISequences(s string) string {
+	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*m`)
+	return ansiRegex.ReplaceAllString(s, "")
 }
 
 func getGitShortHash() (string, error) {

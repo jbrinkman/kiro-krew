@@ -157,6 +157,8 @@ func TestHotkeyIntegrationEndToEnd(t *testing.T) {
 	})
 }
 
+func TestSessionIntegration(t *testing.T) {
+
 	tempDir := t.TempDir()
 	origDir, _ := os.Getwd()
 	defer os.Chdir(origDir)
@@ -234,15 +236,9 @@ func TestHotkeyIntegrationEndToEnd(t *testing.T) {
 	// Cleanup
 	sm.Delete(consoleID)
 	sm.Delete(planningID)
-}
 
-	tempDir := t.TempDir()
-	origDir, _ := os.Getwd()
-	defer os.Chdir(origDir)
-	_ = os.Chdir(tempDir)
-
-	sm := session.NewSessionManager()
 	t.Run("Session Cleanup on Exit", func(t *testing.T) {
+		sm := session.NewSessionManager()
 		// Create multiple sessions
 		sessions := make([]string, 3)
 		for i := 0; i < 3; i++ {
