@@ -3,7 +3,7 @@ label: "kiro-krew"
 poll_interval: 1m
 max_retries: 3
 console_logging: false
-enable_copilot_review: true
+enable_copilot_review: false
 
 # Theme selection (optional, defaults to 'default')
 # Available themes: default, high-contrast, light
