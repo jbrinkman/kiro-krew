@@ -175,9 +175,9 @@ func scoreDeterministic(criterion Criterion, tc TestCase) (int, string, bool) {
 		}
 		return 1, "no app_docs/feature-* path found in output", false
 
-	case strings.Contains(criterion.Name, "acceptance_criteria_testability"):
-		// Check for testable patterns in acceptance criteria
-		testablePatterns := []string{"command", "test", "verify", "check", "validate", "should", "must", "file", "execute"}
+	case strings.Contains(criterion.Name, "acceptance_criteria_quality"):
+		// Check for testable acceptance criteria patterns
+		testablePatterns := []string{"- [ ]", "- [x]", "```", "go test", "go build", "curl ", "exit code", "status code", "returns ", "outputs "}
 		found := 0
 		for _, pattern := range testablePatterns {
 			if strings.Contains(strings.ToLower(tc.Output), pattern) {
@@ -185,29 +185,29 @@ func scoreDeterministic(criterion Criterion, tc TestCase) (int, string, bool) {
 			}
 		}
 		if found >= 3 {
-			return maxScore, fmt.Sprintf("found %d testable assertion patterns", found), false
+			return maxScore, fmt.Sprintf("found %d testable criteria indicators", found), false
 		}
-		return max(1, (found*maxScore)/3), fmt.Sprintf("found %d testable assertion patterns", found), false
+		return max(1, (found*maxScore)/3), fmt.Sprintf("found %d testable criteria indicators", found), false
 
 	case strings.Contains(criterion.Name, "test_execution"):
-		// Check for evidence of command execution and validation
-		executionIndicators := []string{"exit code", "output", "passed", "failed", "executed", "run", "success", "error"}
+		// Check for evidence of actual command execution and results
+		executionIndicators := []string{"exit code", "$ ", "PASS", "FAIL", "ok  \t", "--- FAIL", "--- PASS", "go test", "npm test", "pytest"}
 		found := 0
 		for _, indicator := range executionIndicators {
-			if strings.Contains(strings.ToLower(tc.Output), indicator) {
+			if strings.Contains(tc.Output, indicator) {
 				found++
 			}
 		}
 		if found >= 2 {
-			return maxScore, fmt.Sprintf("found %d execution indicators", found), false
+			return maxScore, fmt.Sprintf("found %d execution evidence indicators", found), false
 		}
-		return max(1, (found*maxScore)/2), fmt.Sprintf("found %d execution indicators", found), false
+		return max(1, (found*maxScore)/2), fmt.Sprintf("found %d execution evidence indicators", found), false
 
 	case strings.Contains(criterion.Name, "code_correctness"):
 		// Check for code compilation/execution success indicators
 		lowerOutput := strings.ToLower(tc.Output)
-		successIndicators := []string{"compiled", "success", "no errors", "passed", "working", "runs"}
-		errorIndicators := []string{"compilation error", "syntax error", " failed", " error "}
+		successIndicators := []string{"build passes", "compiled successfully", "no errors", "exit code 0", "ok  \t"}
+		errorIndicators := []string{"compilation error", "syntax error", "build failed", "does not compile"}
 		successCount := 0
 		errorCount := 0
 		for _, indicator := range successIndicators {
@@ -215,9 +215,8 @@ func scoreDeterministic(criterion Criterion, tc TestCase) (int, string, bool) {
 				successCount++
 			}
 		}
-		// Only count errors if not preceded by "no"
 		for _, indicator := range errorIndicators {
-			if strings.Contains(lowerOutput, indicator) && !strings.Contains(lowerOutput, "no"+indicator) {
+			if strings.Contains(lowerOutput, indicator) {
 				errorCount++
 			}
 		}
@@ -231,10 +230,10 @@ func scoreDeterministic(criterion Criterion, tc TestCase) (int, string, bool) {
 
 	case strings.Contains(criterion.Name, "test_coverage"):
 		// Check for test file references and test execution
-		testPatterns := []string{"test", "_test.go", ".test.js", "spec", "coverage", "tested"}
+		testPatterns := []string{"_test.go", ".test.js", ".spec.ts", "func Test", "go test", "npm test", "pytest", "describe(", "it("}
 		found := 0
 		for _, pattern := range testPatterns {
-			if strings.Contains(strings.ToLower(tc.Output), pattern) {
+			if strings.Contains(tc.Output, pattern) {
 				found++
 			}
 		}

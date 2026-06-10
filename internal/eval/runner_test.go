@@ -4,33 +4,33 @@ import (
 	"testing"
 )
 
-func TestScoreDeterministic_AcceptanceCriteriaTestability(t *testing.T) {
+func TestScoreDeterministic_AcceptanceCriteriaQuality(t *testing.T) {
 	criterion := Criterion{
-		Name:    "acceptance_criteria_testability",
+		Name:    "acceptance_criteria_quality",
 		Scoring: "1-5",
 	}
 
 	tests := []struct {
-		name           string
-		output         string
-		expectedScore  int
-		expectedSkip   bool
+		name          string
+		output        string
+		expectedScore int
+		expectedSkip  bool
 	}{
 		{
-			name:          "high testability - many patterns",
-			output:        "Test that the command executes successfully. Verify the file is created. Check that validation passes. Must validate output.",
+			name:          "high quality - checkboxes and commands",
+			output:        "- [ ] Run `go build ./...` and verify exit code 0\n- [ ] Run `go test ./...` returns no failures\n- [ ] `curl /api/health` returns status code 200",
 			expectedScore: 5,
 			expectedSkip:  false,
 		},
 		{
-			name:          "medium testability - some patterns",
-			output:        "Should work correctly and file must be present.",
-			expectedScore: 5,
+			name:          "medium quality - some testable criteria",
+			output:        "- [ ] The API returns 200 on success\n- The implementation should be clean",
+			expectedScore: 3,
 			expectedSkip:  false,
 		},
 		{
-			name:          "low testability - few patterns",
-			output:        "The feature should be implemented.",
+			name:          "low quality - vague criteria",
+			output:        "The feature should work well and be performant.",
 			expectedScore: 1,
 			expectedSkip:  false,
 		},
@@ -63,32 +63,32 @@ func TestScoreDeterministic_TestExecution(t *testing.T) {
 	}
 
 	tests := []struct {
-		name           string
-		output         string
-		expectedScore  int
-		expectedSkip   bool
+		name          string
+		output        string
+		expectedScore int
+		expectedSkip  bool
 	}{
 		{
-			name:          "clear execution evidence",
-			output:        "Command executed successfully with exit code 0. Output shows passed tests.",
+			name:          "clear execution with exit code and test output",
+			output:        "$ go test ./...\nok  \tgithub.com/example/pkg\t0.042s\nexit code 0",
 			expectedScore: 5,
 			expectedSkip:  false,
 		},
 		{
-			name:          "some execution evidence",
-			output:        "Tests were run and passed successfully.",
+			name:          "execution with PASS/FAIL markers",
+			output:        "$ go test -v ./...\n--- PASS: TestFeature (0.01s)\nPASS",
 			expectedScore: 5,
 			expectedSkip:  false,
 		},
 		{
-			name:          "minimal execution evidence",
-			output:        "The command was executed.",
+			name:          "single execution indicator",
+			output:        "Verified by checking exit code of the build step.",
 			expectedScore: 2,
 			expectedSkip:  false,
 		},
 		{
 			name:          "no execution evidence",
-			output:        "The feature was implemented correctly.",
+			output:        "The implementation looks correct based on code review.",
 			expectedScore: 1,
 			expectedSkip:  false,
 		},
@@ -115,31 +115,31 @@ func TestScoreDeterministic_CodeCorrectness(t *testing.T) {
 	}
 
 	tests := []struct {
-		name           string
-		output         string
-		expectedScore  int
-		expectedSkip   bool
+		name          string
+		output        string
+		expectedScore int
+		expectedSkip  bool
 	}{
 		{
-			name:          "clear success indicators",
-			output:        "Code compiled successfully with no errors and runs correctly.",
+			name:          "build passes with no errors",
+			output:        "Build passes: go build ./...\nno errors found\nexit code 0",
 			expectedScore: 5,
 			expectedSkip:  false,
 		},
 		{
-			name:          "success with working code",
-			output:        "The implementation is working and tests passed.",
+			name:          "compiled successfully",
+			output:        "The code compiled successfully and all tests pass.",
 			expectedScore: 5,
 			expectedSkip:  false,
 		},
 		{
-			name:          "error indicators present",
-			output:        "Compilation failed with syntax error in main.go.",
+			name:          "syntax error present",
+			output:        "Build failed: syntax error in cmd/main.go:15",
 			expectedScore: 1,
 			expectedSkip:  false,
 		},
 		{
-			name:          "no clear indicators",
+			name:          "no build evidence",
 			output:        "The feature has been implemented as requested.",
 			expectedScore: 2,
 			expectedSkip:  false,
@@ -167,32 +167,26 @@ func TestScoreDeterministic_TestCoverage(t *testing.T) {
 	}
 
 	tests := []struct {
-		name           string
-		output         string
-		expectedScore  int
-		expectedSkip   bool
+		name          string
+		output        string
+		expectedScore int
+		expectedSkip  bool
 	}{
 		{
-			name:          "comprehensive test coverage",
-			output:        "Added test_user.go with comprehensive test coverage. All functionality is tested.",
+			name:          "test files and execution",
+			output:        "Created internal/auth/handler_test.go with func TestHandleLogin.\nRan go test ./internal/auth/...",
 			expectedScore: 5,
 			expectedSkip:  false,
 		},
 		{
-			name:          "some test coverage",
-			output:        "Tests were added to verify the new functionality.",
+			name:          "test file reference only",
+			output:        "Added user_test.go with unit tests for the new service.",
 			expectedScore: 2,
 			expectedSkip:  false,
 		},
 		{
-			name:          "minimal test references",
-			output:        "The feature includes test cases.",
-			expectedScore: 2,
-			expectedSkip:  false,
-		},
-		{
-			name:          "no test coverage",
-			output:        "The feature has been implemented successfully.",
+			name:          "no test indicators",
+			output:        "The feature has been implemented with proper error handling.",
 			expectedScore: 1,
 			expectedSkip:  false,
 		},
@@ -213,7 +207,6 @@ func TestScoreDeterministic_TestCoverage(t *testing.T) {
 }
 
 func TestScoreDeterministic_ExistingCheckers(t *testing.T) {
-	// Test that existing checkers still work
 	tests := []struct {
 		name       string
 		criterion  Criterion
@@ -239,7 +232,7 @@ func TestScoreDeterministic_ExistingCheckers(t *testing.T) {
 			expectSkip: false,
 		},
 		{
-			name: "unknown checker",
+			name: "unknown checker skips",
 			criterion: Criterion{
 				Name:    "unknown_checker",
 				Scoring: "1-5",
