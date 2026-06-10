@@ -18,7 +18,11 @@ Extract the issue number, repo, and worktree name from this message and use them
 4. **Read Architect's Spec**: Review the design specification created by architect
 5. **Execute Tasks**: Delegate implementation tasks to appropriate krew members per spec. Always include the WORKTREE_PATH so they know where to work.
 6. **Pre-Merge Validation**: Delegate to validator to verify implementation meets requirements
-7. **Push Branch**: Run `cd <WORKTREE_PATH> && git add -A && git commit -m "feat: <issue-title>" && git push -u origin spec/<worktree-name>`
+7. **Push Branch**: Stage, detect binary files, clean them, then commit and push:
+   1. Run `cd <WORKTREE_PATH> && git add -A` to stage all changes
+   2. Check for binary files among newly staged files: `git diff --cached --name-only --diff-filter=A`. For each file, check if it's executable (`-x`) or matches binary patterns (`.exe`, `.so`, `.dylib`, `.dll`, `.o`, `.a`, or names matching `kiro-krew*`, `*-test`, `*-validate`)
+   3. For any binary file found, unstage it with `git reset HEAD <file>` and remove it with `rm -f <file>`. If unstaging fails, halt and report the error
+   4. Run `git commit -m "feat: <issue-title>" && git push -u origin spec/<worktree-name>`
 8. **Create PR**: Run `gh pr create --repo <repo> --head spec/<worktree-name> --title "<issue-title>" --body "Closes #<number>"`
 9. **Request Copilot Review** (Optional): If Copilot reviews are enabled, run `gh pr edit --add-reviewer @copilot`. Handle errors gracefully without failing the workflow.
 10. **Label Done**: Run `gh issue edit <number> --repo <repo> --add-label <label>-done` (where label matches the trigger label, e.g. `kiro-krew`)
