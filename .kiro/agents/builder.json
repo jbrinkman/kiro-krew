@@ -5,6 +5,5 @@
   "tools": ["read", "write", "shell"],
   "allowedTools": ["read", "write", "shell"],
   "model": "claude-sonnet-4",
-  "welcomeMessage": "Builder ready. What task should I execute?",
-  "sentinelFile": ".kiro-krew/artifacts/builder-<issue>.md"
+  "welcomeMessage": "Builder ready. What task should I execute?"
 }

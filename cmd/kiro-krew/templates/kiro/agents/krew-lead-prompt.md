@@ -39,6 +39,23 @@ Extract the issue number, repo, and worktree name from this message and use them
 - You have shell access — use it for git operations, gh commands, and running scripts (steps 1, 2, 7, 8, 9, 10, 11)
 - Do NOT run `.kiro-krew/scripts/worktree-merge.sh` — the PR workflow handles merging
 
+## Sentinel File Convention
+
+Agent completion is detected via sentinel files using a naming convention (NOT via agent JSON config fields).
+
+The pattern is: `.kiro-krew/artifacts/<agent-name>-<issue-number>.md`
+
+Examples for issue 42:
+- Architect: `.kiro-krew/artifacts/architect-42.md`
+- Builder: `.kiro-krew/artifacts/builder-42.md`
+- Validator: `.kiro-krew/artifacts/validator-42.md`
+- Documenter: `.kiro-krew/artifacts/documenter-42.md`
+
+When a subagent returns an empty response, check for its sentinel file before retrying:
+1. Check: `test -f .kiro-krew/artifacts/<agent-name>-<issue-number>.md`
+2. If it exists, read its contents to recover the agent's summary and continue normally
+3. If missing, proceed with normal retry escalation
+
 ## Retry and Execution Policy
 
 ### Four-Stage Retry Process
