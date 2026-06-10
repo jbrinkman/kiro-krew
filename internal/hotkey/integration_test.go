@@ -157,6 +157,8 @@ func TestHotkeyIntegrationEndToEnd(t *testing.T) {
 	})
 }
 
+func TestSessionIntegration(t *testing.T) {
+	// Setup environment
 	tempDir := t.TempDir()
 	origDir, _ := os.Getwd()
 	defer os.Chdir(origDir)
@@ -236,6 +238,8 @@ func TestHotkeyIntegrationEndToEnd(t *testing.T) {
 	sm.Delete(planningID)
 }
 
+func TestSessionCleanup(t *testing.T) {
+	// Setup environment
 	tempDir := t.TempDir()
 	origDir, _ := os.Getwd()
 	defer os.Chdir(origDir)
