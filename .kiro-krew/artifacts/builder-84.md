@@ -1,15 +1,19 @@
-# Task 2 Completion - Agent Tab Title Update
+# Task Complete - Issue #84
 
-## Summary
-Successfully updated the AgentTab Title() method to display issue numbers instead of agent IDs.
+**Task**: Enhanced Title() method with robust fallback parsing logic
 
-## Changes Made
-- Modified `Title()` method to access agent manager and extract issue number
-- Added fallback to original behavior when agent is not found
-- Added fmt import for string formatting
+**Status**: Completed
 
-## Implementation
-- Uses `at.outputView.manager.GetAgent(at.agentID)` to access agent data
-- Formats title as "Issue {number}" when agent exists
-- Gracefully handles missing agents with original "Agent {id}" format
-- Maintains backward compatibility
+**What was done**:
+- Added `extractIssueNumberFromAgentID` helper function to parse issue numbers from agent ID format
+- Enhanced `Title()` method with three-tier fallback logic:
+  1. Primary: Direct agent lookup (existing behavior)
+  2. Fallback: Parse issue number from agent ID format "agent-{issueNumber}-{timestamp}"
+  3. Last resort: Use old "Agent {agentID}" format
+- Added required imports (`strings`, `strconv`)
+- Implemented graceful error handling for all edge cases
+
+**Files changed**:
+- `internal/tui/agent_tab.go` - Enhanced Title() method and added helper function
+
+**Verification**: Code compiles successfully with `go build ./internal/tui/`

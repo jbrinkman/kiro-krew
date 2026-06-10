@@ -1,22 +1,25 @@
-# Architect Completion: Issue #84
+# Architect Completion - Issue #84
 
-## Design Specification Completed
+## Design Specification Summary
 
-Successfully analyzed GitHub issue #84 and created comprehensive design specification for simplifying TUI agent tab names.
+Successfully created comprehensive design specification for Issue #84: "Simplify TUI agent tab names to show issue numbers clearly"
 
-**Specification Location**: `.kiro-krew/specs/issue-84-simplify-tui-agent-tab-names.md`
+**Key Findings:**
+- Current implementation already has the desired "Issue N" format logic in place
+- The issue likely occurs when agent lookup fails, triggering fallback behavior
+- Root cause appears to be timing/race conditions in agent manager registration
 
-## Key Design Decisions
+**Design Approach:**
+- Enhance existing `Title()` method with robust fallback parsing
+- Add helper function to extract issue number from agent ID format
+- Implement comprehensive test coverage
+- Maintain backward compatibility
 
-- **Minimal Change Approach**: Only modify `AgentTab.Title()` method and add simple getter to agent manager
-- **Robust Implementation**: Include fallback behavior to prevent crashes during agent transitions
-- **Clean Architecture**: Use existing `Agent.IssueNumber` field rather than parsing agent ID strings
-- **Format**: Change from "Agent agent-80-18752" to clean "Issue 80" format
+**Specification Location:** `.kiro-krew/specs/issue-84-simplify-tui-agent-tab-names.md`
 
-## Implementation Scope
+**Implementation Scope:**
+- Primary file: `internal/tui/agent_tab.go` 
+- New test file: `internal/tui/agent_tab_test.go`
+- Low-risk, self-contained change with clear acceptance criteria
 
-1. Add `GetAgent(id)` method to agent manager for safe agent lookup
-2. Update agent tab title to use "Issue N" format via agent's issue number field  
-3. Ensure graceful fallback if agent lookup fails during tab operations
-
-The design focuses purely on UI display improvements with no functional changes to agent behavior or tab operations.
+The design specification provides detailed implementation steps, validation commands, and risk assessment for successful completion of this issue.

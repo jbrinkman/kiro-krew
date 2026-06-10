@@ -2,11 +2,22 @@ package tui
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/jbrinkman/kiro-krew/internal/agent"
 )
+
+// extractIssueNumberFromAgentID parses issue number from agent ID format "agent-{issueNumber}-{timestamp}"
+func extractIssueNumberFromAgentID(agentID string) (int, error) {
+	parts := strings.Split(agentID, "-")
+	if len(parts) >= 3 && parts[0] == "agent" {
+		return strconv.Atoi(parts[1])
+	}
+	return 0, fmt.Errorf("invalid agent ID format")
+}
 
 // AgentTab implements Tab interface for individual agent views
 type AgentTab struct {
@@ -34,9 +45,17 @@ func (at *AgentTab) Type() TabType {
 
 // Title returns the tab title
 func (at *AgentTab) Title() string {
+	// Primary: Use direct agent lookup
 	if agent := at.outputView.manager.GetAgent(at.agentID); agent != nil {
 		return fmt.Sprintf("Issue %d", agent.IssueNumber)
 	}
+	
+	// Fallback: Parse issue number from agent ID format "agent-{issueNumber}-{timestamp}"
+	if issueNum, err := extractIssueNumberFromAgentID(at.agentID); err == nil {
+		return fmt.Sprintf("Issue %d", issueNum)
+	}
+	
+	// Last resort: Use old format
 	return "Agent " + at.agentID
 }
 
