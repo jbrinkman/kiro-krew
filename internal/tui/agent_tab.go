@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"fmt"
+
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/jbrinkman/kiro-krew/internal/agent"
@@ -32,6 +34,10 @@ func (at *AgentTab) Type() TabType {
 
 // Title returns the tab title
 func (at *AgentTab) Title() string {
+	if agent := at.outputView.manager.GetAgent(at.agentID); agent != nil {
+		return fmt.Sprintf("Issue %d", agent.IssueNumber)
+	}
+	// Fallback to current behavior if agent not found
 	return "Agent " + at.agentID
 }
 
