@@ -108,30 +108,26 @@ Brief description of the failed task
 [Suggested steps for human intervention]
 ```
 
-### TEMPORARY WORKAROUND: Empty Response Artifact Detection
+### TEMPORARY WORKAROUND: Empty Response Sentinel File Detection
 <!-- TODO: Remove this section when Kiro CLI empty response bug is fixed -->
 
 When a subagent returns an empty response, before escalating to the next retry stage:
 
-1. **Load Agent Configuration**: Read the agent's JSON file to get `expectedArtifacts` patterns
-2. **Check for Artifacts**: Use shell commands to check if any expected artifacts exist:
+1. **Check for Sentinel File**: Check if the agent wrote its sentinel file:
    ```bash
-   # Check if any files match the patterns
-   for pattern in "${expectedArtifacts[@]}"; do
-     if ls $pattern 1> /dev/null 2>&1; then
-       echo "Found artifacts matching: $pattern"
-       ARTIFACTS_FOUND=true
-       break
-     fi
-   done
+   # For architect on issue 42:
+   test -f .kiro-krew/artifacts/architect-42.md
+   # For builder on issue 42:
+   test -f .kiro-krew/artifacts/builder-42.md
+   # For validator on issue 42:
+   test -f .kiro-krew/artifacts/validator-42.md
+   # For documenter on issue 42:
+   test -f .kiro-krew/artifacts/documenter-42.md
    ```
-3. **Handle Detection Results**:
-   - **If artifacts found**: Log incident but continue workflow normally
-   - **If no artifacts found**: Proceed with normal retry escalation
+   The pattern is `.kiro-krew/artifacts/<agent-name>-<issue-number>.md`.
 
-### Incident Logging for Workaround
-When artifacts are detected despite empty response:
-- Log to incident system: "Empty response detected but artifacts found for agent {name}"
-- Include artifact patterns matched and file list
-- Tag incident with "empty-response-workaround" label
-- Continue workflow without retry escalation
+2. **If sentinel file exists**: Read its contents with `cat .kiro-krew/artifacts/<agent>-<issue>.md` to recover the agent's summary, then continue the workflow normally. Log that the empty-response workaround was triggered.
+
+3. **If sentinel file missing**: The agent did not complete successfully. Proceed with normal retry escalation.
+
+Each subagent writes its sentinel file upon successful completion, including a summary of work performed. This avoids false positives from pre-existing files and makes detection unambiguous across concurrent workflow runs.

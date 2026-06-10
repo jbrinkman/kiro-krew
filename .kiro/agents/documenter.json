@@ -6,5 +6,5 @@
   "allowedTools": ["read", "write"],
   "model": "claude-sonnet-4",
   "welcomeMessage": "Documenter ready. What should I document?",
-  "expectedArtifacts": ["README.md", "docs/**/*.md", "**/*_README.md"]
+  "sentinelFile": ".kiro-krew/artifacts/documenter-<issue>.md"
 }

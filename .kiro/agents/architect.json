@@ -4,5 +4,5 @@
   "tools": ["read", "write", "shell"],
   "allowedTools": ["read", "write", "shell"],
   "model": "claude-sonnet-4",
-  "expectedArtifacts": [".kiro-krew/specs/issue-*-*.md"]
+  "sentinelFile": ".kiro-krew/artifacts/architect-<issue>.md"
 }

@@ -12,24 +12,25 @@ Due to a bug in Kiro CLI, subagents occasionally return empty responses even whe
 ## Solution Approach
 
 ### High-Level Strategy
-1. **Agent Configuration Enhancement**: Add `expectedArtifacts` field to each agent JSON configuration file
-2. **Artifact Detection Logic**: Implement artifact checking in krew-lead retry logic to detect successful completion despite empty responses  
+1. **Agent Configuration Enhancement**: Add `sentinelFile` field to each agent JSON configuration file
+2. **Sentinel File Detection Logic**: Implement sentinel file checking in krew-lead retry logic to detect successful completion despite empty responses  
 3. **Temporary Workaround Implementation**: Clearly mark all workaround code for future removal when the Kiro CLI bug is fixed
 4. **Preserve Existing Logic**: Maintain all current retry escalation behavior for legitimate failures
 
 ### Architectural Decisions
-- **Artifact Knowledge Distribution**: Each agent specifies its own expected artifacts rather than centralizing in krew-lead
+- **Sentinel File Approach**: Each agent writes a well-known file (`.kiro-krew/artifacts/<agent>-<issue>.md`) on completion, avoiding false positives from pre-existing files
 - **Non-Breaking Implementation**: Workaround activates only for empty responses, preserving normal failure handling
 - **Clear Separation**: All workaround code is isolated and marked with clear comments for easy removal
 
 ## Relevant Files
 
 ### Files to Modify
-- `.kiro/agents/architect.json` - Add expectedArtifacts for design specifications
-- `.kiro/agents/builder.json` - Add expectedArtifacts for implementation artifacts  
-- `.kiro/agents/validator.json` - Add expectedArtifacts for validation reports
-- `.kiro/agents/documenter.json` - Add expectedArtifacts for documentation files
-- `.kiro/agents/krew-lead-prompt.md` - Implement artifact checking logic in retry stages
+- `.kiro/agents/architect.json` - Add sentinelFile for design specifications
+- `.kiro/agents/builder.json` - Add sentinelFile for implementation artifacts  
+- `.kiro/agents/validator.json` - Add sentinelFile for validation reports, add write permission
+- `.kiro/agents/documenter.json` - Add sentinelFile for documentation files
+- `.kiro/agents/krew-lead-prompt.md` - Implement sentinel file checking logic in retry stages
+- `.kiro/agents/validator-prompt.md` - Note write permission scoped to sentinel file
 
 ### Files Not Modified
 - `.kiro/agents/planner.json` - Planner is interactive and not part of automated krew workflow
@@ -37,13 +38,15 @@ Due to a bug in Kiro CLI, subagents occasionally return empty responses even whe
 
 ## Agent Configuration Updates
 
-### Expected Artifacts by Agent
+### Sentinel File by Agent
+
+Each agent declares a `sentinelFile` path pattern. The agent writes this file upon successful completion with a summary of work performed. The `<issue>` placeholder is replaced at runtime with the issue number.
 
 **Architect Agent**
 ```json
 {
   "name": "architect",
-  "expectedArtifacts": [".kiro-krew/specs/issue-*-*.md"],
+  "sentinelFile": ".kiro-krew/artifacts/architect-<issue>.md",
   "prompt": "file://./architect-prompt.md",
   "tools": ["read", "write", "shell"],
   "allowedTools": ["read", "write", "shell"],
@@ -54,8 +57,8 @@ Due to a bug in Kiro CLI, subagents occasionally return empty responses even whe
 **Builder Agent**
 ```json
 {
-  "name": "builder", 
-  "expectedArtifacts": ["**/*.go", "**/*.js", "**/*.ts", "**/*.py", "**/*.md", "go.mod", "package.json", "Makefile"],
+  "name": "builder",
+  "sentinelFile": ".kiro-krew/artifacts/builder-<issue>.md",
   "description": "Focused engineering agent that executes ONE task at a time. Builds, implements, creates.",
   "prompt": "file://./builder-prompt.md",
   "tools": ["read", "write", "shell"],
@@ -69,11 +72,11 @@ Due to a bug in Kiro CLI, subagents occasionally return empty responses even whe
 ```json
 {
   "name": "validator",
-  "expectedArtifacts": [".kiro-krew/validation-*.md", "test-results-*.txt"],
+  "sentinelFile": ".kiro-krew/artifacts/validator-<issue>.md",
   "description": "Read-only validation agent that verifies task completion against acceptance criteria.",
-  "prompt": "file://./validator-prompt.md", 
-  "tools": ["read", "shell"],
-  "allowedTools": ["read", "shell"],
+  "prompt": "file://./validator-prompt.md",
+  "tools": ["read", "write", "shell"],
+  "allowedTools": ["read", "write", "shell"],
   "toolsSettings": {
     "shell": {
       "autoAllowReadonly": true
@@ -83,12 +86,13 @@ Due to a bug in Kiro CLI, subagents occasionally return empty responses even whe
   "welcomeMessage": "Validator ready. What should I verify?"
 }
 ```
+Note: Validator gains `write` permission scoped to creating its sentinel file only.
 
 **Documenter Agent**
 ```json
 {
   "name": "documenter",
-  "expectedArtifacts": ["README.md", "docs/**/*.md", "**/*_README.md"],
+  "sentinelFile": ".kiro-krew/artifacts/documenter-<issue>.md",
   "description": "Generates documentation for completed and validated features.",
   "prompt": "file://./documenter-prompt.md",
   "tools": ["read", "write"],
@@ -100,46 +104,33 @@ Due to a bug in Kiro CLI, subagents occasionally return empty responses even whe
 
 ## Krew-Lead Logic Enhancement
 
-### Artifact Checking Implementation
+### Sentinel File Checking Implementation
 
 Add the following logic to krew-lead-prompt.md after the existing retry policy section:
 
 ```markdown
-### TEMPORARY WORKAROUND: Empty Response Artifact Detection
+### TEMPORARY WORKAROUND: Empty Response Sentinel File Detection
 <!-- TODO: Remove this section when Kiro CLI empty response bug is fixed -->
 
 When a subagent returns an empty response, before escalating to the next retry stage:
 
-1. **Load Agent Configuration**: Read the agent's JSON file to get `expectedArtifacts` patterns
-2. **Check for Artifacts**: Use shell commands to check if any expected artifacts exist:
+1. **Check for Sentinel File**: Read the agent's `sentinelFile` from its JSON config and check existence:
    ```bash
-   # Check if any files match the patterns
-   for pattern in "${expectedArtifacts[@]}"; do
-     if ls $pattern 1> /dev/null 2>&1; then
-       echo "Found artifacts matching: $pattern"
-       ARTIFACTS_FOUND=true
-       break
-     fi
-   done
+   test -f .kiro-krew/artifacts/<agent>-<issue>.md
    ```
-3. **Handle Detection Results**:
-   - **If artifacts found**: Log incident but continue workflow normally
-   - **If no artifacts found**: Proceed with normal retry escalation
+2. **Handle Detection Results**:
+   - **If sentinel file exists**: Read its contents for context, log incident with "empty-response-workaround" label, and continue workflow normally
+   - **If sentinel file missing**: Proceed with normal retry escalation
 
-### Incident Logging for Workaround
-When artifacts are detected despite empty response:
-- Log to incident system: "Empty response detected but artifacts found for agent {name}"
-- Include artifact patterns matched and file list
-- Tag incident with "empty-response-workaround" label
-- Continue workflow without retry escalation
+Each subagent writes a sentinel file at `.kiro-krew/artifacts/<agent>-<issue>.md` upon successful completion, including a summary of work performed.
 ```
 
 ## Step-by-Step Task Breakdown
 
 ### Task 1: Update Agent Configuration Files
 **Acceptance Criteria:**
-- All agent JSON files contain `expectedArtifacts` field with appropriate patterns
-- Patterns cover the primary artifacts each agent produces
+- All agent JSON files contain `sentinelFile` field with path `.kiro-krew/artifacts/<agent>-<issue>.md`
+- Validator gains `write` permission scoped to sentinel file
 - JSON syntax is valid and parseable
 
 **Validation Commands:**
@@ -150,13 +141,13 @@ jq . .kiro/agents/builder.json
 jq . .kiro/agents/validator.json
 jq . .kiro/agents/documenter.json
 
-# Verify expectedArtifacts field exists
-jq '.expectedArtifacts' .kiro/agents/architect.json
+# Verify sentinelFile field exists
+jq '.sentinelFile' .kiro/agents/architect.json
 ```
 
-### Task 2: Implement Artifact Checking Logic
+### Task 2: Implement Sentinel File Checking Logic
 **Acceptance Criteria:**
-- Krew-lead prompt contains artifact checking logic
+- Krew-lead prompt contains sentinel file checking logic
 - Workaround code is clearly marked as temporary
 - Logic only activates for empty responses
 - Existing retry escalation preserved for legitimate failures
@@ -166,40 +157,43 @@ jq '.expectedArtifacts' .kiro/agents/architect.json
 # Verify krew-lead prompt contains workaround section
 grep -A 10 "TEMPORARY WORKAROUND" .kiro/agents/krew-lead-prompt.md
 
-# Test pattern matching works
-ls .kiro-krew/specs/issue-*-*.md 2>/dev/null && echo "Architect patterns work"
+# Test sentinel file detection
+mkdir -p .kiro-krew/artifacts
+touch .kiro-krew/artifacts/architect-77.md
+test -f .kiro-krew/artifacts/architect-77.md && echo "Sentinel detection works"
+rm .kiro-krew/artifacts/architect-77.md
 ```
 
 ### Task 3: Test Workaround Implementation  
 **Acceptance Criteria:**
-- Workaround correctly identifies when artifacts exist
+- Workaround correctly identifies when sentinel file exists
 - Normal retry behavior preserved for actual failures
 - Incident logging captures empty response events
 - No breaking changes to existing workflow
 
 **Validation Commands:**
 ```bash
-# Create test artifacts and verify detection
-mkdir -p .kiro-krew/specs
-touch .kiro-krew/specs/issue-77-test.md
-ls .kiro-krew/specs/issue-*-*.md && echo "Test artifact detected"
+# Create test sentinel and verify detection
+mkdir -p .kiro-krew/artifacts
+echo "# Test" > .kiro-krew/artifacts/builder-77.md
+test -f .kiro-krew/artifacts/builder-77.md && echo "Test sentinel detected"
 
 # Clean up test
-rm .kiro-krew/specs/issue-77-test.md
+rm .kiro-krew/artifacts/builder-77.md
 ```
 
 ## Team Orchestration
 
 ### Implementation Sequence
-1. **Builder Agent**: Update all agent JSON configuration files with expectedArtifacts fields
-2. **Builder Agent**: Implement artifact checking logic in krew-lead-prompt.md  
+1. **Builder Agent**: Update all agent JSON configuration files with sentinelFile fields
+2. **Builder Agent**: Implement sentinel file checking logic in krew-lead-prompt.md  
 3. **Validator Agent**: Verify all configurations are valid and logic is correctly implemented
 4. **Builder Agent**: Create unit tests or validation scripts to verify workaround behavior
 
 ### Communication Protocol
 - All workaround code must include comments referencing issue #77
 - Mark all sections with "TEMPORARY WORKAROUND" for easy identification
-- Document artifact patterns clearly in agent configurations
+- Document sentinel file paths clearly in agent configurations
 
 ## Validation Commands
 
@@ -216,24 +210,18 @@ test -f .kiro/agents/krew-lead-prompt.md && echo "krew-lead-prompt.md exists"
 
 ### Post-Implementation Validation  
 ```bash
-# Verify expectedArtifacts fields are present
+# Verify sentinelFile fields are present
 for agent in architect builder validator documenter; do
-  jq -e '.expectedArtifacts' ".kiro/agents/$agent.json" && echo "$agent has expectedArtifacts"
+  jq -e '.sentinelFile' ".kiro/agents/$agent.json" && echo "$agent has sentinelFile"
 done
 
-# Test artifact detection patterns
-mkdir -p .kiro-krew/specs test-dir
-touch .kiro-krew/specs/issue-test-example.md
-touch test-dir/example.go
-
-# Test architect pattern
-ls .kiro-krew/specs/issue-*-*.md && echo "✓ Architect pattern works"
-
-# Test builder patterns  
-ls **/*.go 2>/dev/null && echo "✓ Builder pattern works"
+# Test sentinel file detection
+mkdir -p .kiro-krew/artifacts
+echo "# Test summary" > .kiro-krew/artifacts/architect-99.md
+test -f .kiro-krew/artifacts/architect-99.md && echo "✓ Sentinel detection works"
 
 # Cleanup
-rm -rf test-dir .kiro-krew/specs/issue-test-example.md
+rm -f .kiro-krew/artifacts/architect-99.md
 ```
 
 ### Runtime Validation
@@ -249,15 +237,15 @@ grep -q "TODO: Remove.*Kiro CLI.*bug" .kiro/agents/krew-lead-prompt.md && echo "
 
 ### Low Risk
 - Agent JSON configuration changes (easily reversible)
-- Adding artifact patterns (non-breaking addition)
+- Adding sentinel file path (non-breaking addition)
 
 ### Medium Risk  
 - Modifying krew-lead retry logic (could affect failure handling)
-- File pattern matching (could have false positives/negatives)
+- Adding write permission to validator (scoped to sentinel file only)
 
 ### Mitigation Strategies
 - Preserve all existing retry logic as fallback
-- Use conservative artifact patterns to avoid false positives
+- Sentinel file path is unique per agent+issue, avoiding false positives
 - Clear marking of workaround code for easy removal
 - Comprehensive validation before deployment
 
@@ -266,11 +254,13 @@ grep -q "TODO: Remove.*Kiro CLI.*bug" .kiro/agents/krew-lead-prompt.md && echo "
 When the Kiro CLI empty response bug is fixed:
 
 1. **Remove Workaround Code**: Delete all sections marked "TEMPORARY WORKAROUND" from krew-lead-prompt.md
-2. **Clean Agent Configs**: Remove `expectedArtifacts` fields from all agent JSON files  
-3. **Update Documentation**: Remove references to empty response handling from workflow documentation
-4. **Test Cleanup**: Verify normal retry escalation still works correctly
+2. **Clean Agent Configs**: Remove `sentinelFile` fields from all agent JSON files  
+3. **Revert Validator Permissions**: Remove `write` from validator tools if no longer needed
+4. **Update Documentation**: Remove references to empty response handling from workflow documentation
+5. **Test Cleanup**: Verify normal retry escalation still works correctly
 
 Search pattern for removal:
 ```bash
-grep -r "TEMPORARY WORKAROUND\|TODO.*Kiro CLI.*bug\|expectedArtifacts" .kiro/
+grep -r "TEMPORARY WORKAROUND\|TODO.*Kiro CLI.*bug\|sentinelFile" .kiro/
 ```
+
