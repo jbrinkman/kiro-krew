@@ -17,19 +17,23 @@ import (
 )
 
 type Watcher struct {
-	config  *config.Config
-	manager *agent.Manager
-	stop    chan struct{}
-	tracked map[int]bool
-	mu      sync.RWMutex
-	started bool
+	config            *config.Config
+	manager           *agent.Manager
+	stop              chan struct{}
+	tracked           map[int]bool
+	mu                sync.RWMutex
+	started           bool
+	backoffTracker    *BackoffTracker
+	dependencyValidator *DependencyValidator
 }
 
 func New(cfg *config.Config, mgr *agent.Manager) *Watcher {
 	return &Watcher{
-		config:  cfg,
-		manager: mgr,
-		tracked: make(map[int]bool),
+		config:             cfg,
+		manager:            mgr,
+		tracked:            make(map[int]bool),
+		backoffTracker:     NewBackoffTracker(),
+		dependencyValidator: NewDependencyValidator(),
 	}
 }
 
@@ -71,6 +75,9 @@ func (w *Watcher) pollLoop() {
 }
 
 func (w *Watcher) checkIssues() {
+	// Increment polling round for backoff tracking
+	w.backoffTracker.IncrementRound()
+	
 	log.Printf("[watcher] polling for issues...")
 	issues, err := github.ListIssues(w.config.Repo, w.config.Label)
 	if err != nil {
@@ -94,6 +101,32 @@ func (w *Watcher) checkIssues() {
 
 		if w.hasExceededGlobalRetries(issue.Number) {
 			log.Printf("[watcher] issue #%d exceeded retry limit (%d attempts), skipping", issue.Number, w.config.MaxRetries)
+			continue
+		}
+
+		// Check dependency validation with backoff
+		if !w.backoffTracker.ShouldCheck(issue.Number) {
+			roundsRemaining := w.backoffTracker.GetRoundsUntilCheck(issue.Number)
+			log.Printf("[watcher] issue #%d in backoff, checking again in %d rounds", issue.Number, roundsRemaining)
+			continue
+		}
+
+		validationResult, err := w.dependencyValidator.ValidateIssue(w.config.Repo, issue.Number)
+		if err != nil {
+			log.Printf("[watcher] dependency validation error for issue #%d: %v", issue.Number, err)
+			w.backoffTracker.RecordFailure(issue.Number)
+			continue
+		}
+
+		// Log circular dependencies as warnings but don't block processing
+		if len(validationResult.CircularDependencies) > 0 {
+			log.Printf("[watcher] WARNING: circular dependency detected for issue #%d: %v", issue.Number, validationResult.CircularDependencies)
+		}
+
+		// Skip issues with unresolved dependencies
+		if !validationResult.IsValid {
+			log.Printf("[watcher] skipping issue #%d due to unresolved dependencies: %v", issue.Number, validationResult.UnresolvedDependencies)
+			w.backoffTracker.RecordFailure(issue.Number)
 			continue
 		}
 

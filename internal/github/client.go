@@ -19,6 +19,11 @@ type Issue struct {
 	Labels []Label `json:"labels"`
 }
 
+type IssueDetails struct {
+	Body  string `json:"body"`
+	State string `json:"state"`
+}
+
 func GetToken() (string, error) {
 	cmd := exec.Command("gh", "auth", "token")
 	output, err := cmd.Output()
@@ -26,6 +31,21 @@ func GetToken() (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(output)), nil
+}
+
+func GetIssueDetails(repo string, number int) (*IssueDetails, error) {
+	cmd := exec.Command("gh", "issue", "view", fmt.Sprintf("%d", number), "--repo", repo, "--json", "body,state")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("gh issue view failed: %w", err)
+	}
+
+	var details IssueDetails
+	if err := json.Unmarshal(output, &details); err != nil {
+		return nil, fmt.Errorf("failed to parse issue details: %w", err)
+	}
+
+	return &details, nil
 }
 
 func ListIssues(repo, label string) ([]Issue, error) {
