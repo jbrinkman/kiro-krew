@@ -111,7 +111,7 @@ func (w *Watcher) checkIssues() {
 			continue
 		}
 
-		validationResult, err := w.dependencyValidator.ValidateIssue(w.config.Repo, issue.Number)
+		validationResult, err := w.dependencyValidator.ValidateIssue(w.config.Repo, issue.Number, issue.Body)
 		if err != nil {
 			log.Printf("[watcher] dependency validation error for issue #%d: %v", issue.Number, err)
 			w.backoffTracker.RecordFailure(issue.Number)

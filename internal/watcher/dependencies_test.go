@@ -69,11 +69,11 @@ func TestParseDependencies(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := parser.ParseDependencies(tt.input)
-			
+
 			// Sort both slices for comparison since order doesn't matter
 			sort.Ints(result)
 			sort.Ints(tt.expected)
-			
+
 			// Handle nil vs empty slice comparison
 			if len(result) != len(tt.expected) {
 				t.Errorf("ParseDependencies() = %v, expected %v", result, tt.expected)
@@ -82,4 +82,74 @@ func TestParseDependencies(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestBackoffTracker(t *testing.T) {
+	t.Run("new issue should be checked", func(t *testing.T) {
+		bt := NewBackoffTracker()
+		bt.IncrementRound()
+		if !bt.ShouldCheck(1) {
+			t.Error("expected new issue to be checked")
+		}
+	})
+
+	t.Run("backoff progression 2x 4x 8x 16x max", func(t *testing.T) {
+		bt := NewBackoffTracker()
+		bt.IncrementRound() // round 1
+
+		// First failure: delay 2 rounds (next check at round 3)
+		bt.RecordFailure(1)
+		if bt.ShouldCheck(1) {
+			t.Error("expected issue to be in backoff after first failure")
+		}
+		if got := bt.GetRoundsUntilCheck(1); got != 2 {
+			t.Errorf("expected 2 rounds until check, got %d", got)
+		}
+
+		bt.IncrementRound() // round 2
+		if bt.ShouldCheck(1) {
+			t.Error("expected issue still in backoff at round 2")
+		}
+
+		bt.IncrementRound() // round 3
+		if !bt.ShouldCheck(1) {
+			t.Error("expected issue to be checkable at round 3")
+		}
+
+		// Second failure: delay 4 rounds (next check at round 7)
+		bt.RecordFailure(1)
+		if bt.ShouldCheck(1) {
+			t.Error("expected issue to be in backoff after second failure")
+		}
+		if got := bt.GetRoundsUntilCheck(1); got != 4 {
+			t.Errorf("expected 4 rounds until check, got %d", got)
+		}
+
+		// Third failure: delay 8 rounds
+		for i := 0; i < 4; i++ {
+			bt.IncrementRound()
+		}
+		bt.RecordFailure(1)
+		if got := bt.GetRoundsUntilCheck(1); got != 8 {
+			t.Errorf("expected 8 rounds until check, got %d", got)
+		}
+
+		// Fourth failure: delay 16 rounds (max)
+		for i := 0; i < 8; i++ {
+			bt.IncrementRound()
+		}
+		bt.RecordFailure(1)
+		if got := bt.GetRoundsUntilCheck(1); got != 16 {
+			t.Errorf("expected 16 rounds until check (max), got %d", got)
+		}
+
+		// Fifth failure: still capped at 16
+		for i := 0; i < 16; i++ {
+			bt.IncrementRound()
+		}
+		bt.RecordFailure(1)
+		if got := bt.GetRoundsUntilCheck(1); got != 16 {
+			t.Errorf("expected 16 rounds (cap), got %d", got)
+		}
+	})
 }

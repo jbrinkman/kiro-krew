@@ -16,6 +16,7 @@ type Label struct {
 type Issue struct {
 	Number int     `json:"number"`
 	Title  string  `json:"title"`
+	Body   string  `json:"body"`
 	Labels []Label `json:"labels"`
 }
 
@@ -49,7 +50,7 @@ func GetIssueDetails(repo string, number int) (*IssueDetails, error) {
 }
 
 func ListIssues(repo, label string) ([]Issue, error) {
-	cmd := exec.Command("gh", "issue", "list", "--repo", repo, "--label", label, "--state", "open", "--json", "number,title,labels")
+	cmd := exec.Command("gh", "issue", "list", "--repo", repo, "--label", label, "--state", "open", "--json", "number,title,body,labels")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("gh issue list failed: %w", err)
