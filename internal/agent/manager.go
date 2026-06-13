@@ -249,6 +249,22 @@ func (m *Manager) Spawn(issueNumber int, repo string) (*Agent, error) {
 	return agent, nil
 }
 
+// GetAgent retrieves an agent by its ID, or nil if not found.
+func (m *Manager) GetAgent(id string) *Agent {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	
+	return m.agents[id]
+}
+
+// RegisterAgent registers an agent with the given ID and issue number.
+// This is primarily used for testing.
+func (m *Manager) RegisterAgent(id string, issueNumber int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.agents[id] = &Agent{ID: id, IssueNumber: issueNumber}
+}
+
 func (m *Manager) List() []*Agent {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
