@@ -5,6 +5,7 @@ import (
 	"io"
 	"regexp"
 	"sync"
+	"sync/atomic"
 )
 
 // OutputCapture captures and stores agent output with ANSI stripping.
@@ -13,9 +14,9 @@ type OutputCapture struct {
 	mu        sync.RWMutex
 	buffer    []string
 	maxSize   int
-	head      int    // next write position
-	count     int    // number of valid entries (≤ maxSize)
-	gen       uint64 // incremented on every AddLine
+	head      int // next write position
+	count     int // number of valid entries (≤ maxSize)
+	gen       atomic.Uint64
 	ansiRegex *regexp.Regexp
 	suspended bool
 }
@@ -47,7 +48,7 @@ func (oc *OutputCapture) AddLine(line string) {
 	if oc.count < oc.maxSize {
 		oc.count++
 	}
-	oc.gen++
+	oc.gen.Add(1)
 }
 
 // Suspend suspends output capture
@@ -64,12 +65,10 @@ func (oc *OutputCapture) Resume() {
 	oc.suspended = false
 }
 
-// Generation returns the current generation counter.
+// Generation returns the current generation counter (lock-free).
 // Callers can compare against a previous value to detect new data.
 func (oc *OutputCapture) Generation() uint64 {
-	oc.mu.RLock()
-	defer oc.mu.RUnlock()
-	return oc.gen
+	return oc.gen.Load()
 }
 
 // GetLines returns a copy of all captured lines in chronological order

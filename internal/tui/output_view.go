@@ -103,6 +103,7 @@ func (ov *OutputView) Resize(width, height int) {
 	ov.width = width
 	ov.height = height
 	ov.viewport = viewport.New(viewport.WithWidth(width), viewport.WithHeight(height))
+	ov.lastGen = 0 // Force refresh on next View()
 	ov.refreshContent()
 }
 

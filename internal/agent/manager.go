@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -41,6 +42,7 @@ type Manager struct {
 	config               *config.Config
 	outputCapture        *OutputCapture
 	terminalOutputPaused bool
+	statusGen            atomic.Uint64
 }
 
 func NewManager(cfg *config.Config) *Manager {
@@ -146,12 +148,13 @@ func (m *Manager) GetOutputLines() []string {
 	return m.outputCapture.GetLines()
 }
 
-// GetOutputGeneration returns the output capture generation counter.
+// GetOutputGeneration returns a combined generation counter that changes
+// on new output lines or agent status changes.
 func (m *Manager) GetOutputGeneration() uint64 {
 	if m.outputCapture == nil {
-		return 0
+		return m.statusGen.Load()
 	}
-	return m.outputCapture.Generation()
+	return m.outputCapture.Generation() + m.statusGen.Load()
 }
 
 // CaptureOutputLine stores a single output line for an issue.
@@ -250,6 +253,7 @@ func (m *Manager) Spawn(issueNumber int, repo string) (*Agent, error) {
 	}
 
 	m.agents[id] = agent
+	m.statusGen.Add(1)
 	log.Printf("[agent] spawned for issue #%d (worktree: %s, log: %s)", issueNumber, worktreeName, agentLogPath)
 
 	go m.monitorAgent(agent, cmd)
@@ -344,6 +348,7 @@ func (m *Manager) HandleExit(id string, exitCode int) {
 				return
 			}
 			updatedAgent.Status = StatusCompleted
+			m.statusGen.Add(1)
 			log.Printf("[agent] %s completed successfully with PR (issue #%d)", id, updatedAgent.IssueNumber)
 			doneLabel := m.config.Label + "-done"
 			m.mu.Unlock()
@@ -360,6 +365,7 @@ func (m *Manager) HandleExit(id string, exitCode int) {
 			}
 			// No PR found, treat as failure
 			updatedAgent.Status = StatusFailed
+			m.statusGen.Add(1)
 			log.Printf("[agent] %s completed but no PR found (issue #%d, retry %d/%d)", id, updatedAgent.IssueNumber, updatedAgent.RetryCount, m.config.MaxRetries)
 			if updatedAgent.RetryCount < m.config.MaxRetries {
 				updatedAgent.RetryCount++
@@ -386,6 +392,7 @@ func (m *Manager) HandleExit(id string, exitCode int) {
 		}
 
 		agent.Status = StatusFailed
+		m.statusGen.Add(1)
 		log.Printf("[agent] %s exited with code %d (issue #%d, retry %d/%d)", id, exitCode, agent.IssueNumber, agent.RetryCount, m.config.MaxRetries)
 		if agent.RetryCount < m.config.MaxRetries {
 			agent.RetryCount++
@@ -459,6 +466,7 @@ func (m *Manager) retryAgent(agent *Agent) {
 			log.Printf("[agent] retry failed to create worktree for issue #%d: %v", agent.IssueNumber, err)
 			m.mu.Lock()
 			agent.Status = StatusFailed
+			m.statusGen.Add(1)
 			m.mu.Unlock()
 			return
 		} else {
@@ -478,6 +486,7 @@ func (m *Manager) retryAgent(agent *Agent) {
 		log.Printf("[agent] retry failed to open log file for issue #%d: %v", agent.IssueNumber, err)
 		m.mu.Lock()
 		agent.Status = StatusFailed
+		m.statusGen.Add(1)
 		m.mu.Unlock()
 		return
 	}
@@ -508,6 +517,7 @@ func (m *Manager) retryAgent(agent *Agent) {
 		log.Printf("[agent] retry failed for issue #%d: %v", agent.IssueNumber, err)
 		m.mu.Lock()
 		agent.Status = StatusFailed
+		m.statusGen.Add(1)
 		m.mu.Unlock()
 		return
 	}
@@ -517,6 +527,7 @@ func (m *Manager) retryAgent(agent *Agent) {
 	agent.LogFile = agentLogFile
 	agent.Status = StatusRunning
 	agent.StartTime = time.Now()
+	m.statusGen.Add(1)
 	m.mu.Unlock()
 
 	log.Printf("[agent] retry started for issue #%d (worktree: %s)", agent.IssueNumber, worktreeName)
