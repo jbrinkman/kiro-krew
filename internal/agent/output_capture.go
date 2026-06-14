@@ -5,13 +5,18 @@ import (
 	"io"
 	"regexp"
 	"sync"
+	"sync/atomic"
 )
 
-// OutputCapture captures and stores agent output with ANSI stripping
+// OutputCapture captures and stores agent output with ANSI stripping.
+// Uses an index-based ring buffer to avoid O(n) slice shifting on every line.
 type OutputCapture struct {
 	mu        sync.RWMutex
 	buffer    []string
 	maxSize   int
+	head      int // next write position
+	count     int // number of valid entries (≤ maxSize)
+	gen       atomic.Uint64
 	ansiRegex *regexp.Regexp
 	suspended bool
 }
@@ -22,30 +27,28 @@ func NewOutputCapture(maxSize int) *OutputCapture {
 		maxSize = 1
 	}
 	return &OutputCapture{
-		buffer:    make([]string, 0, maxSize),
+		buffer:    make([]string, maxSize),
 		maxSize:   maxSize,
 		ansiRegex: regexp.MustCompile(`\x1b\[[0-9;]*[mK]`),
 	}
 }
 
-// AddLine adds a line to the buffer, stripping ANSI sequences
+// AddLine adds a line to the ring buffer, stripping ANSI sequences
 func (oc *OutputCapture) AddLine(line string) {
 	oc.mu.Lock()
 	defer oc.mu.Unlock()
 
-	// Skip capturing if suspended
 	if oc.suspended {
 		return
 	}
 
 	stripped := oc.ansiRegex.ReplaceAllString(line, "")
-
-	if len(oc.buffer) >= oc.maxSize {
-		copy(oc.buffer, oc.buffer[1:])
-		oc.buffer[len(oc.buffer)-1] = stripped
-	} else {
-		oc.buffer = append(oc.buffer, stripped)
+	oc.buffer[oc.head] = stripped
+	oc.head = (oc.head + 1) % oc.maxSize
+	if oc.count < oc.maxSize {
+		oc.count++
 	}
+	oc.gen.Add(1)
 }
 
 // Suspend suspends output capture
@@ -62,17 +65,34 @@ func (oc *OutputCapture) Resume() {
 	oc.suspended = false
 }
 
-// GetLines returns a copy of all captured lines
+// Generation returns the current generation counter (lock-free).
+// Callers can compare against a previous value to detect new data.
+func (oc *OutputCapture) Generation() uint64 {
+	return oc.gen.Load()
+}
+
+// GetLines returns a copy of all captured lines in chronological order
 func (oc *OutputCapture) GetLines() []string {
 	oc.mu.RLock()
 	defer oc.mu.RUnlock()
 
-	result := make([]string, len(oc.buffer))
-	copy(result, oc.buffer)
+	if oc.count == 0 {
+		return nil
+	}
+
+	result := make([]string, oc.count)
+	if oc.count < oc.maxSize {
+		// Buffer not yet full — entries are 0..count-1
+		copy(result, oc.buffer[:oc.count])
+	} else {
+		// Buffer full — oldest entry is at head, wrap around
+		n := copy(result, oc.buffer[oc.head:oc.maxSize])
+		copy(result[n:], oc.buffer[:oc.head])
+	}
 	return result
 }
 
-// CaptureWriter wraps prefixedWriter to capture output
+// CaptureWriter wraps an optional writer to capture output lines
 type CaptureWriter struct {
 	mu      sync.Mutex
 	writer  io.Writer
@@ -91,7 +111,7 @@ func NewCaptureWriter(writer io.Writer, capture *OutputCapture, prefix string) *
 	}
 }
 
-// Write implements io.Writer, capturing lines while delegating to prefixedWriter
+// Write implements io.Writer, capturing lines while delegating to the wrapped writer
 func (cw *CaptureWriter) Write(p []byte) (int, error) {
 	cw.mu.Lock()
 	defer cw.mu.Unlock()

@@ -50,6 +50,70 @@ func TestOutputCaptureSuspendResume(t *testing.T) {
 	}
 }
 
+func TestOutputCaptureRingBuffer(t *testing.T) {
+	capture := NewOutputCapture(3)
+
+	capture.AddLine("a")
+	capture.AddLine("b")
+	capture.AddLine("c")
+
+	lines := capture.GetLines()
+	if len(lines) != 3 {
+		t.Fatalf("Expected 3 lines, got %d", len(lines))
+	}
+	if lines[0] != "a" || lines[1] != "b" || lines[2] != "c" {
+		t.Fatalf("Expected [a b c], got %v", lines)
+	}
+
+	// Overflow — oldest line (a) should be evicted
+	capture.AddLine("d")
+	lines = capture.GetLines()
+	if len(lines) != 3 {
+		t.Fatalf("Expected 3 lines after overflow, got %d", len(lines))
+	}
+	if lines[0] != "b" || lines[1] != "c" || lines[2] != "d" {
+		t.Fatalf("Expected [b c d], got %v", lines)
+	}
+
+	// Another overflow
+	capture.AddLine("e")
+	capture.AddLine("f")
+	lines = capture.GetLines()
+	if lines[0] != "d" || lines[1] != "e" || lines[2] != "f" {
+		t.Fatalf("Expected [d e f], got %v", lines)
+	}
+}
+
+func TestOutputCaptureGeneration(t *testing.T) {
+	capture := NewOutputCapture(10)
+
+	gen0 := capture.Generation()
+	if gen0 != 0 {
+		t.Fatalf("Expected initial generation 0, got %d", gen0)
+	}
+
+	capture.AddLine("x")
+	gen1 := capture.Generation()
+	if gen1 != 1 {
+		t.Fatalf("Expected generation 1 after AddLine, got %d", gen1)
+	}
+
+	// Suspended lines don't increment generation
+	capture.Suspend()
+	capture.AddLine("ignored")
+	gen2 := capture.Generation()
+	if gen2 != 1 {
+		t.Fatalf("Expected generation still 1 after suspended AddLine, got %d", gen2)
+	}
+
+	capture.Resume()
+	capture.AddLine("y")
+	gen3 := capture.Generation()
+	if gen3 != 2 {
+		t.Fatalf("Expected generation 2, got %d", gen3)
+	}
+}
+
 func TestCaptureWriterConcurrentWrites(t *testing.T) {
 	capture := NewOutputCapture(100)
 	writer := NewCaptureWriter(nil, capture, "[agent issue-1] ")

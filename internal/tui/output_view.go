@@ -3,7 +3,6 @@ package tui
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
@@ -18,9 +17,9 @@ type OutputView struct {
 	styles       *Styles
 	width        int
 	height       int
-	lastUpdate   time.Time
 	cachedOutput []string
 	agentID      string // Filter output by this agent ID, empty string shows all
+	lastGen      uint64 // last observed OutputCapture generation
 }
 
 // SetStyles updates the styles used by this view.
@@ -32,11 +31,10 @@ func (ov *OutputView) SetStyles(styles *Styles) {
 func NewOutputView(manager *agent.Manager, styles *Styles) *OutputView {
 	vp := viewport.New(viewport.WithWidth(80), viewport.WithHeight(24))
 	return &OutputView{
-		viewport:   vp,
-		manager:    manager,
-		styles:     styles,
-		lastUpdate: time.Now(),
-		agentID:    "", // Empty means show all agents
+		viewport: vp,
+		manager:  manager,
+		styles:   styles,
+		agentID:  "", // Empty means show all agents
 	}
 }
 
@@ -44,11 +42,10 @@ func NewOutputView(manager *agent.Manager, styles *Styles) *OutputView {
 func NewOutputViewForAgent(agentID string, manager *agent.Manager, styles *Styles) *OutputView {
 	vp := viewport.New(viewport.WithWidth(80), viewport.WithHeight(24))
 	return &OutputView{
-		viewport:   vp,
-		manager:    manager,
-		styles:     styles,
-		lastUpdate: time.Now(),
-		agentID:    agentID,
+		viewport: vp,
+		manager:  manager,
+		styles:   styles,
+		agentID:  agentID,
 	}
 }
 
@@ -93,7 +90,11 @@ func (ov *OutputView) View() string {
 		return ""
 	}
 
-	ov.refreshContent()
+	gen := ov.manager.GetOutputGeneration()
+	if gen != ov.lastGen {
+		ov.lastGen = gen
+		ov.refreshContent()
+	}
 	return ov.viewport.View()
 }
 
@@ -102,6 +103,7 @@ func (ov *OutputView) Resize(width, height int) {
 	ov.width = width
 	ov.height = height
 	ov.viewport = viewport.New(viewport.WithWidth(width), viewport.WithHeight(height))
+	ov.lastGen = 0 // Force refresh on next View()
 	ov.refreshContent()
 }
 
