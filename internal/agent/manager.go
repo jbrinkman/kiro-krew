@@ -146,6 +146,14 @@ func (m *Manager) GetOutputLines() []string {
 	return m.outputCapture.GetLines()
 }
 
+// GetOutputGeneration returns the output capture generation counter.
+func (m *Manager) GetOutputGeneration() uint64 {
+	if m.outputCapture == nil {
+		return 0
+	}
+	return m.outputCapture.Generation()
+}
+
 // CaptureOutputLine stores a single output line for an issue.
 func (m *Manager) CaptureOutputLine(issueNumber int, line string) {
 	if m.outputCapture == nil {
