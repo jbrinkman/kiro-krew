@@ -9,15 +9,17 @@ import (
 	"github.com/jbrinkman/kiro-krew/internal/agent"
 	"github.com/jbrinkman/kiro-krew/internal/config"
 	"github.com/jbrinkman/kiro-krew/internal/tui"
+	"github.com/jbrinkman/kiro-krew/internal/version"
 	"github.com/jbrinkman/kiro-krew/internal/watcher"
 )
 
 var Templates embed.FS
 
 var rootCmd = &cobra.Command{
-	Use:   "kiro-krew",
-	Short: "Multi-agent development tool",
-	Long:  "kiro-krew is a multi-agent development tool that watches GitHub issues and spawns agents to work on them.",
+	Use:     "kiro-krew",
+	Short:   "Multi-agent development tool",
+	Long:    "kiro-krew is a multi-agent development tool that watches GitHub issues and spawns agents to work on them.",
+	Version: version.String(),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
 		if err != nil {
@@ -32,6 +34,12 @@ var rootCmd = &cobra.Command{
 
 		return tui.Run(w, manager, cfg)
 	},
+}
+
+func init() {
+	// Cobra automatically adds --version/-v flags when Version is set
+	// Customize the version template to show just the version number
+	rootCmd.SetVersionTemplate("{{.Version}}\n")
 }
 
 func SetTemplates(templates embed.FS) {

@@ -31,6 +31,11 @@ func init() {
 	}
 }
 
+// String returns just the version number
+func String() string {
+	return Version
+}
+
 // Info returns version information
 func Info() map[string]string {
 	return map[string]string{
