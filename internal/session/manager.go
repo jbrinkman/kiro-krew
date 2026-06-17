@@ -70,7 +70,7 @@ func (sm *SessionManager) Save(id string, state *SessionState) error {
 // Load reads a session from disk with corruption recovery
 func (sm *SessionManager) Load(id string) (*SessionState, error) {
 	filename := filepath.Join(sm.sessionsDir, id+".json")
-	
+
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read session file: %w", err)
@@ -133,7 +133,7 @@ func (sm *SessionManager) Cleanup(maxAge time.Duration) error {
 
 	cutoff := time.Now().Add(-maxAge)
 	var errors []string
-	
+
 	for _, id := range sessions {
 		filename := filepath.Join(sm.sessionsDir, id+".json")
 		info, err := os.Stat(filename)
@@ -185,18 +185,18 @@ func (sm *SessionManager) recoverCorruptedSession(filename string, data []byte) 
 	var partial struct {
 		Type SessionType `json:"type"`
 	}
-	
+
 	if json.Unmarshal(data, &partial) == nil && partial.Type != "" {
 		// Create new session with recovered type
 		recovered := NewSessionState(partial.Type)
-		
+
 		// Create backup of corrupted file
 		backupName := filename + ".corrupt." + time.Now().Format("20060102-150405")
 		_ = os.Rename(filename, backupName)
-		
+
 		return recovered
 	}
-	
+
 	return nil
 }
 
@@ -205,15 +205,15 @@ func (sm *SessionManager) validateSession(state *SessionState) error {
 	if state == nil {
 		return fmt.Errorf("session state is nil")
 	}
-	
+
 	if state.Type != Console && state.Type != Planning {
 		return fmt.Errorf("invalid session type: %s", state.Type)
 	}
-	
+
 	if state.History == nil {
 		state.History = make([]Message, 0)
 	}
-	
+
 	return nil
 }
 

@@ -1,0 +1,100 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (leave empty for auto-detection)'
+        required: false
+        default: ''
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    permissions:
+      contents: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Set up Go
+      uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
+      with:
+        go-version: '1.25.0'
+        
+    - name: Install Task
+      uses: arduino/setup-task@b91d5d2c96a56797b48ac1e0e89220bf64044611 # v2.0.0
+      with:
+        version: 3.x
+        
+    - name: Determine next version
+      id: version
+      run: |
+        if [ -n "${{ github.event.inputs.version }}" ]; then
+          echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+        else
+          # Auto-detect version based on current version
+          CURRENT_VERSION=$(jq -r '.version' internal/version/version.json)
+          # Simple increment for now - can be enhanced with semantic-release
+          NEXT_VERSION=$(echo $CURRENT_VERSION | awk -F. '{$NF = $NF + 1;} 1' | sed 's/ /./g')
+          echo "version=$NEXT_VERSION" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Set version
+      run: task version:set VERSION=${{ steps.version.outputs.version }}
+      
+    - name: Build release artifacts
+      run: task build:release
+      
+    - name: Create release
+      uses: actions/create-release@0cb9c9b65d5d1901c1f53e5e66eaf4afd303e70e # v1.1.4
+      id: create_release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v${{ steps.version.outputs.version }}
+        release_name: Release v${{ steps.version.outputs.version }}
+        body: |
+          Release v${{ steps.version.outputs.version }}
+          
+          ## Changes
+          Auto-generated release from GitHub Actions.
+        draft: false
+        prerelease: false
+        
+    - name: Upload Linux binary
+      uses: actions/upload-release-asset@e8f9f06c4b078e705bd2ea027f0926603fc9b4d5 # v1.0.2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./dist/release/kiro-krew-linux-amd64
+        asset_name: kiro-krew-linux-amd64
+        asset_content_type: application/octet-stream
+        
+    - name: Upload macOS binary
+      uses: actions/upload-release-asset@e8f9f06c4b078e705bd2ea027f0926603fc9b4d5 # v1.0.2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./dist/release/kiro-krew-macos-arm64
+        asset_name: kiro-krew-macos-arm64
+        asset_content_type: application/octet-stream
+        
+    - name: Upload Windows binary
+      uses: actions/upload-release-asset@e8f9f06c4b078e705bd2ea027f0926603fc9b4d5 # v1.0.2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./dist/release/kiro-krew-windows-amd64.exe
+        asset_name: kiro-krew-windows-amd64.exe
+        asset_content_type: application/octet-stream

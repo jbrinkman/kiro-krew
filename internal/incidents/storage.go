@@ -20,6 +20,6 @@ func (il *IncidentLogger) generateFilename(issue, attempt int) string {
 func (il *IncidentLogger) writeIncidentFile(filename, content string) error {
 	incidentDir := filepath.Join(il.baseDir, il.repoName, "incidents")
 	filePath := filepath.Join(incidentDir, filename)
-	
+
 	return os.WriteFile(filePath, []byte(content), 0644)
 }

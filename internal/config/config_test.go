@@ -8,9 +8,9 @@ import (
 
 func TestLoad_EnableCopilotReviewDefaults(t *testing.T) {
 	tests := []struct {
-		name           string
-		configContent  string
-		expectedValue  bool
+		name          string
+		configContent string
+		expectedValue bool
 	}{
 		{
 			name: "enable_copilot_review not specified - should default to true",
@@ -47,7 +47,7 @@ enable_copilot_review: false`,
 			if err := os.WriteFile(configFile, []byte(tt.configContent), 0644); err != nil {
 				t.Fatalf("Failed to write config file: %v", err)
 			}
-			
+
 			// Change to temp directory
 			oldDir, err := os.Getwd()
 			if err != nil {
@@ -61,13 +61,13 @@ enable_copilot_review: false`,
 			if err := os.Chdir(tmpDir); err != nil {
 				t.Fatalf("Failed to change directory: %v", err)
 			}
-			
+
 			// Load config
 			cfg, err := Load()
 			if err != nil {
 				t.Fatalf("Load() error = %v", err)
 			}
-			
+
 			if cfg.EnableCopilotReview != tt.expectedValue {
 				t.Errorf("EnableCopilotReview = %v, expected %v", cfg.EnableCopilotReview, tt.expectedValue)
 			}
@@ -88,7 +88,7 @@ func TestLoad_AllDefaultValues(t *testing.T) {
 	if err := os.WriteFile(configFile, []byte(configContent), 0644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
-	
+
 	oldDir, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("Failed to get working directory: %v", err)
@@ -101,12 +101,12 @@ func TestLoad_AllDefaultValues(t *testing.T) {
 	if err := os.Chdir(tmpDir); err != nil {
 		t.Fatalf("Failed to change directory: %v", err)
 	}
-	
+
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	
+
 	// Verify all default values
 	if cfg.Label != "kiro-krew" {
 		t.Errorf("Label = %s, expected kiro-krew", cfg.Label)

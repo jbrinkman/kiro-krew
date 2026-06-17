@@ -13,15 +13,15 @@ import (
 
 // mockTUIModel simulates the TUI model for testing
 type mockTUIModel struct {
-	currentMode       session.SessionType
-	sessionManager    *session.SessionManager
-	hotkeyTriggered   bool
-	modeSwitch        bool
-	errorReceived     error
-	processRunning    bool
-	sessionPreserved  bool
-	consoleState      map[string]interface{}
-	planningState     map[string]interface{}
+	currentMode      session.SessionType
+	sessionManager   *session.SessionManager
+	hotkeyTriggered  bool
+	modeSwitch       bool
+	errorReceived    error
+	processRunning   bool
+	sessionPreserved bool
+	consoleState     map[string]interface{}
+	planningState    map[string]interface{}
 }
 
 func newMockTUIModel() *mockTUIModel {
@@ -272,7 +272,7 @@ func TestSessionIntegration(t *testing.T) {
 
 		// All sessions should still exist since they're new
 		if len(remainingSessions) != len(allSessions) {
-			t.Errorf("Expected %d sessions after cleanup, got %d", 
+			t.Errorf("Expected %d sessions after cleanup, got %d",
 				len(allSessions), len(remainingSessions))
 		}
 
@@ -293,7 +293,7 @@ func TestSessionIntegration(t *testing.T) {
 		// Note: In real implementation, this would use file modification time
 		// For testing, we simulate with Cleanup call with very short duration
 		time.Sleep(10 * time.Millisecond)
-		
+
 		err = sm.Cleanup(5 * time.Millisecond)
 		if err != nil {
 			t.Errorf("Cleanup of old sessions failed: %v", err)
@@ -388,7 +388,7 @@ func TestCompleteWorkflow(t *testing.T) {
 
 		// Step 3: Trigger hotkey to switch to planning
 		model.update(HotkeyTriggeredMsg{})
-		
+
 		if model.currentMode != session.Planning {
 			t.Error("Should be in planning mode after first hotkey")
 		}

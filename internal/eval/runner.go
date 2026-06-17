@@ -230,7 +230,7 @@ func scoreDeterministic(criterion Criterion, tc TestCase) (int, string, bool) {
 		if errorCount > 0 {
 			return 1, "compilation or runtime errors detected", false
 		}
-		return maxScore/2, "no clear success or error indicators", false
+		return maxScore / 2, "no clear success or error indicators", false
 
 	case strings.Contains(criterion.Name, "test_coverage"):
 		// Check for test file references and test execution

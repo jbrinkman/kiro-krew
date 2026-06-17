@@ -127,16 +127,16 @@ func (tm *TabManager) CloseTab(index int) bool {
 	if index < 0 || index >= len(tm.tabs) || !tm.tabs[index].IsClosable() {
 		return false
 	}
-	
+
 	tm.tabs = append(tm.tabs[:index], tm.tabs[index+1:]...)
-	
+
 	// Maintain active tab index
 	if tm.activeTab >= len(tm.tabs) && len(tm.tabs) > 0 {
 		tm.activeTab = len(tm.tabs) - 1
 	} else if tm.activeTab > index {
 		tm.activeTab--
 	}
-	
+
 	return true
 }
 
@@ -165,7 +165,7 @@ func (tm *TabManager) ToggleView() {
 	if len(tm.tabs) < 2 {
 		return
 	}
-	
+
 	// If on main tab, switch to first agent tab
 	if tm.activeTab == 0 {
 		for i, tab := range tm.tabs {
@@ -247,7 +247,7 @@ func (tm *TabManager) RestoreOrFocusAgentTab(agentID string, manager *agent.Mana
 		tm.SetActiveTab(existingIndex)
 		return true
 	}
-	
+
 	// Create new agent tab
 	agentTab := NewAgentTab(agentID, manager, styles)
 	tm.AddTab(agentTab)

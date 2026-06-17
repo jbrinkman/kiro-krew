@@ -18,7 +18,7 @@ func TestSessionCorruptionRecovery(t *testing.T) {
 	// Create a corrupted session file
 	sessionDir := ".kiro-krew/sessions"
 	os.MkdirAll(sessionDir, 0755)
-	
+
 	corruptedData := `{"type": "planning", "history": [invalid json`
 	sessionFile := filepath.Join(sessionDir, "corrupted.json")
 	os.WriteFile(sessionFile, []byte(corruptedData), 0644)
@@ -43,7 +43,7 @@ func TestSessionCorruptionRecovery(t *testing.T) {
 			break
 		}
 	}
-	
+
 	if !hasBackup {
 		t.Log("No backup found, this might be expected if recovery failed")
 	}
@@ -51,7 +51,7 @@ func TestSessionCorruptionRecovery(t *testing.T) {
 
 // Helper function to check if string contains substring
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (len(substr) == 0 || s[len(s)-len(substr):] == substr || 
+	return len(s) >= len(substr) && (len(substr) == 0 || s[len(s)-len(substr):] == substr ||
 		(len(s) > len(substr) && s[:len(substr)] == substr) ||
 		(len(s) > len(substr) && findSubstring(s, substr)))
 }

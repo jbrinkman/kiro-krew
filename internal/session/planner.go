@@ -24,30 +24,30 @@ type PlannerProcess struct {
 // NewPlannerProcess starts a new kiro-cli subprocess for planning
 func NewPlannerProcess() (*PlannerProcess, error) {
 	ctx, cancel := context.WithCancel(context.Background())
-	
+
 	cmd := exec.CommandContext(ctx, "kiro-cli", "chat")
-	
+
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		cancel()
 		return nil, fmt.Errorf("failed to create stdin pipe: %w", err)
 	}
-	
+
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		cancel()
 		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
-	
+
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		cancel()
 		return nil, fmt.Errorf("failed to create stderr pipe: %w", err)
 	}
-	
+
 	// Set process group for clean termination
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	
+
 	process := &PlannerProcess{
 		cmd:    cmd,
 		stdin:  stdin,
@@ -57,14 +57,14 @@ func NewPlannerProcess() (*PlannerProcess, error) {
 		ctx:    ctx,
 		cancel: cancel,
 	}
-	
+
 	if err := cmd.Start(); err != nil {
 		cancel()
 		return nil, fmt.Errorf("failed to start kiro-cli: %w", err)
 	}
-	
+
 	go process.captureOutput()
-	
+
 	return process, nil
 }
 
@@ -75,12 +75,12 @@ func (p *PlannerProcess) SendMessage(message string) error {
 		return fmt.Errorf("process stopped")
 	default:
 	}
-	
+
 	// Validate process is still running
 	if p.cmd.Process == nil {
 		return fmt.Errorf("subprocess terminated unexpectedly")
 	}
-	
+
 	_, err := p.stdin.Write([]byte(message + "\n"))
 	if err != nil {
 		// Check if process died
@@ -89,7 +89,7 @@ func (p *PlannerProcess) SendMessage(message string) error {
 		}
 		return fmt.Errorf("failed to write to subprocess: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -103,7 +103,7 @@ func (p *PlannerProcess) Suspend() error {
 	if p.cmd.Process == nil {
 		return fmt.Errorf("process not running")
 	}
-	
+
 	return syscall.Kill(-p.cmd.Process.Pid, syscall.SIGSTOP)
 }
 
@@ -112,14 +112,14 @@ func (p *PlannerProcess) Resume() error {
 	if p.cmd.Process == nil {
 		return fmt.Errorf("process not running")
 	}
-	
+
 	return syscall.Kill(-p.cmd.Process.Pid, syscall.SIGCONT)
 }
 
 // Stop terminates the subprocess gracefully
 func (p *PlannerProcess) Stop() error {
 	p.cancel()
-	
+
 	if p.cmd.Process != nil {
 		// Send SIGTERM to the process group
 		err := syscall.Kill(-p.cmd.Process.Pid, syscall.SIGTERM)
@@ -128,12 +128,12 @@ func (p *PlannerProcess) Stop() error {
 			_ = p.cmd.Process.Kill()
 		}
 	}
-	
+
 	// Close pipes
 	_ = p.stdin.Close()
 	_ = p.stdout.Close()
 	_ = p.stderr.Close()
-	
+
 	// Wait for process to finish
 	_ = p.cmd.Wait()
 
@@ -146,7 +146,7 @@ func (p *PlannerProcess) IsRunning() bool {
 	if p.cmd.Process == nil {
 		return false
 	}
-	
+
 	select {
 	case <-p.ctx.Done():
 		return false
@@ -200,27 +200,27 @@ func NewPlanningSession(manager *SessionManager) (*PlanningSession, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create session: %w", err)
 	}
-	
+
 	state, err := manager.Load(id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load session: %w", err)
 	}
-	
+
 	process, err := NewPlannerProcess()
 	if err != nil {
 		return nil, fmt.Errorf("failed to start planner process: %w", err)
 	}
-	
+
 	session := &PlanningSession{
 		ID:      id,
 		Process: process,
 		State:   state,
 		Manager: manager,
 	}
-	
+
 	// Start capturing conversation history
 	go session.captureHistory()
-	
+
 	return session, nil
 }
 
@@ -230,12 +230,12 @@ func (ps *PlanningSession) SendMessage(content string) error {
 	if ps.State == nil {
 		return fmt.Errorf("session state corrupted")
 	}
-	
+
 	ps.State.AddMessage("user", content)
 	if err := ps.Manager.Save(ps.ID, ps.State); err != nil {
 		return fmt.Errorf("failed to save session state: %w", err)
 	}
-	
+
 	err := ps.Process.SendMessage(content)
 	if err != nil {
 		// Log the error but don't fail the session
@@ -243,7 +243,7 @@ func (ps *PlanningSession) SendMessage(content string) error {
 		_ = ps.Manager.Save(ps.ID, ps.State)
 		return err
 	}
-	
+
 	return nil
 }
 
@@ -252,17 +252,17 @@ func (ps *PlanningSession) Suspend() error {
 	if ps.State == nil {
 		return fmt.Errorf("session state corrupted, cannot suspend")
 	}
-	
+
 	if err := ps.Manager.Save(ps.ID, ps.State); err != nil {
 		return fmt.Errorf("failed to save session state before suspend: %w", err)
 	}
-	
+
 	ps.Suspended = true
 	if err := ps.Process.Suspend(); err != nil {
 		ps.Suspended = false
 		return fmt.Errorf("failed to suspend process: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -271,11 +271,11 @@ func (ps *PlanningSession) SuspendAndDetach() error {
 	if ps.State == nil {
 		return fmt.Errorf("session state corrupted, cannot suspend")
 	}
-	
+
 	if err := ps.Manager.Save(ps.ID, ps.State); err != nil {
 		return fmt.Errorf("failed to save session state before suspend: %w", err)
 	}
-	
+
 	ps.Suspended = true
 	if err := ps.Process.Suspend(); err != nil {
 		ps.Suspended = false
@@ -289,11 +289,11 @@ func (ps *PlanningSession) Resume() error {
 	if !ps.Suspended {
 		return fmt.Errorf("session not suspended")
 	}
-	
+
 	if err := ps.Process.Resume(); err != nil {
 		return fmt.Errorf("failed to resume process: %w", err)
 	}
-	
+
 	ps.Suspended = false
 	return nil
 }
@@ -304,13 +304,13 @@ func (ps *PlanningSession) Stop() error {
 		ps.State.AddMessage("system", "Session terminated")
 		_ = ps.Manager.Save(ps.ID, ps.State)
 	}
-	
+
 	if ps.Process != nil {
 		if err := ps.Process.Stop(); err != nil {
 			return fmt.Errorf("failed to stop process: %w", err)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -323,7 +323,7 @@ func (ps *PlanningSession) Recover() error {
 		state = NewSessionState(Planning)
 		state.AddMessage("system", "Session recovered from corruption")
 	}
-	
+
 	ps.State = state
 	return ps.Manager.Save(ps.ID, ps.State)
 }
