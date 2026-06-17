@@ -82,6 +82,9 @@ kiro-krew> status
 ## CLI Usage
 
 ```bash
+# Display version and exit
+kiro-krew --version
+
 # Initialize project with agent configs and templates (skips existing files)
 kiro-krew init
 
