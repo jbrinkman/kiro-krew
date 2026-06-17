@@ -83,11 +83,11 @@ type model struct {
 	overlayHeight  int
 
 	// View state management
-	tabManager  *TabManager
-	mainTab     *MainTab
-	
+	tabManager *TabManager
+	mainTab    *MainTab
+
 	// Agent lifecycle tracking
-	knownAgents        map[string]bool
+	knownAgents         map[string]bool
 	statusRunningAgents []*agent.Agent // Snapshot for deterministic number key selection
 }
 
@@ -261,10 +261,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.lastLogPos = newPos
 			m = m.appendActivity(newLines...)
 		}
-		
+
 		// Check for agent lifecycle changes
 		m = m.updateAgentTabs()
-		
+
 		return m, m.tickCmd()
 
 	case planningHotkeyMsg:
@@ -337,12 +337,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "1", "2", "3", "4", "5", "6", "7", "8", "9":
 				agentIndex, _ := strconv.Atoi(msg.String())
 				agentIndex-- // Convert to 0-based index
-				
+
 				// Use snapshot stored when overlay was created
 				if agentIndex >= 0 && agentIndex < len(m.statusRunningAgents) && agentIndex < 9 {
 					selectedAgent := m.statusRunningAgents[agentIndex]
 					m = m.clearOverlay()
-					
+
 					// Validate agent is still running before creating/focusing tab
 					currentAgents := m.manager.List()
 					agentStillRunning := false
@@ -352,7 +352,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							break
 						}
 					}
-					
+
 					if agentStillRunning {
 						m.tabManager.RestoreOrFocusAgentTab(selectedAgent.ID, m.manager, m.styles)
 						m.knownAgents[selectedAgent.ID] = true
@@ -538,7 +538,7 @@ func (m model) View() tea.View {
 
 	// Render tab headers at the top
 	tabHeaders := m.tabManager.RenderTabHeaders(m.width, m.styles)
-	
+
 	base := m.renderBaseView()
 
 	// Render active tab content (use base view directly for main tab)

@@ -35,7 +35,7 @@ func HandleKeyMsg(msg tea.KeyPressMsg) tea.Cmd {
 				}
 			}
 		}
-		
+
 		return func() tea.Msg {
 			return HotkeyTriggeredMsg{}
 		}

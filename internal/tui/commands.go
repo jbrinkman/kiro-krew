@@ -60,7 +60,7 @@ func (m model) handleStatus() (model, tea.Cmd) {
 	// Add tab information section
 	tabs := m.tabManager.GetTabs()
 	activeTabIndex := m.tabManager.GetActiveTabIndex()
-	
+
 	content = append(content, m.styles.Prompt.Render("Active Tab"))
 	if len(tabs) > 0 {
 		activeTab := m.tabManager.GetActiveTab()
@@ -69,10 +69,10 @@ func (m model) handleStatus() (model, tea.Cmd) {
 	} else {
 		content = append(content, "  No tabs")
 	}
-	
+
 	content = append(content, "")
 	content = append(content, m.styles.Prompt.Render(fmt.Sprintf("Tabs (%d open)", len(tabs))))
-	
+
 	for i, tab := range tabs {
 		indicator := "  "
 		if i == activeTabIndex {
@@ -84,7 +84,7 @@ func (m model) handleStatus() (model, tea.Cmd) {
 		}
 		content = append(content, fmt.Sprintf("%s%s%s", indicator, tab.Title(), closable))
 	}
-	
+
 	if len(tabs) > 1 {
 		content = append(content, "")
 		content = append(content, m.styles.Prompt.Render("Navigation"))
@@ -116,7 +116,7 @@ func (m model) handleStatus() (model, tea.Cmd) {
 		content = append(content, "", m.styles.Prompt.Render("Running Agents"))
 		content = append(content, "Press number to open view:")
 		content = append(content, "")
-		
+
 		// Scale title truncation to available overlay width
 		titleMax := m.getOverlayContentWidth() - 25 // Reserve space for number, issue#, status, elapsed
 		if titleMax < 15 {
@@ -129,11 +129,11 @@ func (m model) handleStatus() (model, tea.Cmd) {
 				break
 			}
 			elapsed := time.Since(a.StartTime).Truncate(time.Second)
-			line := fmt.Sprintf("  %d. Issue #%d: %s (%s, %s)", 
+			line := fmt.Sprintf("  %d. Issue #%d: %s (%s, %s)",
 				i+1, a.IssueNumber, truncate(a.IssueTitle, titleMax), string(a.Status), elapsed)
 			content = append(content, line)
 		}
-		
+
 		if len(runningAgents) > 9 {
 			content = append(content, fmt.Sprintf("  ... and %d more", len(runningAgents)-9))
 		}
@@ -147,7 +147,7 @@ func (m model) handleStatus() (model, tea.Cmd) {
 		}
 		for _, a := range stoppedAgents {
 			elapsed := time.Since(a.StartTime).Truncate(time.Second)
-			line := fmt.Sprintf("   Issue #%d: %s (%s, %s)", 
+			line := fmt.Sprintf("   Issue #%d: %s (%s, %s)",
 				a.IssueNumber, truncate(a.IssueTitle, titleMax), string(a.Status), elapsed)
 			content = append(content, line)
 		}
@@ -498,13 +498,13 @@ func (m model) handleLogs() (model, tea.Cmd) {
 	} else {
 		content = append(content, m.styles.Prompt.Render(fmt.Sprintf("Found %d incident logs:", len(incidents))))
 		content = append(content, "")
-		
+
 		for _, incident := range incidents {
 			timestamp := incident.Timestamp.Format("Jan 02 15:04:05")
 			line := fmt.Sprintf("Issue #%d (attempt %d) - %s", incident.IssueNumber, incident.Attempt, timestamp)
 			content = append(content, line)
 		}
-		
+
 		content = append(content, "")
 		content = append(content, m.styles.Prompt.Render("Log files location:"))
 		content = append(content, fmt.Sprintf("~/.kiro-krew/logs/%s/incidents/", logger.RepoName()))

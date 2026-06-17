@@ -265,7 +265,7 @@ func (m *Manager) Spawn(issueNumber int, repo string) (*Agent, error) {
 func (m *Manager) GetAgent(id string) *Agent {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	return m.agents[id]
 }
 

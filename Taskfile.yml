@@ -38,6 +38,11 @@ tasks:
     cmds:
       - go fmt ./...
 
+  fmt:check:
+    desc: Check code formatting (fails if unformatted)
+    cmds:
+      - test -z "$(gofmt -l .)"
+
   clean:
     desc: Clean build artifacts
     cmds:
@@ -60,3 +65,49 @@ tasks:
           echo "Error: jq is required for version updates"
           exit 1
         fi
+
+  version:set:
+    desc: Set new version number
+    cmds:
+      - |
+        if [ -z "$VERSION" ]; then
+          echo "Error: VERSION environment variable required"
+          echo "Usage: VERSION=1.0.0 task version:set"
+          exit 1
+        fi
+        
+        jq --arg version "$VERSION" '.version = $version' {{.VERSION_FILE}} > {{.VERSION_FILE}}.tmp
+        mv {{.VERSION_FILE}}.tmp {{.VERSION_FILE}}
+        echo "Updated to version: $VERSION"
+
+  build:release:
+    desc: Build release artifacts for multiple platforms
+    cmds:
+      - mkdir -p {{.BUILD_DIR}}/release
+      - task: build:linux
+      - task: build:macos
+      - task: build:windows
+
+  build:linux:
+    desc: Build for Linux amd64
+    cmds:
+      - GOOS=linux GOARCH=amd64 go build -ldflags "-s -w -X github.com/jbrinkman/kiro-krew/internal/version.BuildDate={{.BUILD_TIME}}" -o {{.BUILD_DIR}}/release/kiro-krew-linux-amd64 ./cmd/kiro-krew
+    vars:
+      BUILD_TIME:
+        sh: date -u +%Y-%m-%dT%H:%M:%SZ
+
+  build:macos:
+    desc: Build for macOS arm64
+    cmds:
+      - GOOS=darwin GOARCH=arm64 go build -ldflags "-s -w -X github.com/jbrinkman/kiro-krew/internal/version.BuildDate={{.BUILD_TIME}}" -o {{.BUILD_DIR}}/release/kiro-krew-macos-arm64 ./cmd/kiro-krew
+    vars:
+      BUILD_TIME:
+        sh: date -u +%Y-%m-%dT%H:%M:%SZ
+
+  build:windows:
+    desc: Build for Windows amd64
+    cmds:
+      - GOOS=windows GOARCH=amd64 go build -ldflags "-s -w -X github.com/jbrinkman/kiro-krew/internal/version.BuildDate={{.BUILD_TIME}}" -o {{.BUILD_DIR}}/release/kiro-krew-windows-amd64.exe ./cmd/kiro-krew
+    vars:
+      BUILD_TIME:
+        sh: date -u +%Y-%m-%dT%H:%M:%SZ

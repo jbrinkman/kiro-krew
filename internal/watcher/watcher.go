@@ -17,22 +17,22 @@ import (
 )
 
 type Watcher struct {
-	config            *config.Config
-	manager           *agent.Manager
-	stop              chan struct{}
-	tracked           map[int]bool
-	mu                sync.RWMutex
-	started           bool
-	backoffTracker    *BackoffTracker
+	config              *config.Config
+	manager             *agent.Manager
+	stop                chan struct{}
+	tracked             map[int]bool
+	mu                  sync.RWMutex
+	started             bool
+	backoffTracker      *BackoffTracker
 	dependencyValidator *DependencyValidator
 }
 
 func New(cfg *config.Config, mgr *agent.Manager) *Watcher {
 	return &Watcher{
-		config:             cfg,
-		manager:            mgr,
-		tracked:            make(map[int]bool),
-		backoffTracker:     NewBackoffTracker(),
+		config:              cfg,
+		manager:             mgr,
+		tracked:             make(map[int]bool),
+		backoffTracker:      NewBackoffTracker(),
 		dependencyValidator: NewDependencyValidator(),
 	}
 }
@@ -77,7 +77,7 @@ func (w *Watcher) pollLoop() {
 func (w *Watcher) checkIssues() {
 	// Increment polling round for backoff tracking
 	w.backoffTracker.IncrementRound()
-	
+
 	log.Printf("[watcher] polling for issues...")
 	issues, err := github.ListIssues(w.config.Repo, w.config.Label)
 	if err != nil {

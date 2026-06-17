@@ -16,3 +16,6 @@ cmd/kiro-krew/kiro-krew
 /test-build
 .kiro-krew/sessions/
 .kiro-krew/artifacts/
+coverage.out
+coverage.html
+dist/

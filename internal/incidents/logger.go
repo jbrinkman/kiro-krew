@@ -50,7 +50,7 @@ func (il *IncidentLogger) LogIncident(issue, attempt int, content string) error 
 
 func (il *IncidentLogger) ListIncidents() ([]IncidentInfo, error) {
 	incidentDir := filepath.Join(il.baseDir, il.repoName, "incidents")
-	
+
 	files, err := os.ReadDir(incidentDir)
 	if os.IsNotExist(err) {
 		return []IncidentInfo{}, nil

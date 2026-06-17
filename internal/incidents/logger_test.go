@@ -66,11 +66,11 @@ func TestIncidentLogger(t *testing.T) {
 func TestGenerateFilename(t *testing.T) {
 	logger := &IncidentLogger{}
 	filename := logger.generateFilename(123, 4)
-	
+
 	if !strings.HasPrefix(filename, "incident-123-4-") {
 		t.Errorf("Filename should start with 'incident-123-4-', got: %s", filename)
 	}
-	
+
 	if !strings.HasSuffix(filename, ".md") {
 		t.Errorf("Filename should end with '.md', got: %s", filename)
 	}

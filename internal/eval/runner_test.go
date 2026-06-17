@@ -262,17 +262,17 @@ func TestScoreLLMJudge_ANSISequences(t *testing.T) {
 		expectError bool
 	}{
 		{
-			name: "valid JSON with ANSI color sequences",
+			name:        "valid JSON with ANSI color sequences",
 			rawResponse: "===JSON_START===\n\x1B[38;5;141m{\"score\": 4, \"reasoning\": \"Good implementation\", \"pass\": true}\x1B[0m\n===JSON_END===",
 			expectError: false,
 		},
 		{
-			name: "valid JSON with multiple ANSI sequences",
+			name:        "valid JSON with multiple ANSI sequences",
 			rawResponse: "===JSON_START===\n\x1B[1m\x1B[32m{\"score\": 5, \"reasoning\": \"Excellent work\", \"pass\": true}\x1B[0m\x1B[39m\n===JSON_END===",
 			expectError: false,
 		},
 		{
-			name: "valid JSON with bold and reset ANSI",
+			name:        "valid JSON with bold and reset ANSI",
 			rawResponse: "===JSON_START===\n\x1B[1m{\"score\": 3, \"reasoning\": \"Adequate\", \"pass\": true}\x1B[0m\n===JSON_END===",
 			expectError: false,
 		},
@@ -280,7 +280,7 @@ func TestScoreLLMJudge_ANSISequences(t *testing.T) {
 			// Verifies ANSI sequences inside JSON string values are also stripped.
 			// This intentionally mutates content—acceptable since ANSI codes in
 			// LLM output are rendering artifacts, not meaningful data.
-			name: "ANSI sequences within JSON string values",
+			name:        "ANSI sequences within JSON string values",
 			rawResponse: "===JSON_START===\n{\"score\": 2, \"reasoning\": \"\x1B[31mNeeds improvement\x1B[0m\", \"pass\": false}\n===JSON_END===",
 			expectError: false,
 		},
@@ -304,7 +304,7 @@ func TestScoreLLMJudge_ANSISequences(t *testing.T) {
 			}
 
 			err := json.Unmarshal([]byte(jsonStr), &response)
-			
+
 			if tt.expectError && err == nil {
 				t.Error("expected JSON parse error but got none")
 			} else if !tt.expectError && err != nil {
