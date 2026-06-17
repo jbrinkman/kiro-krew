@@ -1,0 +1,62 @@
+version: '3'
+
+vars:
+  BINARY_NAME: kiro-krew
+  BUILD_DIR: ./dist
+  VERSION_FILE: internal/version/version.json
+
+tasks:
+  build:
+    desc: Build the application with version metadata
+    cmds:
+      - mkdir -p {{.BUILD_DIR}}
+      - go build -ldflags "-X github.com/jbrinkman/kiro-krew/internal/version.BuildDate={{.BUILD_TIME}} -X github.com/jbrinkman/kiro-krew/internal/version.CommitHash={{.COMMIT_HASH}}" -o {{.BUILD_DIR}}/{{.BINARY_NAME}} ./cmd/kiro-krew
+    vars:
+      BUILD_TIME:
+        sh: date -u +%Y-%m-%dT%H:%M:%SZ
+      COMMIT_HASH:
+        sh: git rev-parse --short HEAD 2>/dev/null || echo "dev"
+
+  test:
+    desc: Run all tests with coverage
+    cmds:
+      - go test -v -race -coverprofile=coverage.out ./...
+      - go tool cover -html=coverage.out -o coverage.html
+
+  dev:
+    desc: Development build (faster, no optimization)
+    cmds:
+      - go build -o {{.BINARY_NAME}} ./cmd/kiro-krew
+
+  lint:
+    desc: Run linters and static analysis
+    cmds:
+      - go vet ./...
+
+  fmt:
+    desc: Format code
+    cmds:
+      - go fmt ./...
+
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - rm -rf {{.BUILD_DIR}}
+      - rm -f {{.BINARY_NAME}}
+      - rm -f coverage.out coverage.html
+
+  version:update:
+    desc: Update version number in version.json
+    prompt: This will update the version number. Continue?
+    cmds:
+      - |
+        echo "Current version: $(jq -r '.version' {{.VERSION_FILE}} 2>/dev/null || echo 'dev')"
+        read -p "Enter new version: " NEW_VERSION
+        if command -v jq >/dev/null 2>&1; then
+          jq --arg version "$NEW_VERSION" '.version = $version' {{.VERSION_FILE}} > {{.VERSION_FILE}}.tmp
+          mv {{.VERSION_FILE}}.tmp {{.VERSION_FILE}}
+          echo "Updated to version: $NEW_VERSION"
+        else
+          echo "Error: jq is required for version updates"
+          exit 1
+        fi
