@@ -30,7 +30,24 @@ Or build from source:
 ```bash
 git clone https://github.com/jbrinkman/kiro-krew.git
 cd kiro-krew
+
+# Using Task (recommended)
+task build
+
+# Or using Go directly
 go build ./cmd/kiro-krew
+```
+
+### Development Tasks
+
+This project uses [Task](https://taskfile.dev) for build automation:
+
+```bash
+task build    # Build optimized binary with version metadata
+task dev      # Development build (faster compilation)
+task test     # Run tests with coverage
+task clean    # Clean build artifacts
+task lint     # Run linters and formatters
 ```
 
 ## Quick Start
