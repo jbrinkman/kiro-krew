@@ -38,6 +38,11 @@ tasks:
     cmds:
       - go fmt ./...
 
+  fmt:check:
+    desc: Check code formatting (fails if unformatted)
+    cmds:
+      - test -z "$(gofmt -l .)"
+
   clean:
     desc: Clean build artifacts
     cmds:
@@ -60,18 +65,6 @@ tasks:
           echo "Error: jq is required for version updates"
           exit 1
         fi
-
-  version:update-commit:
-    desc: Update version metadata with current commit info
-    cmds:
-      - |
-        COMMIT_HASH=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-        BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-        
-        jq --arg commit "$COMMIT_HASH" --arg timestamp "$BUILD_TIME" \
-           '. + {"commit_hash": $commit, "build_timestamp": $timestamp}' \
-           {{.VERSION_FILE}} > {{.VERSION_FILE}}.tmp
-        mv {{.VERSION_FILE}}.tmp {{.VERSION_FILE}}
 
   version:set:
     desc: Set new version number

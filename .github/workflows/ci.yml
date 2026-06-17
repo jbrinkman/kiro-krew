@@ -26,7 +26,7 @@ jobs:
         version: 3.x
         
     - name: Format check
-      run: task fmt
+      run: task fmt:check
       
     - name: Lint
       run: task lint
