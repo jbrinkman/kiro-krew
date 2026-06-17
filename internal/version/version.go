@@ -9,20 +9,20 @@ import (
 //go:embed version.json
 var versionJSON []byte
 
-type VersionInfo struct {
+type versionInfo struct {
 	Version    string `json:"version"`
 	Prerelease string `json:"prerelease"`
 }
 
 var (
-	Version   = "unknown" // Will be set from JSON at init
+	Version   = "dev"
 	BuildDate = "unknown"
 	GoVersion = runtime.Version()
 	Arch      = runtime.GOOS + "/" + runtime.GOARCH
 )
 
 func init() {
-	var info VersionInfo
+	var info versionInfo
 	if err := json.Unmarshal(versionJSON, &info); err == nil {
 		Version = info.Version
 		if info.Prerelease != "" {
