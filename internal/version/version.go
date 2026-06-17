@@ -1,16 +1,35 @@
 package version
 
 import (
+	_ "embed"
+	"encoding/json"
 	"runtime"
 )
 
-// Build-time variables set via ldflags
+//go:embed version.json
+var versionJSON []byte
+
+type versionInfo struct {
+	Version    string `json:"version"`
+	Prerelease string `json:"prerelease"`
+}
+
 var (
 	Version   = "dev"
 	BuildDate = "unknown"
 	GoVersion = runtime.Version()
 	Arch      = runtime.GOOS + "/" + runtime.GOARCH
 )
+
+func init() {
+	var info versionInfo
+	if err := json.Unmarshal(versionJSON, &info); err == nil {
+		Version = info.Version
+		if info.Prerelease != "" {
+			Version += "-" + info.Prerelease
+		}
+	}
+}
 
 // Info returns version information
 func Info() map[string]string {
