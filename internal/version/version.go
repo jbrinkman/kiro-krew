@@ -15,10 +15,11 @@ type versionInfo struct {
 }
 
 var (
-	Version   = "dev"
-	BuildDate = "unknown"
-	GoVersion = runtime.Version()
-	Arch      = runtime.GOOS + "/" + runtime.GOARCH
+	Version    = "dev"
+	BuildDate  = "unknown"
+	CommitHash = "unknown"
+	GoVersion  = runtime.Version()
+	Arch       = runtime.GOOS + "/" + runtime.GOARCH
 )
 
 func init() {
@@ -34,9 +35,10 @@ func init() {
 // Info returns version information
 func Info() map[string]string {
 	return map[string]string{
-		"version":    Version,
-		"build_date": BuildDate,
-		"go_version": GoVersion,
-		"arch":       Arch,
+		"version":     Version,
+		"build_date":  BuildDate,
+		"commit_hash": CommitHash,
+		"go_version":  GoVersion,
+		"arch":        Arch,
 	}
 }
