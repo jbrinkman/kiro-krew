@@ -195,7 +195,7 @@ func (dv *DependencyValidator) ValidateIssue(repo string, issueNumber int, issue
 			continue
 		}
 
-		if depDetails.State != "closed" {
+		if !strings.EqualFold(depDetails.State, "closed") {
 			log.Printf("[watcher] dependency #%d for issue #%d is in state '%s' (not closed)", dep, issueNumber, depDetails.State)
 			unresolved = append(unresolved, dep)
 		}
