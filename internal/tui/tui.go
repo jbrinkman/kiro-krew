@@ -516,7 +516,27 @@ func (m model) renderBaseView() string {
 		activityHeight = 1
 	}
 
-	// Use console viewport for scrollable content
+	// Check if dropdown is visible and adjust activity height accordingly
+	var dropdownContent string
+	var dropdownHeight int
+	if m.input.IsDropdownVisible() {
+		dropdownContent = m.input.ViewDropdown()
+		if dropdownContent != "" {
+			dropdownHeight = len(strings.Split(dropdownContent, "\n"))
+			// Reserve space for dropdown above the input, but ensure minimum activity space
+			newActivityHeight := activityHeight - dropdownHeight
+			if newActivityHeight >= 1 {
+				activityHeight = newActivityHeight
+			} else {
+				// Terminal too small for dropdown, hide it
+				dropdownContent = ""
+				dropdownHeight = 0
+			}
+		}
+	}
+
+	// Update viewport height to accommodate dropdown
+	m.consoleViewport.SetHeight(activityHeight)
 	activity := m.consoleViewport.View()
 
 	separator := m.styles.Separator.Render(strings.Repeat("─", m.width))
@@ -546,15 +566,15 @@ func (m model) renderBaseView() string {
 	// Join prompt and theme label horizontally
 	promptLine := lipgloss.JoinHorizontal(lipgloss.Top, prompt, themeLabel)
 
-	// Add autocomplete dropdown if visible
-	baseView := m.styles.Activity.Render(activity) + "\n" + separator + "\n" + promptLine
+	// Compose view with dropdown above input
+	baseView := m.styles.Activity.Render(activity) + "\n" + separator
 
-	if m.input.IsDropdownVisible() {
-		dropdown := m.input.ViewDropdown()
-		if dropdown != "" {
-			baseView += "\n" + dropdown
-		}
+	// Insert dropdown above the input line if visible and fits
+	if dropdownContent != "" {
+		baseView += "\n" + dropdownContent
 	}
+
+	baseView += "\n" + promptLine
 
 	return baseView
 }
