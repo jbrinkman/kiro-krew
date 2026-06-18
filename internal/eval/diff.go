@@ -26,16 +26,20 @@ func resolveRunDirectory(runName string) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("failed to read results directory: %w", err)
 		}
-		
+
+		var latest string
 		for _, entry := range entries {
 			if !entry.IsDir() {
 				continue
 			}
-			
+
 			dirHash := parseDirectoryName(entry.Name())
 			if dirHash == hash {
-				return entry.Name(), nil
+				latest = entry.Name()
 			}
+		}
+		if latest != "" {
+			return latest, nil
 		}
 	}
 	
