@@ -243,6 +243,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			content := []string{
 				fmt.Sprintf("  Version:    %s", info["version"]),
 				fmt.Sprintf("  Build Date: %s", info["build_date"]),
+				fmt.Sprintf("  Commit:     %s", formatCommitHash(info["commit_hash"])),
 				fmt.Sprintf("  Go Version: %s", info["go_version"]),
 				fmt.Sprintf("  Arch:       %s", info["arch"]),
 				"",
