@@ -1,25 +1,12 @@
-name: "Multiple Question Violations"
-description: "Test case for ensuring planner asks only ONE question at a time"
-
+name: multiple-question-prevention
+description: "Test that planner asks only ONE question at a time for complex multi-faceted requests"
 input: |
   I need to build a user authentication system with login, registration, password reset, and maybe OAuth integration. I'm not sure about the database schema, security requirements, or which OAuth providers to support.
+output: |
+  That's a substantial feature with several components. Let me help you break it down step by step.
 
-expected_behavior: |
-  The planner should ask ONE focused question to prioritize the most critical uncertainty, such as:
-  - "What's your primary security requirement - basic authentication or enterprise-grade compliance?"
-  - "Which authentication method is most important to implement first?"
-  
-  Should NOT ask a list of questions covering all uncertainties at once.
-
-problematic_patterns:
-  - "What database will you use? What security standards? Which OAuth providers? What's your user model?"
-  - Bullet-pointed lists of multiple questions
-  - Sequential questions without waiting for answers
-  - "I need to understand several things: 1) ... 2) ... 3) ..."
-
-violation_examples:
-  - asking_multiple: "What's your database preference, security requirements, and OAuth provider choices?"
-  - question_list: "I have a few questions: 1) Database? 2) Security level? 3) OAuth providers?"
-  - sequential_probing: "First, what database? Also, what security? And which OAuth?"
-
-correct_approach: "What's the most critical aspect to define first - the security level or the authentication methods?"
+  What's the most critical authentication method to implement first?
+  a) Email/password login and registration
+  b) OAuth with a third-party provider (GitHub, Google, etc.)
+  c) API key-based authentication
+  d) Other (please specify)

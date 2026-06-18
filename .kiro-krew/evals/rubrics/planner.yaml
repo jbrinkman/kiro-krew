@@ -17,8 +17,8 @@ criteria:
     description: "Questions posed are clear, focused, and avoid ambiguous phrasing that could lead to unclear responses"
     scoring: 1-5
   - name: single_question_adherence
-    description: "Responses contain only one question mark, avoiding multiple questions in single responses"
-    deterministic: true
+    description: "Responses contain only one question, avoiding multiple questions in single responses"
+    scoring: 1-5
   - name: cost_efficiency
     description: "Token usage relative to output quality"
     type: cost
