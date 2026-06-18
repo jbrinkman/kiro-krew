@@ -322,8 +322,6 @@ func (m model) handleAbout() (model, tea.Cmd) {
 	return m, checkForUpdateCmd()
 }
 
-
-
 func (m model) handleTheme(args []string) (model, tea.Cmd) {
 	if len(args) == 0 {
 		// No longer show overlay for current theme - persistent display handles this

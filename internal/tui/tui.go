@@ -242,8 +242,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if m.activeOverlay == overlayAbout {
-			// Use model's AboutDialog for efficient partial updates
-			m.aboutDialog.BuildContent()
+			// Efficient partial update — only replace the status line
 			m.aboutDialog.UpdateStatusLine(updateLines)
 			m.overlayContent.content = append(m.aboutDialog.GetFullContent(), "", "Press ESC to close")
 		} else {

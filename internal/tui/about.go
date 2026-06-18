@@ -57,3 +57,4 @@ func formatCommitHash(hash string) string {
 	}
 	return hash
 }
+
