@@ -1,3 +1,0 @@
-Demo Prompt:
-
-The Kiro Krew about command currently shows 'Dev' as the build version. I want to implement semantic versioning using a JSON version file so I can see real version numbers (starting with 0.5.0) during local development and easily update versions for official releases. The JSON file should be extensible for future metadata, and the system should gracefully handle missing or corrupted version files.
