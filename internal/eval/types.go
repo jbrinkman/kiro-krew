@@ -57,7 +57,23 @@ type AgentResult struct {
 
 // Summary holds aggregate results for an eval run.
 type Summary struct {
-	GitHash     string             `json:"git_hash"`
-	TotalCost   CostInfo           `json:"total_cost"`
-	AgentScores map[string]float64 `json:"agent_scores"` // agent -> average score
+	GitHash         string             `json:"git_hash"`
+	TotalCost       CostInfo           `json:"total_cost"`
+	AgentScores     map[string]float64 `json:"agent_scores"` // agent -> average score
+	BaselineCommit  string             `json:"baseline_commit,omitempty"`
+	ImprovementData *ImprovementData   `json:"improvement_data,omitempty"`
+}
+
+// ImprovementData tracks performance changes from baseline.
+type ImprovementData struct {
+	AccuracyChange     float64                    `json:"accuracy_change,omitempty"`
+	ErrorRateChange    float64                    `json:"error_rate_change,omitempty"`
+	AgentImprovements  map[string]AgentImprovement `json:"agent_improvements,omitempty"`
+}
+
+// AgentImprovement tracks individual agent performance changes.
+type AgentImprovement struct {
+	ScoreDelta     float64 `json:"score_delta,omitempty"`
+	AccuracyGained float64 `json:"accuracy_gained,omitempty"`
+	ErrorsReduced  int     `json:"errors_reduced,omitempty"`
 }

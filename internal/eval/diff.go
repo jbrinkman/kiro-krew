@@ -48,6 +48,16 @@ func resolveRunDirectory(runName string) (string, error) {
 
 // Diff compares two eval runs and prints score/cost deltas.
 func Diff(runA, runB string) error {
+	return DiffWithOptions(runA, runB, false)
+}
+
+// DiffWithImprovement compares two eval runs with improvement metrics.
+func DiffWithImprovement(runA, runB string) error {
+	return DiffWithOptions(runA, runB, true)
+}
+
+// DiffWithOptions compares two eval runs with optional improvement metrics.
+func DiffWithOptions(runA, runB string, showImprovement bool) error {
 	resultsDir := filepath.Join(".kiro-krew", "evals", "results")
 
 	resolvedA, err := resolveRunDirectory(runA)
@@ -141,6 +151,11 @@ func Diff(runA, runB string) error {
 		fmt.Printf("  %s: %.2f quality/$\n", runB, avgB/summaryB.TotalCost.EstimatedUSD)
 	}
 
+	// Show improvement metrics if requested or available
+	if showImprovement || summaryB.ImprovementData != nil {
+		displayImprovementMetrics(runA, runB, &summaryA, &summaryB, resolvedA, resolvedB)
+	}
+
 	return nil
 }
 
@@ -212,4 +227,103 @@ func avgScore(scores map[string]float64) float64 {
 		sum += v
 	}
 	return sum / float64(len(scores))
+}
+
+// displayImprovementMetrics shows improvement metrics when available.
+func displayImprovementMetrics(runA, runB string, summaryA, summaryB *Summary, resolvedA, resolvedB string) {
+	var improvements *ImprovementData
+	
+	// Use existing improvement data if available, otherwise calculate it
+	if summaryB.ImprovementData != nil {
+		improvements = summaryB.ImprovementData
+	} else {
+		// Load full results to calculate improvements
+		resultsDir := filepath.Join(".kiro-krew", "evals", "results")
+		
+		// Load current results
+		currentResults := make(map[string]AgentResult)
+		entries, err := os.ReadDir(filepath.Join(resultsDir, resolvedB))
+		if err == nil {
+			for _, entry := range entries {
+				if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") && entry.Name() != "summary.json" {
+					result, err := loadAgentResult(filepath.Join(resultsDir, resolvedB, entry.Name()))
+					if err == nil {
+						currentResults[result.Agent] = result
+					}
+				}
+			}
+		}
+		
+		// Load baseline results
+		baselineResults := make(map[string]AgentResult)
+		entries, err = os.ReadDir(filepath.Join(resultsDir, resolvedA))
+		if err == nil {
+			for _, entry := range entries {
+				if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") && entry.Name() != "summary.json" {
+					result, err := loadAgentResult(filepath.Join(resultsDir, resolvedA, entry.Name()))
+					if err == nil {
+						baselineResults[result.Agent] = result
+					}
+				}
+			}
+		}
+		
+		improvements = CalculateImprovements(summaryB, currentResults, summaryA, baselineResults)
+	}
+	
+	if improvements == nil {
+		return
+	}
+	
+	fmt.Printf("\nImprovement Metrics:\n")
+	fmt.Println(strings.Repeat("─", 60))
+	
+	// Overall improvements
+	if improvements.AccuracyChange != 0 {
+		indicator := "→"
+		if improvements.AccuracyChange > 0 {
+			indicator = "↑"
+		} else if improvements.AccuracyChange < 0 {
+			indicator = "↓"
+		}
+		fmt.Printf("Overall Accuracy: %s %+.1f%%\n", indicator, improvements.AccuracyChange)
+	}
+	
+	if improvements.ErrorRateChange != 0 {
+		indicator := "→"
+		if improvements.ErrorRateChange > 0 {
+			indicator = "↑"
+		} else if improvements.ErrorRateChange < 0 {
+			indicator = "↓"
+		}
+		fmt.Printf("Errors Reduced: %s %+.0f\n", indicator, improvements.ErrorRateChange)
+	}
+	
+	// Per-agent improvements
+	if len(improvements.AgentImprovements) > 0 {
+		fmt.Printf("\nPer-Agent Improvements:\n")
+		for agent, agentImprovement := range improvements.AgentImprovements {
+			if agentImprovement.AccuracyGained != 0 || agentImprovement.ErrorsReduced != 0 {
+				fmt.Printf("\n%s:\n", agent)
+				if agentImprovement.AccuracyGained != 0 {
+					indicator := "→"
+					if agentImprovement.AccuracyGained > 0 {
+						indicator = "↑"
+					} else if agentImprovement.AccuracyGained < 0 {
+						indicator = "↓"
+					}
+					fmt.Printf("  Accuracy: %s %+.1f%%\n", indicator, agentImprovement.AccuracyGained)
+				}
+				if agentImprovement.ErrorsReduced != 0 {
+					indicator := "→"
+					if agentImprovement.ErrorsReduced > 0 {
+						indicator = "↑"
+					} else if agentImprovement.ErrorsReduced < 0 {
+						indicator = "↓"
+					}
+					fmt.Printf("  Errors Reduced: %s %+d\n", indicator, agentImprovement.ErrorsReduced)
+				}
+			}
+		}
+	}
 }

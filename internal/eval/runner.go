@@ -65,6 +65,25 @@ func Run(agent string) error {
 	}
 
 	summary := buildSummary(allResults, gitHash)
+
+	// Auto-detect baseline and calculate improvements
+	baselineCommit := detectBaselineCommit()
+	if baselineCommit != "" {
+		summary.BaselineCommit = baselineCommit
+		
+		baselineRun, err := FindBaselineRun(baselineCommit)
+		if err == nil {
+			baselineSummary, baselineResults, err := LoadBaselineResults(baselineRun)
+			if err == nil {
+				currentResults := make(map[string]AgentResult)
+				for _, result := range allResults {
+					currentResults[result.Agent] = result
+				}
+				summary.ImprovementData = CalculateImprovements(&summary, currentResults, baselineSummary, baselineResults)
+			}
+		}
+	}
+
 	data, err := json.MarshalIndent(summary, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal summary: %w", err)
@@ -437,4 +456,30 @@ func getGitShortHash() (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+// detectBaselineCommit automatically finds the most recent previous run to use as baseline.
+func detectBaselineCommit() string {
+	resultsDir := filepath.Join(".kiro-krew", "evals", "results")
+	entries, err := os.ReadDir(resultsDir)
+	if err != nil {
+		return ""
+	}
+
+	var mostRecentDir string
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		// Find most recent directory (lexicographically latest with timestamp prefix)
+		if mostRecentDir == "" || entry.Name() > mostRecentDir {
+			mostRecentDir = entry.Name()
+		}
+	}
+
+	if mostRecentDir != "" {
+		return parseDirectoryName(mostRecentDir)
+	}
+	
+	return ""
 }
