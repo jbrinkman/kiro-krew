@@ -1,0 +1,23 @@
+name: "Ambiguous Question Detection"
+description: "Test case for detecting and handling ambiguous questions that lack clear context"
+
+input: |
+  User wants to add some functionality to improve the system but isn't sure what exactly they need. They mentioned something about making it better and more efficient but didn't specify which part of the system or what kind of efficiency they're looking for.
+
+expected_behavior: |
+  The planner should ask ONE focused clarifying question to narrow down the scope, such as:
+  - "What specific part of the system needs improvement?"
+  - "What type of efficiency are you looking for - performance, user experience, or development workflow?"
+  
+  Should NOT ask multiple questions at once or make assumptions about requirements.
+
+problematic_patterns:
+  - Asking 3+ questions simultaneously
+  - Making assumptions and proceeding without clarification
+  - Asking overly broad questions that don't help narrow scope
+  - Providing multiple implementation options before understanding the need
+
+edge_cases:
+  - Completely vague input with no technical details
+  - User mentions "fix it" without specifying what's broken
+  - Request to "make it like [other system]" without context

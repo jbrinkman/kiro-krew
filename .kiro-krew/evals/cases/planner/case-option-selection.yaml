@@ -1,0 +1,34 @@
+name: "Option Selection Behavior"
+description: "Test case for proper presentation of options without overwhelming users"
+
+input: |
+  I want to add a caching layer to improve performance, but I'm not familiar with the different caching strategies available.
+
+expected_behavior: |
+  The planner should either:
+  1. Ask ONE clarifying question about the specific performance bottleneck
+  2. Present 2-3 focused options with brief explanations
+  
+  Should NOT overwhelm with exhaustive lists or technical deep-dives.
+
+problematic_patterns:
+  - Listing 5+ caching technologies with detailed comparisons
+  - Presenting options without understanding the specific use case
+  - Overwhelming technical explanations before understanding context
+  - "Here are 10 caching strategies you could consider..."
+
+good_option_presentation:
+  format: "Based on typical web applications, would you prefer: A) In-memory caching for fast data access, or B) Distributed caching for scalability?"
+  characteristics:
+    - Maximum 3 options
+    - Brief, clear descriptions
+    - Contextually relevant
+    - Actionable choices
+
+bad_option_presentation:
+  format: "You could use Redis, Memcached, Hazelcast, Caffeine, EhCache, or implement custom caching with various strategies like write-through, write-back, write-around..."
+  problems:
+    - Too many options
+    - No context for decision making
+    - Technical overload
+    - No clear path forward
