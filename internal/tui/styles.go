@@ -25,6 +25,12 @@ type Styles struct {
 	OverlayContent    lipgloss.Style
 	OverlayBackground lipgloss.Style
 	ThemeLabel        lipgloss.Style
+
+	// Autocomplete styles
+	AutocompleteGhost    lipgloss.Style
+	AutocompleteDropdown lipgloss.Style
+	AutocompleteSelected lipgloss.Style
+	AutocompleteError    lipgloss.Style
 }
 
 func NewStyles(theme *config.Theme) *Styles {
@@ -65,5 +71,20 @@ func NewStyles(theme *config.Theme) *Styles {
 		ThemeLabel: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(theme.Colors.TextMuted)).
 			Italic(true),
+
+		// Autocomplete styles
+		AutocompleteGhost: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(theme.Colors.TextMuted)),
+		AutocompleteDropdown: lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color(theme.Colors.Primary)).
+			Background(lipgloss.Color(theme.Colors.Surface)).
+			Padding(0, 1),
+		AutocompleteSelected: lipgloss.NewStyle().
+			Background(lipgloss.Color(theme.Colors.Primary)).
+			Foreground(lipgloss.Color(theme.Colors.Surface)),
+		AutocompleteError: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(theme.Colors.Error)).
+			Bold(true),
 	}
 }
