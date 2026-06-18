@@ -1,0 +1,44 @@
+{
+  "agent": "architect",
+  "git_hash": "0dfe212",
+  "cases": [
+    {
+      "case_name": "simple-feature-issue",
+      "scores": [
+        {
+          "name": "task_decomposition",
+          "score": 4,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The spec breaks the work into 2 discrete, independently implementable tasks. Task 1 handles the core logic (implementing the handleStatus function with formatting and empty-state handling), and Task 2 handles the wiring (registering the command in the TUI switch). Each task has clear acceptance criteria and targets specific files. The tasks are ordered logically and could be implemented independently. Minor gaps: the decomposition is somewhat minimal for a simple feature (which is appropriate), but Task 1 bundles both the table formatting and the empty-state handling into one task rather than separating concerns. Also, there's no explicit task for testing, though validation commands are listed separately."
+        },
+        {
+          "name": "acceptance_criteria_testability",
+          "score": 4,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "Each task has acceptance criteria that are reasonably verifiable. Task 1's criteria (function calls manager.List(), formats as table with specific columns, returns specific message when empty) can be verified through unit tests and assertions. Task 2's criteria (command recognized in switch, dispatches to handleStatus) are verifiable through code inspection and testing. The spec also includes explicit validation commands (go build and go test). The minor gap is that the acceptance criteria are more descriptive than purely assertion-based — they describe behavior rather than providing exact test commands or assertions per task (e.g., no specific go test -run TestHandleStatus or expected output format to assert against). Still, they are concrete enough to write tests against."
+        },
+        {
+          "name": "file_reference_accuracy",
+          "score": 5,
+          "max_score": 5,
+          "deterministic": true,
+          "reasoning": "3/3 referenced files verified on disk"
+        },
+        {
+          "name": "completeness",
+          "score": 5,
+          "max_score": 5,
+          "deterministic": true,
+          "reasoning": "found 2/2 expected structural elements"
+        }
+      ],
+      "cost": {
+        "tokens_in": 65,
+        "tokens_out": 249,
+        "estimated_usd": 0.00393
+      }
+    }
+  ]
+}

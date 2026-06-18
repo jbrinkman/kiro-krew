@@ -1,5 +1,11 @@
 name: plan-feature-request
 description: "Evaluate planner output for structuring a feature request"
+context:
+  - "Current router: internal/api/router.go"
+  - "Existing user model: internal/models/user.go"
+  - "Config loading: internal/config/config.go"
+  - "Constraint: Use golang-jwt/jwt/v5 library"
+  - "Constraint: No database migration in this PR"
 input: |
   Add user authentication with JWT tokens to the API.
   Users should be able to login and access protected endpoints.

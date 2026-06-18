@@ -1,0 +1,44 @@
+{
+  "agent": "planner",
+  "git_hash": "0dfe212",
+  "cases": [
+    {
+      "case_name": "plan-feature-request",
+      "scores": [
+        {
+          "name": "requirement_clarity",
+          "score": 5,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The issue requirements are exceptionally clear, specific, and unambiguous. The acceptance criteria are concrete and testable (specific endpoint paths, HTTP status codes, configurable duration with a stated default, middleware behavior). Constraints are explicit and actionable (named library, bcrypt hashing, environment variable configuration, no DB migration). The context section references exact file paths. There is no ambiguity about what 'done' looks like — each criterion can be independently verified. The user story follows standard format and clearly communicates the 'who/what/why'."
+        },
+        {
+          "name": "scope_appropriateness",
+          "score": 4,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The issue is well-scoped for a single PR: it covers a login endpoint, auth middleware, and token validation — all tightly related components of a single feature. The constraint 'no database migration' keeps scope bounded. The acceptance criteria are specific and testable without being overwhelming. Minor concern: depending on the existing codebase, implementing bcrypt password hashing, a login endpoint, middleware, and error handling could stretch a single PR, but this is standard fare for an auth feature and the pieces are cohesive. It's not split into micro-PRs unnecessarily, nor is it trying to boil the ocean."
+        },
+        {
+          "name": "acceptance_criteria_quality",
+          "score": 3,
+          "max_score": 5,
+          "deterministic": true,
+          "reasoning": "found 2 testable criteria indicators (context: Current router: internal/api/router.go, Existing user model: internal/models/user.go, Config loading: internal/config/config.go, Constraint: Use golang-jwt/jwt/v5 library, Constraint: No database migration in this PR)"
+        },
+        {
+          "name": "constraint_identification",
+          "score": 5,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The output fully identifies and incorporates the technical constraints and dependencies. Both explicit constraints from the input are captured: 'Use golang-jwt/jwt/v5 library' and 'No database migration in this PR' (rephrased as 'Do not introduce a database migration in this PR — use existing user store'). Additionally, the output identifies further technical constraints such as bcrypt hashing for credentials and configurable token secret via environment variable. The Context section also correctly references the existing technical dependencies (router, user model, config loading paths). All constraints are clearly separated in a dedicated 'Constraints' section, making them easy to identify and track."
+        }
+      ],
+      "cost": {
+        "tokens_in": 28,
+        "tokens_out": 318,
+        "estimated_usd": 0.004854
+      }
+    }
+  ]
+}

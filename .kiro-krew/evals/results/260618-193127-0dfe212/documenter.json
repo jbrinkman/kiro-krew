@@ -1,0 +1,44 @@
+{
+  "agent": "documenter",
+  "git_hash": "0dfe212",
+  "cases": [
+    {
+      "case_name": "document-new-feature",
+      "scores": [
+        {
+          "name": "documentation_completeness",
+          "score": 2,
+          "max_score": 5,
+          "deterministic": true,
+          "reasoning": "found 1/2 expected structural elements"
+        },
+        {
+          "name": "accuracy",
+          "score": 4,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The documentation largely reflects what was actually built. It correctly references the two implementation files (internal/tui/commands.go and internal/tui/tui.go), mentions the empty state handling ('No agents running'), and describes the table output with issue number and elapsed time. However, there are minor discrepancies: the plan and acceptance criteria mention 'agent name' as a column, but the documentation shows 'Title' and 'Status' columns instead of 'Agent Name'. The function name is documented as handleStatus() while the plan/implementation files reference StatusCmd. Additionally, the documentation adds a 'title' column that isn't mentioned in the acceptance criteria or plan, which could be accurate (reflecting what was actually built beyond the plan) or could be fabricated. These small inconsistencies between the documented behavior and the stated implementation prevent a perfect score."
+        },
+        {
+          "name": "file_naming_convention",
+          "score": 5,
+          "max_score": 5,
+          "deterministic": true,
+          "reasoning": "output references correct app_docs/feature-* path"
+        },
+        {
+          "name": "practical_usage_guidance",
+          "score": 5,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The Usage section includes concrete examples with actual commands typed at the TUI prompt (kiro-krew\u003e status), realistic sample output showing the table format with columns and data, and a second example demonstrating the empty state. These are practical, copy-paste-ready examples that clearly show users how to invoke the command and what to expect."
+        }
+      ],
+      "cost": {
+        "tokens_in": 140,
+        "tokens_out": 320,
+        "estimated_usd": 0.00522
+      }
+    }
+  ]
+}

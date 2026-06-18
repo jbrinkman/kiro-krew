@@ -1,0 +1,44 @@
+{
+  "agent": "builder",
+  "git_hash": "0dfe212",
+  "cases": [
+    {
+      "case_name": "implement-from-spec",
+      "scores": [
+        {
+          "name": "code_correctness",
+          "score": 5,
+          "max_score": 5,
+          "deterministic": true,
+          "reasoning": "code appears to compile/run successfully"
+        },
+        {
+          "name": "spec_adherence",
+          "score": 4,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The implementation closely follows the specification. It adds a status command to the TUI, modifies the two specified files (commands.go and tui.go), and displays agent information in a table format. However, the spec called for columns 'Issue | Agent | Elapsed' whereas the implementation uses 'Issue | Title | Status | Elapsed' — the 'Agent' column (which agent type is working) is missing and replaced with 'Title' and 'Status' columns. This is a minor deviation from the exact table format specified, though the result is arguably more useful. The build and tests pass, confirming functional correctness."
+        },
+        {
+          "name": "code_quality",
+          "score": 4,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The code is well-structured, readable, and follows Go conventions. It uses proper formatting with fmt.Sprintf and aligned columns, handles the empty case gracefully, and uses idiomatic Go patterns (method on model, returning model and tea.Cmd consistent with Bubble Tea architecture). The truncate helper and time formatting are appropriate. Minor gaps: the spec called for a table with 'Issue | Agent | Elapsed' (3 columns) but the implementation has 4 columns (Issue, Title, Status, Elapsed) — this is arguably an improvement but deviates from spec. The appendActivity call with variadic args (header, sep) isn't shown to be supported by the existing API. Overall the code quality itself is strong with good formatting, clear variable names, and appropriate use of standard library functions."
+        },
+        {
+          "name": "test_coverage",
+          "score": 2,
+          "max_score": 5,
+          "deterministic": true,
+          "reasoning": "found 1 test coverage indicators"
+        }
+      ],
+      "cost": {
+        "tokens_in": 63,
+        "tokens_out": 248,
+        "estimated_usd": 0.003909
+      }
+    }
+  ]
+}

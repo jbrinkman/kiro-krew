@@ -17,11 +17,12 @@ type Criterion struct {
 
 // TestCase defines input and expected characteristics for an agent evaluation.
 type TestCase struct {
-	Name        string `yaml:"name" json:"name"`
-	Description string `yaml:"description" json:"description"`
-	Input       string `yaml:"input" json:"input"`
-	Output      string `yaml:"output,omitempty" json:"output,omitempty"` // pre-captured output
-	Agent       string `yaml:"agent" json:"agent"`
+	Name        string   `yaml:"name" json:"name"`
+	Description string   `yaml:"description" json:"description"`
+	Input       string   `yaml:"input" json:"input"`
+	Output      string   `yaml:"output,omitempty" json:"output,omitempty"` // pre-captured output
+	Agent       string   `yaml:"agent" json:"agent"`
+	Context     []string `yaml:"context,omitempty" json:"context,omitempty"`
 }
 
 // CostInfo tracks token usage and estimated cost.

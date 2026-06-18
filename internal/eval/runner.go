@@ -132,6 +132,12 @@ func scoreDeterministic(criterion Criterion, tc TestCase) (int, string, bool) {
 
 	maxScore := parseMaxScore(criterion.Scoring)
 
+	// Build context suffix for reasoning when available
+	contextSuffix := ""
+	if len(tc.Context) > 0 {
+		contextSuffix = fmt.Sprintf(" (context: %s)", strings.Join(tc.Context, ", "))
+	}
+
 	// Heuristic deterministic checks based on criterion name patterns
 	switch {
 	case strings.Contains(criterion.Name, "completeness"):
@@ -144,7 +150,7 @@ func scoreDeterministic(criterion Criterion, tc TestCase) (int, string, bool) {
 			}
 		}
 		score := (found * maxScore) / len(sections)
-		return score, fmt.Sprintf("found %d/%d expected structural elements", found, len(sections)), false
+		return score, fmt.Sprintf("found %d/%d expected structural elements%s", found, len(sections), contextSuffix), false
 
 	case strings.Contains(criterion.Name, "file_reference"):
 		// Extract candidate file paths and verify they exist
@@ -159,7 +165,7 @@ func scoreDeterministic(criterion Criterion, tc TestCase) (int, string, bool) {
 			}
 		}
 		if len(candidates) == 0 {
-			return 1, "no file references found", false
+			return 1, fmt.Sprintf("no file references found%s", contextSuffix), false
 		}
 		verified := 0
 		for _, path := range candidates {
@@ -171,14 +177,14 @@ func scoreDeterministic(criterion Criterion, tc TestCase) (int, string, bool) {
 		if score < 1 {
 			score = 1
 		}
-		return score, fmt.Sprintf("%d/%d referenced files verified on disk", verified, len(candidates)), false
+		return score, fmt.Sprintf("%d/%d referenced files verified on disk%s", verified, len(candidates), contextSuffix), false
 
 	case strings.Contains(criterion.Name, "file_naming"):
 		// Check documenter output references correct path format
 		if strings.Contains(tc.Output, "app_docs/feature-") {
-			return maxScore, "output references correct app_docs/feature-* path", false
+			return maxScore, fmt.Sprintf("output references correct app_docs/feature-* path%s", contextSuffix), false
 		}
-		return 1, "no app_docs/feature-* path found in output", false
+		return 1, fmt.Sprintf("no app_docs/feature-* path found in output%s", contextSuffix), false
 
 	case strings.Contains(criterion.Name, "acceptance_criteria_quality"):
 		// Check for testable acceptance criteria patterns
@@ -190,9 +196,9 @@ func scoreDeterministic(criterion Criterion, tc TestCase) (int, string, bool) {
 			}
 		}
 		if found >= 3 {
-			return maxScore, fmt.Sprintf("found %d testable criteria indicators", found), false
+			return maxScore, fmt.Sprintf("found %d testable criteria indicators%s", found, contextSuffix), false
 		}
-		return max(1, (found*maxScore)/3), fmt.Sprintf("found %d testable criteria indicators", found), false
+		return max(1, (found*maxScore)/3), fmt.Sprintf("found %d testable criteria indicators%s", found, contextSuffix), false
 
 	case strings.Contains(criterion.Name, "test_execution"):
 		// Check for evidence of actual command execution and results
@@ -204,9 +210,9 @@ func scoreDeterministic(criterion Criterion, tc TestCase) (int, string, bool) {
 			}
 		}
 		if found >= 2 {
-			return maxScore, fmt.Sprintf("found %d execution evidence indicators", found), false
+			return maxScore, fmt.Sprintf("found %d execution evidence indicators%s", found, contextSuffix), false
 		}
-		return max(1, (found*maxScore)/2), fmt.Sprintf("found %d execution evidence indicators", found), false
+		return max(1, (found*maxScore)/2), fmt.Sprintf("found %d execution evidence indicators%s", found, contextSuffix), false
 
 	case strings.Contains(criterion.Name, "code_correctness"):
 		// Check for code compilation/execution success indicators
@@ -226,12 +232,12 @@ func scoreDeterministic(criterion Criterion, tc TestCase) (int, string, bool) {
 			}
 		}
 		if successCount > 0 && errorCount == 0 {
-			return maxScore, "code appears to compile/run successfully", false
+			return maxScore, fmt.Sprintf("code appears to compile/run successfully%s", contextSuffix), false
 		}
 		if errorCount > 0 {
-			return 1, "compilation or runtime errors detected", false
+			return 1, fmt.Sprintf("compilation or runtime errors detected%s", contextSuffix), false
 		}
-		return maxScore / 2, "no clear success or error indicators", false
+		return maxScore / 2, fmt.Sprintf("no clear success or error indicators%s", contextSuffix), false
 
 	case strings.Contains(criterion.Name, "test_coverage"):
 		// Check for test file references and test execution
@@ -243,13 +249,13 @@ func scoreDeterministic(criterion Criterion, tc TestCase) (int, string, bool) {
 			}
 		}
 		if found >= 2 {
-			return maxScore, fmt.Sprintf("found %d test coverage indicators", found), false
+			return maxScore, fmt.Sprintf("found %d test coverage indicators%s", found, contextSuffix), false
 		}
-		return max(1, (found*maxScore)/2), fmt.Sprintf("found %d test coverage indicators", found), false
+		return max(1, (found*maxScore)/2), fmt.Sprintf("found %d test coverage indicators%s", found, contextSuffix), false
 
 	default:
 		// Unknown deterministic criterion — skip rather than award false credit
-		return 0, fmt.Sprintf("no deterministic checker implemented for %q", criterion.Name), true
+		return 0, fmt.Sprintf("no deterministic checker implemented for %q%s", criterion.Name, contextSuffix), true
 	}
 }
 
@@ -263,6 +269,12 @@ func runKiroCLI(prompt string) ([]byte, error) {
 }
 
 func scoreLLMJudge(criterion Criterion, tc TestCase) (int, string, bool) {
+	// Build input/context section
+	inputContext := tc.Input
+	if len(tc.Context) > 0 {
+		inputContext += "\n\nCONTEXT:\n" + strings.Join(tc.Context, "\n")
+	}
+
 	prompt := fmt.Sprintf(`Evaluate this output against the criterion.
 Wrap your JSON response between ===JSON_START=== and ===JSON_END=== delimiters.
 
@@ -282,7 +294,7 @@ INPUT/CONTEXT:
 %s
 
 OUTPUT TO EVALUATE:
-%s`, criterion.Name, criterion.Description, tc.Input, tc.Output)
+%s`, criterion.Name, criterion.Description, inputContext, tc.Output)
 
 	output, err := runKiroCLI(prompt)
 	if err != nil {

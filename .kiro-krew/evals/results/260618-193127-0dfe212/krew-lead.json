@@ -1,0 +1,44 @@
+{
+  "agent": "krew-lead",
+  "git_hash": "0dfe212",
+  "cases": [
+    {
+      "case_name": "orchestrate-issue-resolution",
+      "scores": [
+        {
+          "name": "workflow_adherence",
+          "score": 5,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The output demonstrates all workflow steps executed in the correct order as specified by the criterion: (1) read issue via gh issue view, (2) create worktree via the worktree-create script, (3) architect delegation producing a spec, (4) builder delegation implementing the changes, (5) validator delegation verifying acceptance criteria, (6) push branch with git commit and push, (7) create PR via gh pr create with Closes #42, and (8) label the issue as done with kiro-krew-done. Every step is present, in the correct sequence, and completed successfully."
+        },
+        {
+          "name": "delegation_quality",
+          "score": 4,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The output shows that sub-agents (architect, builder, validator) each received WORKTREE_PATH (.worktrees/issue-42-12345) and relevant issue details. The architect got issue details including title, body, and acceptance criteria plus the worktree path. The builder received the spec file path and worktree path. The validator received acceptance criteria and worktree path. However, the context passed is described at a summary level rather than showing the full detail of what was actually provided (e.g., the exact issue body text, full acceptance criteria content). The delegation is clearly structured and includes the key elements (WORKTREE_PATH and issue details), but there's minor ambiguity about the completeness of context passed — for instance, whether the builder also received the full issue context or just the spec path, and whether labels or other metadata were included."
+        },
+        {
+          "name": "retry_policy_compliance",
+          "score": 2,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The output shows only a single attempt tag [attempt:1] and the workflow succeeds on the first try without any failures or retries. There is no demonstration of a four-stage retry process, no escalation between stages, and no evidence of proper retry policy compliance. While the [attempt:1] tag exists, the criterion requires a four-stage retry process with proper attempt tags and escalation - meaning multiple stages of retry with increasing intervention should be shown or at least structured into the workflow. The output is a straightforward linear success path with no retry logic, escalation paths, or multiple attempt stages visible."
+        },
+        {
+          "name": "error_handling",
+          "score": 2,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The output shows a successful happy-path execution with the 'kiro-krew-done' label applied at the end, which demonstrates awareness of the labeling mechanism. However, there is no evidence of actual error handling or graceful failure management. The workflow proceeds linearly without any indication of what happens if a step fails — no try/catch logic, no retry attempts (despite the system supporting retries with exponential backoff), no 'kiro-krew-failed' labeling path shown, and no incident reporting mechanism. The criterion specifically asks about handling failures gracefully with appropriate labeling and incident reports. While the output doesn't explicitly fail, it also doesn't demonstrate any error handling capability — it only shows the success path. A robust implementation would show conditional logic, retry behavior, failure labeling, or at minimum acknowledge what happens on error."
+        }
+      ],
+      "cost": {
+        "tokens_in": 35,
+        "tokens_out": 365,
+        "estimated_usd": 0.00558
+      }
+    }
+  ]
+}

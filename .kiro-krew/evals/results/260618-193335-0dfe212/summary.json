@@ -1,0 +1,11 @@
+{
+  "git_hash": "0dfe212",
+  "total_cost": {
+    "tokens_in": 28,
+    "tokens_out": 318,
+    "estimated_usd": 0.004854
+  },
+  "agent_scores": {
+    "planner": 0.85
+  }
+}
