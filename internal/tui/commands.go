@@ -318,9 +318,20 @@ func (m model) getOverlayContentWidth() int {
 func (m model) handleAbout() (model, tea.Cmd) {
 	info := version.Info()
 
+	commitHash := info["commit_hash"]
+	displayHash := "unknown"
+	if commitHash != "unknown" && commitHash != "" {
+		if len(commitHash) >= 8 {
+			displayHash = commitHash[:8]
+		} else {
+			displayHash = commitHash
+		}
+	}
+
 	content := []string{
 		fmt.Sprintf("  Version:    %s", info["version"]),
 		fmt.Sprintf("  Build Date: %s", info["build_date"]),
+		fmt.Sprintf("  Commit:     %s", displayHash),
 		fmt.Sprintf("  Go Version: %s", info["go_version"]),
 		fmt.Sprintf("  Arch:       %s", info["arch"]),
 		"",
