@@ -217,12 +217,6 @@ func (a *AutocompleteInput) View() string {
 		inputView += a.styles.AutocompleteGhost.Render(ghost)
 	}
 	
-	// Add error styling if command is invalid and not empty
-	currentValue := a.textinput.Value()
-	if currentValue != "" && !a.IsValidCommand() {
-		inputView = a.styles.AutocompleteError.Render(inputView)
-	}
-	
 	return inputView
 }
 

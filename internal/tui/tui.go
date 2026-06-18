@@ -447,6 +447,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.input, cmd = m.input.Update(msg)
 				return m, cmd
 			}
+			return m, nil
 		case "enter":
 			// Only handle enter in main tab (console view)
 			activeTab := m.tabManager.GetActiveTab()
@@ -463,14 +464,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if input == "" {
 				return m, cmd
 			}
-			
-			// Check if command is valid before executing
-			if !m.commandRegistry.IsValidCommand(input) {
-				m = m.appendActivity(m.styles.Error.Render(fmt.Sprintf("Unknown command: %s", input)))
-				// TODO: Add system beep for audio feedback
-				return m, cmd
-			}
-			
+
 			return m.executeCommand(input)
 		default:
 			// Forward key messages to active tab
