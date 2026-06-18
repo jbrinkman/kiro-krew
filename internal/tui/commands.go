@@ -318,15 +318,7 @@ func (m model) getOverlayContentWidth() int {
 func (m model) handleAbout() (model, tea.Cmd) {
 	info := version.Info()
 
-	commitHash := info["commit_hash"]
-	displayHash := "unknown"
-	if commitHash != "unknown" && commitHash != "" {
-		if len(commitHash) >= 8 {
-			displayHash = commitHash[:8]
-		} else {
-			displayHash = commitHash
-		}
-	}
+	displayHash := formatCommitHash(info["commit_hash"])
 
 	content := []string{
 		fmt.Sprintf("  Version:    %s", info["version"]),
@@ -340,6 +332,17 @@ func (m model) handleAbout() (model, tea.Cmd) {
 
 	m = m.activateOverlay(overlayAbout, "Kiro-Krew Version Information", content)
 	return m, checkForUpdateCmd()
+}
+
+// formatCommitHash returns a short display hash (7 chars) or "unknown".
+func formatCommitHash(hash string) string {
+	if hash == "unknown" || hash == "" {
+		return "unknown"
+	}
+	if len(hash) >= 7 {
+		return hash[:7]
+	}
+	return hash
 }
 
 func (m model) handleTheme(args []string) (model, tea.Cmd) {
