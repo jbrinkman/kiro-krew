@@ -104,12 +104,14 @@ func (a *AutocompleteInput) handleKeyMsg(msg tea.KeyMsg) (*AutocompleteInput, te
 	case "tab":
 		if a.state.ghostText != "" {
 			a.textinput.SetValue(a.state.ghostText)
+			a.textinput.CursorEnd()
 			a.updateAutocomplete()
 			return a, nil
 		}
 		if a.state.showDropdown && len(a.state.suggestions) > 0 {
 			selected := a.state.suggestions[a.state.selectedIndex]
 			a.textinput.SetValue(selected)
+			a.textinput.CursorEnd()
 			a.updateAutocomplete()
 			return a, nil
 		}
@@ -153,32 +155,8 @@ func (a *AutocompleteInput) updateAutocomplete() {
 		return
 	}
 
-	// Get command suggestions
-	commands := a.registry.FilterCommands(input)
-	suggestions := make([]string, 0, len(commands))
-
-	parts := strings.Fields(input)
-
-	if len(parts) == 1 {
-		// Single word - suggest commands
-		for _, cmd := range commands {
-			suggestions = append(suggestions, cmd.Name)
-		}
-
-		// Check for subcommands if input matches a command exactly
-		if cmd, exists := a.registry.GetCommand(parts[0]); exists && len(cmd.Subcommands) > 0 {
-			for _, sub := range cmd.Subcommands {
-				suggestions = append(suggestions, cmd.Name+" "+sub)
-			}
-		}
-	} else if len(parts) == 2 && !strings.HasSuffix(input, " ") {
-		// Two words without trailing space - suggest subcommands
-		subcommands := a.registry.GetSubcommands(input)
-		cmdName := parts[0]
-		for _, sub := range subcommands {
-			suggestions = append(suggestions, cmdName+" "+sub)
-		}
-	}
+	// Use flattened commands for atomic compound command matching
+	suggestions := a.registry.GetFlattenedMatches(input)
 
 	a.state.suggestions = suggestions
 	a.state.showDropdown = len(suggestions) > 0
@@ -208,16 +186,17 @@ func (a *AutocompleteInput) updateGhostText() {
 
 // View renders the autocomplete input with ghost text
 func (a *AutocompleteInput) View() string {
-	// Get the base input view
-	inputView := a.textinput.View()
+	// Get the base input view (preserves cursor rendering)
+	baseView := a.textinput.View()
 
-	// Add ghost text if available
+	// Add ghost text if available — append after the textinput view
+	// so cursor remains visible at the boundary between typed text and ghost
 	if a.state.ghostText != "" && len(a.state.ghostText) > len(a.textinput.Value()) {
 		ghost := a.state.ghostText[len(a.textinput.Value()):]
-		inputView += a.styles.AutocompleteGhost.Render(ghost)
+		baseView += a.styles.AutocompleteGhost.Render(ghost)
 	}
 
-	return inputView
+	return baseView
 }
 
 // ViewDropdown renders the dropdown menu

@@ -15,13 +15,15 @@ type Command struct {
 
 // CommandRegistry manages all available commands for autocomplete
 type CommandRegistry struct {
-	commands map[string]*Command
+	commands          map[string]*Command
+	flattenedCommands []string // Compound commands as single units
 }
 
 // NewCommandRegistry creates a new command registry with all REPL commands
 func NewCommandRegistry() *CommandRegistry {
 	registry := &CommandRegistry{
-		commands: make(map[string]*Command),
+		commands:          make(map[string]*Command),
+		flattenedCommands: []string{},
 	}
 
 	// Register all commands
@@ -77,12 +79,30 @@ func NewCommandRegistry() *CommandRegistry {
 		Description: "View incident logs",
 	})
 
+	// Build flattened command list
+	registry.buildFlattenedCommands()
+
 	return registry
 }
 
 // register adds a command to the registry
 func (r *CommandRegistry) register(cmd *Command) {
 	r.commands[cmd.Name] = cmd
+}
+
+// buildFlattenedCommands creates a list of all commands including compound ones
+func (r *CommandRegistry) buildFlattenedCommands() {
+	r.flattenedCommands = []string{}
+
+	for _, cmd := range r.commands {
+		// Add base command
+		r.flattenedCommands = append(r.flattenedCommands, cmd.Name)
+
+		// Add compound commands (command + subcommand)
+		for _, sub := range cmd.Subcommands {
+			r.flattenedCommands = append(r.flattenedCommands, cmd.Name+" "+sub)
+		}
+	}
 }
 
 // GetCommand returns a command by name
@@ -116,6 +136,24 @@ func (r *CommandRegistry) FilterCommands(input string) []*Command {
 
 	for _, cmd := range r.commands {
 		if strings.HasPrefix(strings.ToLower(cmd.Name), prefix) {
+			matches = append(matches, cmd)
+		}
+	}
+
+	return matches
+}
+
+// GetFlattenedMatches returns flattened command strings that match the input prefix
+func (r *CommandRegistry) GetFlattenedMatches(input string) []string {
+	if input == "" {
+		return r.flattenedCommands
+	}
+
+	inputLower := strings.ToLower(input)
+	matches := []string{}
+
+	for _, cmd := range r.flattenedCommands {
+		if strings.HasPrefix(strings.ToLower(cmd), inputLower) {
 			matches = append(matches, cmd)
 		}
 	}
