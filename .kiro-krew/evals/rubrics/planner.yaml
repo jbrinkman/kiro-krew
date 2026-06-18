@@ -1,17 +1,23 @@
 agent: planner
 criteria:
   - name: requirement_clarity
-    description: "Issue requirements are clear, specific, and unambiguous"
+    description: "Issue requirements are clearly defined, specific, and leave no ambiguity about expected outcomes"
     scoring: 1-5
   - name: scope_appropriateness
-    description: "Issue scope is achievable in a single PR without being too broad"
+    description: "Issue scope is properly bounded - achievable in a single PR without being overly broad or narrow"
     scoring: 1-5
   - name: acceptance_criteria_quality
-    description: "Acceptance criteria are testable and complete"
+    description: "Acceptance criteria are comprehensive, testable, and provide clear completion indicators"
     scoring: 1-5
     deterministic: true
   - name: constraint_identification
-    description: "Technical constraints and dependencies are identified"
+    description: "Technical constraints, dependencies, and potential blockers are properly identified and documented"
+    scoring: 1-5
+  - name: question_clarity
+    description: "Questions posed are clear, focused, and avoid ambiguous phrasing that could lead to unclear responses"
+    scoring: 1-5
+  - name: single_question_adherence
+    description: "Responses contain only one question, avoiding multiple questions in single responses"
     scoring: 1-5
   - name: cost_efficiency
     description: "Token usage relative to output quality"

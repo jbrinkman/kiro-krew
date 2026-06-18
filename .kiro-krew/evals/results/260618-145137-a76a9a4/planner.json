@@ -1,0 +1,233 @@
+{
+  "agent": "planner",
+  "git_hash": "a76a9a4",
+  "cases": [
+    {
+      "case_name": "plan-feature-request",
+      "scores": [
+        {
+          "name": "requirement_clarity",
+          "score": 5,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The output transforms a vague two-sentence request into a highly structured issue with unambiguous requirements. The acceptance criteria are specific and testable (exact endpoints, HTTP status codes, configurable expiration with a default value, middleware behavior). Constraints narrow implementation choices (specific JWT library, bcrypt, env var configuration, no DB migration). Context points to exact files. There is no ambiguity about what 'done' looks like."
+        },
+        {
+          "name": "scope_appropriateness",
+          "score": 4,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The issue is well-scoped for a single PR. It focuses on a specific feature (JWT auth) with clear boundaries: login endpoint, middleware, and token validation. The constraints actively limit scope by excluding database migrations and specifying existing infrastructure to build on. The acceptance criteria are concrete and testable. However, 'add JWT authentication' is still moderately broad — it involves a new endpoint, middleware, error handling, configuration changes, and credential hashing logic, which could be a sizeable PR. Some teams might split this into smaller pieces (e.g., middleware separately from the login endpoint). That said, for most projects this represents a reasonable single-PR scope that a developer could complete in one focused effort."
+        },
+        {
+          "name": "acceptance_criteria_quality",
+          "score": 3,
+          "max_score": 5,
+          "deterministic": true,
+          "reasoning": "found 2 testable criteria indicators"
+        },
+        {
+          "name": "constraint_identification",
+          "score": 4,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The output identifies several meaningful technical constraints: specific library to use (golang-jwt/jwt/v5), password hashing approach (bcrypt), configuration method for token secret (environment variable), and a scope constraint about not introducing database migrations. It also provides useful context about existing code locations that inform implementation. However, it could be more thorough by identifying potential blockers (e.g., does the existing user store already have password fields?), dependencies on other packages, testing requirements or limitations, and considerations around token refresh/revocation strategy. The constraints section is solid but focused primarily on implementation choices rather than also covering potential blockers or risks."
+        },
+        {
+          "name": "question_clarity",
+          "score": 5,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The output does not pose questions to the user — it presents a completed issue. However, evaluating 'question_clarity' in the context of this planning skill output means assessing whether the issue itself is clear and focused enough to avoid ambiguous interpretation by implementers. The acceptance criteria are specific, measurable, and unambiguous (exact endpoints, status codes, behaviors). The constraints are precise (specific library, specific hashing algorithm, specific configuration method). The problem statement clearly articulates the gap, and the user story follows a standard format. There is no ambiguous phrasing that could lead to unclear implementation. Every requirement is focused and actionable."
+        },
+        {
+          "name": "single_question_adherence",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": true,
+          "skipped": true,
+          "reasoning": "no deterministic checker implemented for \"single_question_adherence\""
+        }
+      ],
+      "cost": {
+        "tokens_in": 28,
+        "tokens_out": 318,
+        "estimated_usd": 0.004854
+      }
+    },
+    {
+      "case_name": "Ambiguous Question Detection",
+      "scores": [
+        {
+          "name": "requirement_clarity",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "no output available for LLM judging"
+        },
+        {
+          "name": "scope_appropriateness",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "no output available for LLM judging"
+        },
+        {
+          "name": "acceptance_criteria_quality",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": true,
+          "skipped": true,
+          "reasoning": "no output to evaluate"
+        },
+        {
+          "name": "constraint_identification",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "no output available for LLM judging"
+        },
+        {
+          "name": "question_clarity",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "no output available for LLM judging"
+        },
+        {
+          "name": "single_question_adherence",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": true,
+          "skipped": true,
+          "reasoning": "no output to evaluate"
+        }
+      ],
+      "cost": {
+        "tokens_in": 0,
+        "tokens_out": 0,
+        "estimated_usd": 0
+      }
+    },
+    {
+      "case_name": "Multiple Question Violations",
+      "scores": [
+        {
+          "name": "requirement_clarity",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "no output available for LLM judging"
+        },
+        {
+          "name": "scope_appropriateness",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "no output available for LLM judging"
+        },
+        {
+          "name": "acceptance_criteria_quality",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": true,
+          "skipped": true,
+          "reasoning": "no output to evaluate"
+        },
+        {
+          "name": "constraint_identification",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "no output available for LLM judging"
+        },
+        {
+          "name": "question_clarity",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "no output available for LLM judging"
+        },
+        {
+          "name": "single_question_adherence",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": true,
+          "skipped": true,
+          "reasoning": "no output to evaluate"
+        }
+      ],
+      "cost": {
+        "tokens_in": 0,
+        "tokens_out": 0,
+        "estimated_usd": 0
+      }
+    },
+    {
+      "case_name": "Option Selection Behavior",
+      "scores": [
+        {
+          "name": "requirement_clarity",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "no output available for LLM judging"
+        },
+        {
+          "name": "scope_appropriateness",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "no output available for LLM judging"
+        },
+        {
+          "name": "acceptance_criteria_quality",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": true,
+          "skipped": true,
+          "reasoning": "no output to evaluate"
+        },
+        {
+          "name": "constraint_identification",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "no output available for LLM judging"
+        },
+        {
+          "name": "question_clarity",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "no output available for LLM judging"
+        },
+        {
+          "name": "single_question_adherence",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": true,
+          "skipped": true,
+          "reasoning": "no output to evaluate"
+        }
+      ],
+      "cost": {
+        "tokens_in": 0,
+        "tokens_out": 0,
+        "estimated_usd": 0
+      }
+    }
+  ]
+}

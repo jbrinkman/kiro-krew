@@ -133,6 +133,66 @@ All six shipped agents have rubrics and test cases:
 | `planner` | `rubrics/planner.yaml` | requirement_clarity, scope_appropriateness, acceptance_criteria_quality, constraint_identification |
 | `validator` | `rubrics/validator.yaml` | issue_coverage, test_execution, defect_detection, actionable_feedback |
 
+## Evaluation Workflow
+
+The evaluation framework serves as unit testing for prompt engineering. Follow this workflow when modifying agent prompts or configurations:
+
+### Before Making Changes (Baseline)
+
+**Required**: Run `kiro-krew eval` before making any prompt changes to establish a baseline:
+
+```bash
+# Capture current performance
+kiro-krew eval
+```
+
+This creates a results snapshot at `.kiro-krew/evals/results/<git-hash>/` for comparison.
+
+### After Making Changes (Verification)
+
+**Required**: Run `kiro-krew eval` after prompt changes to verify improvements:
+
+```bash
+# Test modified behavior
+kiro-krew eval
+
+# Compare with baseline
+kiro-krew eval diff <baseline-hash> <current-hash>
+```
+
+### Creating Test Cases for Behavioral Changes
+
+When making specific behavioral changes, create targeted test cases:
+
+1. **Identify the behavior** — What specific agent behavior are you changing?
+2. **Create test case** — Add a case in `.kiro-krew/evals/cases/<agent>/` that exercises this behavior
+3. **Verify coverage** — Ensure existing rubric criteria measure the desired change
+4. **Test iteratively** — Run evaluations as you refine the prompt
+
+Example workflow for improving architect task decomposition:
+```bash
+# 1. Baseline
+kiro-krew eval architect
+
+# 2. Add test case for complex decomposition scenario
+# Edit .kiro-krew/evals/cases/architect/complex-decomposition.yaml
+
+# 3. Modify architect prompt
+# Edit .kiro/agents/architect-prompt.md
+
+# 4. Verify improvement
+kiro-krew eval architect
+kiro-krew eval diff <baseline> <current>
+```
+
+### Evaluation as Unit Testing
+
+Treat evaluations like unit tests:
+- **Red-Green-Refactor**: Baseline (red) → Change (green) → Optimize (refactor)
+- **Regression prevention**: Catch unintended behavior changes
+- **Performance tracking**: Monitor cost and quality over time
+- **Documentation**: Results serve as behavioral specifications
+
 ## Comparing Runs
 
 The `eval diff` command shows:
