@@ -317,7 +317,7 @@ func (m model) getOverlayContentWidth() int {
 func (m model) handleAbout() (model, tea.Cmd) {
 	m.aboutDialog.BuildContent()
 	m.aboutDialog.UpdateStatusLine([]string{"Checking for updates..."})
-	
+
 	m = m.activateOverlay(overlayAbout, "Kiro-Krew Version Information", m.aboutDialog.GetFullContent())
 	return m, checkForUpdateCmd()
 }

@@ -21,7 +21,7 @@ func NewAboutDialog() *AboutDialog {
 func (d *AboutDialog) BuildContent() []string {
 	info := version.Info()
 	displayHash := formatCommitHash(info["commit_hash"])
-	
+
 	d.baseContent = []string{
 		fmt.Sprintf("  Version:    %s", info["version"]),
 		fmt.Sprintf("  Build Date: %s", info["build_date"]),
@@ -30,7 +30,7 @@ func (d *AboutDialog) BuildContent() []string {
 		fmt.Sprintf("  Arch:       %s", info["arch"]),
 		"",
 	}
-	
+
 	return d.baseContent
 }
 
@@ -57,4 +57,3 @@ func formatCommitHash(hash string) string {
 	}
 	return hash
 }
-

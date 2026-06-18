@@ -89,7 +89,7 @@ type model struct {
 	// Agent lifecycle tracking
 	knownAgents         map[string]bool
 	statusRunningAgents []*agent.Agent // Snapshot for deterministic number key selection
-	
+
 	// About dialog state
 	aboutDialog *AboutDialog
 }

@@ -51,7 +51,7 @@ func TestAboutDialog(t *testing.T) {
 	// Test UpdateStatusLine and GetFullContent
 	statusLines := []string{"Status: OK", "Last check: now"}
 	dialog.UpdateStatusLine(statusLines)
-	
+
 	fullContent := dialog.GetFullContent()
 	if len(fullContent) <= len(content) {
 		t.Error("GetFullContent() should include status lines")
