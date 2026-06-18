@@ -1,0 +1,44 @@
+{
+  "agent": "documenter",
+  "git_hash": "670505a",
+  "cases": [
+    {
+      "case_name": "document-new-feature",
+      "scores": [
+        {
+          "name": "documentation_completeness",
+          "score": 2,
+          "max_score": 5,
+          "deterministic": true,
+          "reasoning": "found 1/2 expected structural elements"
+        },
+        {
+          "name": "accuracy",
+          "score": 4,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The documentation largely reflects what was actually built. It correctly references the implementation files (internal/tui/commands.go and internal/tui/tui.go), describes the empty state handling, and shows the core columns. However, there are minor discrepancies: the plan and acceptance criteria mention 'agent name' as a column, but the documentation shows 'Title' and 'Status' columns instead. The function name in the docs is 'handleStatus()' while the plan/implementation references mention 'StatusCmd'. The documentation also adds a 'title' column that wasn't explicitly in the acceptance criteria. These are minor gaps — the documentation mostly reflects the implementation but introduces some details (like exact column names and function names) that may not perfectly match what was built, and omits the 'agent name' column that was specified."
+        },
+        {
+          "name": "file_naming_convention",
+          "score": 5,
+          "max_score": 5,
+          "deterministic": true,
+          "reasoning": "output references correct app_docs/feature-* path"
+        },
+        {
+          "name": "practical_usage_guidance",
+          "score": 5,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The Usage section includes concrete examples with actual commands typed at the TUI prompt (kiro-krew\u003e status), shows realistic sample output with formatted table data (issue numbers, titles, statuses, elapsed times), and demonstrates both the normal case and the empty state. These are practical, copy-pasteable examples that clearly show users how to invoke the command and what to expect."
+        }
+      ],
+      "cost": {
+        "tokens_in": 140,
+        "tokens_out": 320,
+        "estimated_usd": 0.00522
+      }
+    }
+  ]
+}

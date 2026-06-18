@@ -1,0 +1,44 @@
+{
+  "agent": "documenter",
+  "git_hash": "670505a",
+  "cases": [
+    {
+      "case_name": "document-new-feature",
+      "scores": [
+        {
+          "name": "documentation_completeness",
+          "score": 2,
+          "max_score": 5,
+          "deterministic": true,
+          "reasoning": "found 1/2 expected structural elements"
+        },
+        {
+          "name": "accuracy",
+          "score": 4,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The documentation largely reflects what was actually built. It correctly references the implementation files (internal/tui/commands.go and internal/tui/tui.go), describes the empty state handling, and shows the core columns. However, there's a minor discrepancy: the plan and acceptance criteria specify 'agent name' as a column, but the documentation shows 'Title' and 'Status' columns instead of 'agent name'. The documentation also mentions a 'title' column and references handleStatus() rather than StatusCmd (which is what the implementation files section names). These small inconsistencies between what was described as built and what the documentation claims suggest minor inaccuracies, though the overall documentation is grounded in the actual implementation rather than being purely aspirational."
+        },
+        {
+          "name": "file_naming_convention",
+          "score": 5,
+          "max_score": 5,
+          "deterministic": true,
+          "reasoning": "output references correct app_docs/feature-* path"
+        },
+        {
+          "name": "practical_usage_guidance",
+          "score": 5,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The Usage section includes concrete examples with actual commands typed at the TUI prompt (kiro-krew\u003e status), shows realistic sample output with formatted table data (issue numbers, titles, statuses, elapsed times), and demonstrates both the normal case and the empty state. These are practical, copy-pasteable examples that clearly show users what to expect when running the command."
+        }
+      ],
+      "cost": {
+        "tokens_in": 140,
+        "tokens_out": 320,
+        "estimated_usd": 0.00522
+      }
+    }
+  ]
+}

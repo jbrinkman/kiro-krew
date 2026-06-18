@@ -19,6 +19,11 @@ var ansiRegex = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
 
 // Run executes the evaluation for all agents (or a specific agent) and writes results.
 func Run(agent string) error {
+	// Migrate existing directories on first execution
+	if err := migrateExistingDirectories(); err != nil {
+		fmt.Printf("Warning: migration failed: %v\n", err)
+	}
+
 	gitHash, err := getGitShortHash()
 	if err != nil {
 		return fmt.Errorf("failed to get git hash: %w", err)
@@ -33,7 +38,8 @@ func Run(agent string) error {
 		return fmt.Errorf("no rubrics found in .kiro-krew/evals/rubrics/")
 	}
 
-	resultsDir := filepath.Join(".kiro-krew", "evals", "results", gitHash)
+	timestamp := generateTimestampPrefix()
+	resultsDir := filepath.Join(".kiro-krew", "evals", "results", timestamp+"-"+gitHash)
 	if err := os.MkdirAll(resultsDir, 0755); err != nil {
 		return fmt.Errorf("failed to create results directory: %w", err)
 	}
