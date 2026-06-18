@@ -15,14 +15,14 @@ type Command struct {
 
 // CommandRegistry manages all available commands for autocomplete
 type CommandRegistry struct {
-	commands        map[string]*Command
+	commands          map[string]*Command
 	flattenedCommands []string // Compound commands as single units
 }
 
 // NewCommandRegistry creates a new command registry with all REPL commands
 func NewCommandRegistry() *CommandRegistry {
 	registry := &CommandRegistry{
-		commands: make(map[string]*Command),
+		commands:          make(map[string]*Command),
 		flattenedCommands: []string{},
 	}
 
@@ -93,11 +93,11 @@ func (r *CommandRegistry) register(cmd *Command) {
 // buildFlattenedCommands creates a list of all commands including compound ones
 func (r *CommandRegistry) buildFlattenedCommands() {
 	r.flattenedCommands = []string{}
-	
+
 	for _, cmd := range r.commands {
 		// Add base command
 		r.flattenedCommands = append(r.flattenedCommands, cmd.Name)
-		
+
 		// Add compound commands (command + subcommand)
 		for _, sub := range cmd.Subcommands {
 			r.flattenedCommands = append(r.flattenedCommands, cmd.Name+" "+sub)
@@ -151,13 +151,13 @@ func (r *CommandRegistry) GetFlattenedMatches(input string) []string {
 
 	inputLower := strings.ToLower(input)
 	matches := []string{}
-	
+
 	for _, cmd := range r.flattenedCommands {
 		if strings.HasPrefix(strings.ToLower(cmd), inputLower) {
 			matches = append(matches, cmd)
 		}
 	}
-	
+
 	return matches
 }
 

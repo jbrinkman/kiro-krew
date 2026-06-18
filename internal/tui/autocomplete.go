@@ -157,7 +157,7 @@ func (a *AutocompleteInput) updateAutocomplete() {
 
 	// Use flattened commands for atomic compound command matching
 	suggestions := a.registry.GetFlattenedMatches(input)
-	
+
 	a.state.suggestions = suggestions
 	a.state.showDropdown = len(suggestions) > 0
 	a.state.selectedIndex = 0
@@ -186,21 +186,14 @@ func (a *AutocompleteInput) updateGhostText() {
 
 // View renders the autocomplete input with ghost text
 func (a *AutocompleteInput) View() string {
-	// Get the base input view
+	// Get the base input view (preserves cursor rendering)
 	baseView := a.textinput.View()
 
-	// Add ghost text if available
+	// Add ghost text if available — append after the textinput view
+	// so cursor remains visible at the boundary between typed text and ghost
 	if a.state.ghostText != "" && len(a.state.ghostText) > len(a.textinput.Value()) {
 		ghost := a.state.ghostText[len(a.textinput.Value()):]
-		ghostText := a.styles.AutocompleteGhost.Render(ghost)
-		
-		// Insert ghost text right after the cursor, without extra spaces
-		// The textinput view includes prompt + input + cursor, we need to place ghost text after input but before cursor
-		prompt := a.textinput.Prompt
-		inputValue := a.textinput.Value()
-		
-		// Render as: prompt + inputValue + ghostText + cursor
-		return prompt + inputValue + ghostText
+		baseView += a.styles.AutocompleteGhost.Render(ghost)
 	}
 
 	return baseView
