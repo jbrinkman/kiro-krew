@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"charm.land/bubbles/v2/textinput"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -61,7 +60,8 @@ type model struct {
 	sessionManager        *session.SessionManager
 	config                *config.Config
 	styles                *Styles
-	input                 textinput.Model
+	input                 *AutocompleteInput
+	commandRegistry       *CommandRegistry
 	consoleViewport       viewport.Model
 	activityLines         []string
 	maxActivityLines      int
@@ -92,12 +92,12 @@ type model struct {
 }
 
 func newModel(w *watcher.Watcher, m *agent.Manager, cfg *config.Config, logFile *os.File, logReader *os.File) model {
-	ti := textinput.New()
-	ti.Prompt = "kiro-krew> "
-	ti.Focus()
-
 	theme := cfg.LoadedTheme
 	styles := NewStyles(theme)
+
+	// Create command registry and autocomplete input
+	commandRegistry := NewCommandRegistry()
+	autocompleteInput := NewAutocompleteInput(commandRegistry, styles)
 
 	consoleViewport := viewport.New(viewport.WithWidth(80), viewport.WithHeight(24))
 	// Disable built-in key bindings — we handle scrolling explicitly
@@ -109,13 +109,14 @@ func newModel(w *watcher.Watcher, m *agent.Manager, cfg *config.Config, logFile 
 	tabManager.AddTab(mainTab)
 
 	return model{
-		watcher:          w,
-		manager:          m,
-		sessionManager:   session.NewSessionManager(),
-		config:           cfg,
-		styles:           styles,
-		input:            ti,
-		consoleViewport:  consoleViewport,
+		watcher:         w,
+		manager:         m,
+		sessionManager:  session.NewSessionManager(),
+		config:          cfg,
+		styles:          styles,
+		input:           autocompleteInput,
+		commandRegistry: commandRegistry,
+		consoleViewport: consoleViewport,
 		logFile:          logFile,
 		logReader:        logReader,
 		maxActivityLines: cfg.MaxActivityLines,
@@ -131,7 +132,7 @@ func newModel(w *watcher.Watcher, m *agent.Manager, cfg *config.Config, logFile 
 }
 
 func (m model) Init() tea.Cmd {
-	return tea.Batch(textinput.Blink, m.tickCmd())
+	return tea.Batch(m.input.Focus(), m.tickCmd())
 }
 
 func (m model) tickCmd() tea.Cmd {
@@ -199,7 +200,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m = m.restoreConsoleState()
 		m.input.Focus()
-		return m, tea.Batch(textinput.Blink, tea.ClearScreen)
+		return m, tea.Batch(m.input.Focus(), tea.ClearScreen)
 
 	case updateCheckMsg:
 		updateLines := []string{}
@@ -409,6 +410,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Handle console scroll events when in main tab
 			activeTab := m.tabManager.GetActiveTab()
 			if activeTab != nil && activeTab.Type() == TabTypeMain {
+				// Check if autocomplete dropdown is visible for up/down navigation
+				if (msg.String() == "up" || msg.String() == "down") && m.input.IsDropdownVisible() {
+					var cmd tea.Cmd
+					m.input, cmd = m.input.Update(msg)
+					return m, cmd
+				}
+				
+				// Handle console scrolling
 				switch msg.String() {
 				case "up":
 					m.consoleViewport.ScrollUp(1)
@@ -430,17 +439,38 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, cmd
 			}
 			return m, nil
+		case "tab":
+			// Handle tab completion in main tab
+			activeTab := m.tabManager.GetActiveTab()
+			if activeTab != nil && activeTab.Type() == TabTypeMain {
+				var cmd tea.Cmd
+				m.input, cmd = m.input.Update(msg)
+				return m, cmd
+			}
 		case "enter":
 			// Only handle enter in main tab (console view)
 			activeTab := m.tabManager.GetActiveTab()
 			if activeTab == nil || activeTab.Type() != TabTypeMain {
 				return m, nil
 			}
+			
+			// Let autocomplete handle enter first (which will pass through)
+			var cmd tea.Cmd
+			m.input, cmd = m.input.Update(msg)
+			
 			input := strings.TrimSpace(m.input.Value())
 			m.input.SetValue("")
 			if input == "" {
-				return m, nil
+				return m, cmd
 			}
+			
+			// Check if command is valid before executing
+			if !m.commandRegistry.IsValidCommand(input) {
+				m = m.appendActivity(m.styles.Error.Render(fmt.Sprintf("Unknown command: %s", input)))
+				// TODO: Add system beep for audio feedback
+				return m, cmd
+			}
+			
 			return m.executeCommand(input)
 		default:
 			// Forward key messages to active tab
@@ -521,7 +551,17 @@ func (m model) renderBaseView() string {
 	// Join prompt and theme label horizontally
 	promptLine := lipgloss.JoinHorizontal(lipgloss.Top, prompt, themeLabel)
 
-	return m.styles.Activity.Render(activity) + "\n" + separator + "\n" + promptLine
+	// Add autocomplete dropdown if visible
+	baseView := m.styles.Activity.Render(activity) + "\n" + separator + "\n" + promptLine
+	
+	if m.input.IsDropdownVisible() {
+		dropdown := m.input.ViewDropdown()
+		if dropdown != "" {
+			baseView += "\n" + dropdown
+		}
+	}
+
+	return baseView
 }
 
 func (m model) View() tea.View {
