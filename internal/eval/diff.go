@@ -11,13 +11,13 @@ import (
 // resolveRunDirectory handles both old and new format detection
 func resolveRunDirectory(runName string) (string, error) {
 	resultsDir := filepath.Join(".kiro-krew", "evals", "results")
-	
+
 	// If directory exists as-is, use it
 	fullPath := filepath.Join(resultsDir, runName)
 	if _, err := os.Stat(fullPath); err == nil {
 		return runName, nil
 	}
-	
+
 	// If runName looks like a hash only, search for timestamped version
 	hash := parseDirectoryName(runName)
 	if hash == runName {
@@ -42,7 +42,7 @@ func resolveRunDirectory(runName string) (string, error) {
 			return latest, nil
 		}
 	}
-	
+
 	return "", fmt.Errorf("run directory %s not found", runName)
 }
 
@@ -54,7 +54,7 @@ func Diff(runA, runB string) error {
 	if err != nil {
 		return fmt.Errorf("failed to resolve run %s: %w", runA, err)
 	}
-	
+
 	resolvedB, err := resolveRunDirectory(runB)
 	if err != nil {
 		return fmt.Errorf("failed to resolve run %s: %w", runB, err)
