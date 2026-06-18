@@ -109,14 +109,14 @@ func newModel(w *watcher.Watcher, m *agent.Manager, cfg *config.Config, logFile 
 	tabManager.AddTab(mainTab)
 
 	return model{
-		watcher:         w,
-		manager:         m,
-		sessionManager:  session.NewSessionManager(),
-		config:          cfg,
-		styles:          styles,
-		input:           autocompleteInput,
-		commandRegistry: commandRegistry,
-		consoleViewport: consoleViewport,
+		watcher:          w,
+		manager:          m,
+		sessionManager:   session.NewSessionManager(),
+		config:           cfg,
+		styles:           styles,
+		input:            autocompleteInput,
+		commandRegistry:  commandRegistry,
+		consoleViewport:  consoleViewport,
 		logFile:          logFile,
 		logReader:        logReader,
 		maxActivityLines: cfg.MaxActivityLines,
@@ -417,7 +417,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.input, cmd = m.input.Update(msg)
 					return m, cmd
 				}
-				
+
 				// Handle console scrolling
 				switch msg.String() {
 				case "up":
@@ -455,11 +455,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if activeTab == nil || activeTab.Type() != TabTypeMain {
 				return m, nil
 			}
-			
+
 			// Let autocomplete handle enter first (which will pass through)
 			var cmd tea.Cmd
 			m.input, cmd = m.input.Update(msg)
-			
+
 			input := strings.TrimSpace(m.input.Value())
 			m.input.SetValue("")
 			if input == "" {
@@ -548,7 +548,7 @@ func (m model) renderBaseView() string {
 
 	// Add autocomplete dropdown if visible
 	baseView := m.styles.Activity.Render(activity) + "\n" + separator + "\n" + promptLine
-	
+
 	if m.input.IsDropdownVisible() {
 		dropdown := m.input.ViewDropdown()
 		if dropdown != "" {

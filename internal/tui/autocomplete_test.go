@@ -10,7 +10,7 @@ func TestAutocompleteInput(t *testing.T) {
 	registry := NewCommandRegistry()
 	theme := &config.Theme{} // Use default theme
 	styles := NewStyles(theme)
-	
+
 	autocomplete := NewAutocompleteInput(registry, styles)
 
 	// Test initial state

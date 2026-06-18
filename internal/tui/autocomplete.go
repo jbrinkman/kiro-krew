@@ -124,7 +124,7 @@ func (a *AutocompleteInput) handleKeyMsg(msg tea.KeyMsg) (*AutocompleteInput, te
 		// But hide dropdown
 		a.state.showDropdown = false
 		a.state.ghostText = ""
-		
+
 		// Pass through to underlying textinput
 		var cmd tea.Cmd
 		a.textinput, cmd = a.textinput.Update(msg)
@@ -144,7 +144,7 @@ func (a *AutocompleteInput) handleKeyMsg(msg tea.KeyMsg) (*AutocompleteInput, te
 // updateAutocomplete updates the autocomplete state based on current input
 func (a *AutocompleteInput) updateAutocomplete() {
 	input := a.textinput.Value()
-	
+
 	if input == "" {
 		a.state.showDropdown = false
 		a.state.suggestions = []string{}
@@ -158,13 +158,13 @@ func (a *AutocompleteInput) updateAutocomplete() {
 	suggestions := make([]string, 0, len(commands))
 
 	parts := strings.Fields(input)
-	
+
 	if len(parts) == 1 {
 		// Single word - suggest commands
 		for _, cmd := range commands {
 			suggestions = append(suggestions, cmd.Name)
 		}
-		
+
 		// Check for subcommands if input matches a command exactly
 		if cmd, exists := a.registry.GetCommand(parts[0]); exists && len(cmd.Subcommands) > 0 {
 			for _, sub := range cmd.Subcommands {
@@ -190,7 +190,7 @@ func (a *AutocompleteInput) updateAutocomplete() {
 // updateGhostText updates the ghost text based on current selection
 func (a *AutocompleteInput) updateGhostText() {
 	input := a.textinput.Value()
-	
+
 	if !a.state.showDropdown || len(a.state.suggestions) == 0 {
 		a.state.ghostText = ""
 		return
@@ -210,13 +210,13 @@ func (a *AutocompleteInput) updateGhostText() {
 func (a *AutocompleteInput) View() string {
 	// Get the base input view
 	inputView := a.textinput.View()
-	
+
 	// Add ghost text if available
 	if a.state.ghostText != "" && len(a.state.ghostText) > len(a.textinput.Value()) {
 		ghost := a.state.ghostText[len(a.textinput.Value()):]
 		inputView += a.styles.AutocompleteGhost.Render(ghost)
 	}
-	
+
 	return inputView
 }
 
@@ -227,22 +227,22 @@ func (a *AutocompleteInput) ViewDropdown() string {
 	}
 
 	var lines []string
-	
+
 	for i, suggestion := range a.state.suggestions {
 		if i >= 10 { // Limit dropdown size
 			break
 		}
-		
+
 		var style lipgloss.Style
 		if i == a.state.selectedIndex {
 			style = a.styles.AutocompleteSelected.Padding(0, 1)
 		} else {
 			style = lipgloss.NewStyle().Padding(0, 1)
 		}
-		
+
 		lines = append(lines, style.Render(suggestion))
 	}
-	
+
 	// Create dropdown box using theme styles
 	return a.styles.AutocompleteDropdown.Render(strings.Join(lines, "\n"))
 }

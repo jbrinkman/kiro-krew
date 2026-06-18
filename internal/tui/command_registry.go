@@ -37,24 +37,24 @@ func NewCommandRegistry() *CommandRegistry {
 	})
 
 	registry.register(&Command{
-		Name:       "stop",
+		Name:        "stop",
 		Description: "Stop agent for specific issue number",
-		HasArgs:    true,
-		ArgPattern: "<issue>",
+		HasArgs:     true,
+		ArgPattern:  "<issue>",
 	})
 
 	registry.register(&Command{
-		Name:       "plan",
+		Name:        "plan",
 		Description: "Start interactive planning session",
-		HasArgs:    true,
-		ArgPattern: "[desc]",
+		HasArgs:     true,
+		ArgPattern:  "[desc]",
 	})
 
 	registry.register(&Command{
-		Name:       "theme",
+		Name:        "theme",
 		Description: "Show current theme or switch to new theme",
-		HasArgs:    true,
-		ArgPattern: "[name]",
+		HasArgs:     true,
+		ArgPattern:  "[name]",
 	})
 
 	registry.register(&Command{
@@ -171,7 +171,7 @@ func (r *CommandRegistry) GetBestMatch(input string) string {
 	commands := r.FilterCommands(input)
 	if len(commands) > 0 {
 		cmdName := commands[0].Name
-		
+
 		// If input is just the command name, return it
 		if len(parts) == 1 {
 			return cmdName
