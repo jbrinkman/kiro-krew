@@ -1,18 +1,21 @@
 # Build Instructions
 
-This project uses [Task](https://taskfile.dev) for build automation. Use Task commands instead of direct `go build` or `go test`.
+This project uses [Task](https://taskfile.dev) for build automation.
 
-## Commands
+## Rule
 
-- `task build` — Build optimized binary with version metadata
-- `task dev` — Fast development build (no optimization)
-- `task test` — Run all tests with coverage
-- `task lint` — Run linters (`go vet`)
-- `task fmt` — Format code (`go fmt`)
-- `task clean` — Remove build artifacts
+**Before running any build, test, format, or lint operation, check `Taskfile.yml` for a matching target and use it.** Do not invoke tools like `go build`, `go test`, `go fmt`, `go vet`, or `gofmt` directly when a Task target exists for that operation. Task targets encapsulate flags, paths, and configuration that direct invocations miss.
 
-## Notes
+Run `task --list` to see all available targets.
 
-- Always use `task build` for production builds — it injects build date and commit hash via ldflags.
-- `task dev` is faster for iteration but skips optimization flags.
-- If Task is not available, fall back to: `go build ./cmd/kiro-krew`
+## Examples
+
+- Formatting code → `task fmt` (not `gofmt -w .`)
+- Building → `task build` (not `go build ./cmd/...`)
+- Running all tests → `task test` (not `go test ./...`)
+
+## When direct commands are acceptable
+
+- Task is not installed and cannot be installed
+- You need flags the Task target doesn't support (e.g., running a single test by name with `-run`)
+- The operation has no matching Task target
