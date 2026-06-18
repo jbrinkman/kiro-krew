@@ -19,20 +19,19 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      uses: actions/checkout@v6
       with:
         fetch-depth: 0
         token: ${{ secrets.GITHUB_TOKEN }}
         
     - name: Set up Go
-      uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
+      uses: actions/setup-go@v6
       with:
         go-version: '1.25.0'
         
     - name: Install Task
-      uses: arduino/setup-task@b91d5d2c96a56797b48ac1e0e89220bf64044611 # v2.0.0
-      with:
-        version: 3.x
+      run: |
+        sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
         
     - name: Determine next version
       id: version
@@ -54,7 +53,7 @@ jobs:
       run: task build:release
       
     - name: Create release and upload assets
-      uses: softprops/action-gh-release@c95fe1489396fe8a9eb87c0abf8aa5b2ef267fda # v2.2.1
+      uses: softprops/action-gh-release@v2
       with:
         tag_name: v${{ steps.version.outputs.version }}
         name: Release v${{ steps.version.outputs.version }}

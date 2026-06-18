@@ -8,16 +8,64 @@ import (
 	"strings"
 )
 
+// resolveRunDirectory handles both old and new format detection
+func resolveRunDirectory(runName string) (string, error) {
+	resultsDir := filepath.Join(".kiro-krew", "evals", "results")
+
+	// If directory exists as-is, use it
+	fullPath := filepath.Join(resultsDir, runName)
+	if _, err := os.Stat(fullPath); err == nil {
+		return runName, nil
+	}
+
+	// If runName looks like a hash only, search for timestamped version
+	hash := parseDirectoryName(runName)
+	if hash == runName {
+		// This is just a hash, look for a timestamped directory with this hash
+		entries, err := os.ReadDir(resultsDir)
+		if err != nil {
+			return "", fmt.Errorf("failed to read results directory: %w", err)
+		}
+
+		var latest string
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+
+			dirHash := parseDirectoryName(entry.Name())
+			if dirHash == hash {
+				latest = entry.Name()
+			}
+		}
+		if latest != "" {
+			return latest, nil
+		}
+	}
+
+	return "", fmt.Errorf("run directory %s not found", runName)
+}
+
 // Diff compares two eval runs and prints score/cost deltas.
 func Diff(runA, runB string) error {
 	resultsDir := filepath.Join(".kiro-krew", "evals", "results")
 
-	summaryA, err := loadSummary(filepath.Join(resultsDir, runA, "summary.json"))
+	resolvedA, err := resolveRunDirectory(runA)
+	if err != nil {
+		return fmt.Errorf("failed to resolve run %s: %w", runA, err)
+	}
+
+	resolvedB, err := resolveRunDirectory(runB)
+	if err != nil {
+		return fmt.Errorf("failed to resolve run %s: %w", runB, err)
+	}
+
+	summaryA, err := loadSummary(filepath.Join(resultsDir, resolvedA, "summary.json"))
 	if err != nil {
 		return fmt.Errorf("failed to load run %s: %w", runA, err)
 	}
 
-	summaryB, err := loadSummary(filepath.Join(resultsDir, runB, "summary.json"))
+	summaryB, err := loadSummary(filepath.Join(resultsDir, resolvedB, "summary.json"))
 	if err != nil {
 		return fmt.Errorf("failed to load run %s: %w", runB, err)
 	}
@@ -28,8 +76,8 @@ func Diff(runA, runB string) error {
 	// Per-agent, per-criterion deltas
 	allAgents := mergeKeys(summaryA.AgentScores, summaryB.AgentScores)
 	for _, agent := range allAgents {
-		resultA, errA := loadAgentResult(filepath.Join(resultsDir, runA, agent+".json"))
-		resultB, errB := loadAgentResult(filepath.Join(resultsDir, runB, agent+".json"))
+		resultA, errA := loadAgentResult(filepath.Join(resultsDir, resolvedA, agent+".json"))
+		resultB, errB := loadAgentResult(filepath.Join(resultsDir, resolvedB, agent+".json"))
 
 		scoreA := summaryA.AgentScores[agent]
 		scoreB := summaryB.AgentScores[agent]

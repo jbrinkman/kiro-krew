@@ -1,0 +1,44 @@
+{
+  "agent": "documenter",
+  "git_hash": "670505a",
+  "cases": [
+    {
+      "case_name": "document-new-feature",
+      "scores": [
+        {
+          "name": "documentation_completeness",
+          "score": 2,
+          "max_score": 5,
+          "deterministic": true,
+          "reasoning": "found 1/2 expected structural elements"
+        },
+        {
+          "name": "accuracy",
+          "score": 4,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The documentation closely reflects what was actually built based on the implementation files and acceptance criteria. It correctly identifies the two files modified (commands.go and tui.go), accurately describes the empty state handling ('No agents running'), and shows the table output with issue number and elapsed time. However, there are minor discrepancies: the documentation mentions a 'title' column and 'current status' column, while the acceptance criteria and plan only specify issue number, agent name, and elapsed time. The plan says 'agent name' but the docs show 'Title' and 'Status' columns instead. This suggests the documentation may be slightly embellishing or misrepresenting the actual column layout. The function name also differs — the docs say handleStatus() while the plan references StatusCmd. These are minor inaccuracies that prevent a perfect score but overall the documentation substantively reflects what was built."
+        },
+        {
+          "name": "file_naming_convention",
+          "score": 5,
+          "max_score": 5,
+          "deterministic": true,
+          "reasoning": "output references correct app_docs/feature-* path"
+        },
+        {
+          "name": "practical_usage_guidance",
+          "score": 5,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The Usage section includes concrete examples with actual commands typed at the TUI prompt (kiro-krew\u003e status), shows realistic sample output with formatted table data (issue numbers, titles, statuses, elapsed times), and demonstrates both the normal case and the empty state. These are practical, copy-paste-ready examples that clearly show users how to invoke the command and what to expect."
+        }
+      ],
+      "cost": {
+        "tokens_in": 140,
+        "tokens_out": 320,
+        "estimated_usd": 0.00522
+      }
+    }
+  ]
+}

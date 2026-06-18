@@ -33,7 +33,8 @@ func Run(agent string) error {
 		return fmt.Errorf("no rubrics found in .kiro-krew/evals/rubrics/")
 	}
 
-	resultsDir := filepath.Join(".kiro-krew", "evals", "results", gitHash)
+	timestamp := generateTimestampPrefix()
+	resultsDir := filepath.Join(".kiro-krew", "evals", "results", timestamp+"-"+gitHash)
 	if err := os.MkdirAll(resultsDir, 0755); err != nil {
 		return fmt.Errorf("failed to create results directory: %w", err)
 	}
