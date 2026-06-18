@@ -133,14 +133,15 @@ func (a *AutocompleteInput) handleKeyMsg(msg tea.KeyMsg) (*AutocompleteInput, te
 		return a, cmd
 
 	default:
-		// Handle overwrite mode for regular character input when ghost text is present
-		keyStr := msg.String()
-		if len(keyStr) == 1 && a.state.ghostText != "" {
+		// Handle overwrite mode for printable character input when ghost text is present
+		key := msg.Key()
+		if key.Text != "" && a.state.ghostText != "" {
 			currentValue := a.textinput.Value()
 			if len(a.state.ghostText) > len(currentValue) {
 				// Overwrite mode: replace next ghost character with typed character
-				newValue := currentValue + keyStr
+				newValue := currentValue + key.Text
 				a.textinput.SetValue(newValue)
+				a.textinput.CursorEnd()
 				a.updateAutocomplete()
 				return a, nil
 			}
@@ -208,10 +209,10 @@ func (a *AutocompleteInput) View() string {
 	originalValue := a.textinput.Value()
 	originalCursorPos := a.textinput.Position()
 
-	// Temporarily set the display value to include ghost text
+	// Temporarily set the display value to include ghost text as plain text
+	// so the textinput can properly calculate cursor position and rendering
 	ghost := a.state.ghostText[len(originalValue):]
-	displayValue := originalValue + a.styles.AutocompleteGhost.Render(ghost)
-	a.textinput.SetValue(displayValue)
+	a.textinput.SetValue(originalValue + ghost)
 	a.textinput.SetCursor(originalCursorPos)
 
 	// Render with ghost text overlaid
