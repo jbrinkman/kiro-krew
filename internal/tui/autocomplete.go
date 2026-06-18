@@ -133,7 +133,20 @@ func (a *AutocompleteInput) handleKeyMsg(msg tea.KeyMsg) (*AutocompleteInput, te
 		return a, cmd
 
 	default:
-		// Handle regular input
+		// Handle overwrite mode for regular character input when ghost text is present
+		keyStr := msg.String()
+		if len(keyStr) == 1 && a.state.ghostText != "" {
+			currentValue := a.textinput.Value()
+			if len(a.state.ghostText) > len(currentValue) {
+				// Overwrite mode: replace next ghost character with typed character
+				newValue := currentValue + keyStr
+				a.textinput.SetValue(newValue)
+				a.updateAutocomplete()
+				return a, nil
+			}
+		}
+
+		// Handle regular input (including backspace, navigation, etc.)
 		var cmd tea.Cmd
 		a.textinput, cmd = a.textinput.Update(msg)
 		a.updateAutocomplete()
@@ -184,19 +197,31 @@ func (a *AutocompleteInput) updateGhostText() {
 	}
 }
 
-// View renders the autocomplete input with ghost text
+// View renders the autocomplete input with ghost text overlaid at cursor position
 func (a *AutocompleteInput) View() string {
-	// Get the base input view (preserves cursor rendering)
-	baseView := a.textinput.View()
-
-	// Add ghost text if available — append after the textinput view
-	// so cursor remains visible at the boundary between typed text and ghost
-	if a.state.ghostText != "" && len(a.state.ghostText) > len(a.textinput.Value()) {
-		ghost := a.state.ghostText[len(a.textinput.Value()):]
-		baseView += a.styles.AutocompleteGhost.Render(ghost)
+	// If no ghost text, return base view
+	if a.state.ghostText == "" || len(a.state.ghostText) <= len(a.textinput.Value()) {
+		return a.textinput.View()
 	}
 
-	return baseView
+	// Store original values
+	originalValue := a.textinput.Value()
+	originalCursorPos := a.textinput.Position()
+
+	// Temporarily set the display value to include ghost text
+	ghost := a.state.ghostText[len(originalValue):]
+	displayValue := originalValue + a.styles.AutocompleteGhost.Render(ghost)
+	a.textinput.SetValue(displayValue)
+	a.textinput.SetCursor(originalCursorPos)
+
+	// Render with ghost text overlaid
+	view := a.textinput.View()
+
+	// Restore original state
+	a.textinput.SetValue(originalValue)
+	a.textinput.SetCursor(originalCursorPos)
+
+	return view
 }
 
 // ViewDropdown renders the dropdown menu
