@@ -1,0 +1,12 @@
+name: multiple-question-prevention
+description: "Test that planner asks only ONE question at a time for complex multi-faceted requests"
+input: |
+  I need to build a user authentication system with login, registration, password reset, and maybe OAuth integration. I'm not sure about the database schema, security requirements, or which OAuth providers to support.
+output: |
+  That's a substantial feature with several components. Let me help you break it down step by step.
+
+  What's the most critical authentication method to implement first?
+  a) Email/password login and registration
+  b) OAuth with a third-party provider (GitHub, Google, etc.)
+  c) API key-based authentication
+  d) Other (please specify)
