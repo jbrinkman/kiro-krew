@@ -1,6 +1,9 @@
 package tui
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestFormatCommitHash(t *testing.T) {
 	tests := []struct {
@@ -21,5 +24,48 @@ func TestFormatCommitHash(t *testing.T) {
 				t.Errorf("formatCommitHash(%q) = %q, want %q", tt.input, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestAboutDialog(t *testing.T) {
+	dialog := NewAboutDialog()
+
+	// Test BuildContent returns expected structure
+	content := dialog.BuildContent()
+	if len(content) == 0 {
+		t.Error("BuildContent() returned empty content")
+	}
+
+	// Verify expected fields are present
+	foundVersion := false
+	for _, line := range content {
+		if strings.Contains(line, "Version:") {
+			foundVersion = true
+			break
+		}
+	}
+	if !foundVersion {
+		t.Error("BuildContent() missing Version field")
+	}
+
+	// Test UpdateStatusLine and GetFullContent
+	statusLines := []string{"Status: OK", "Last check: now"}
+	dialog.UpdateStatusLine(statusLines)
+	
+	fullContent := dialog.GetFullContent()
+	if len(fullContent) <= len(content) {
+		t.Error("GetFullContent() should include status lines")
+	}
+
+	// Verify status lines are appended
+	foundStatus := false
+	for _, line := range fullContent {
+		if strings.Contains(line, "Status: OK") {
+			foundStatus = true
+			break
+		}
+	}
+	if !foundStatus {
+		t.Error("GetFullContent() missing appended status lines")
 	}
 }

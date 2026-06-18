@@ -89,6 +89,9 @@ type model struct {
 	// Agent lifecycle tracking
 	knownAgents         map[string]bool
 	statusRunningAgents []*agent.Agent // Snapshot for deterministic number key selection
+	
+	// About dialog state
+	aboutDialog *AboutDialog
 }
 
 func newModel(w *watcher.Watcher, m *agent.Manager, cfg *config.Config, logFile *os.File, logReader *os.File) model {
@@ -127,6 +130,7 @@ func newModel(w *watcher.Watcher, m *agent.Manager, cfg *config.Config, logFile 
 		tabManager:  tabManager,
 		mainTab:     mainTab,
 		knownAgents: make(map[string]bool),
+		aboutDialog: NewAboutDialog(),
 	}
 }
 
@@ -238,18 +242,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if m.activeOverlay == overlayAbout {
-			// Update about overlay content
-			info := version.Info()
-			content := []string{
-				fmt.Sprintf("  Version:    %s", info["version"]),
-				fmt.Sprintf("  Build Date: %s", info["build_date"]),
-				fmt.Sprintf("  Commit:     %s", formatCommitHash(info["commit_hash"])),
-				fmt.Sprintf("  Go Version: %s", info["go_version"]),
-				fmt.Sprintf("  Arch:       %s", info["arch"]),
-				"",
-			}
-			content = append(content, updateLines...)
-			m.overlayContent.content = append(content, "", "Press ESC to close")
+			// Use model's AboutDialog for efficient partial updates
+			m.aboutDialog.BuildContent()
+			m.aboutDialog.UpdateStatusLine(updateLines)
+			m.overlayContent.content = append(m.aboutDialog.GetFullContent(), "", "Press ESC to close")
 		} else {
 			// Add to activity as before
 			m = m.appendActivity(updateLines...)
