@@ -1,0 +1,25 @@
+name: architecture-documentation
+description: "Test documenter's technical architecture documentation skills"
+agent: documenter
+input: |
+  Document the agent orchestration architecture for maintainers and contributors.
+  Explain the workflow, component relationships, and design decisions.
+setup:
+  - type: text
+    label: "Architecture Components"
+    content: "Watcher, Manager, Krew-Lead, Architect, Builder, Validator, Documenter agents with git worktree isolation"
+  - type: text
+    label: "Target Audience"
+    content: "Project maintainers, contributors, and developers extending the system"
+context:
+  - "Should explain both high-level workflow and implementation details"
+  - "Include design rationale for key decisions"
+  - "Diagrams or flow charts would be valuable"
+  - "Should help onboard new contributors"
+expected_output: |
+  Architecture documentation including:
+  - High-level system overview and component responsibilities
+  - Detailed workflow diagrams (text or ASCII if visual not possible)
+  - Agent interaction patterns and communication protocols
+  - Design decisions and trade-offs explanation
+  - Extension points and customization guidance for contributors

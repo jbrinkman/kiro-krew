@@ -1,0 +1,25 @@
+name: security-validation
+description: "Test validator's security review capabilities for authentication code"
+agent: validator
+input: |
+  Validate the security of the implemented JWT authentication system.
+  Focus on password handling, token generation, and input validation.
+setup:
+  - type: text
+    label: "Authentication Implementation"
+    content: "JWT auth with bcrypt password hashing, token validation middleware, login/register endpoints"
+  - type: text
+    label: "Security Requirements"
+    content: "Passwords must be bcrypt hashed, JWT secrets secure, input validation, SQL injection prevention"
+context:
+  - "Should check for common security vulnerabilities"
+  - "Password storage must never expose plaintext"
+  - "JWT implementation should follow security best practices"
+  - "Input validation should prevent injection attacks"
+expected_output: |
+  Security validation report with:
+  - Password hashing implementation review (bcrypt usage)
+  - JWT token security analysis (secret management, expiration)
+  - Input validation assessment for all endpoints
+  - SQL injection vulnerability check
+  - Overall security posture assessment

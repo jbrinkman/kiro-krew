@@ -87,6 +87,22 @@ func evaluate(rubric Rubric, cases []TestCase, gitHash string) AgentResult {
 	for _, tc := range cases {
 		cr := CaseResult{CaseName: tc.Name}
 
+		// Assemble prompt and invoke agent
+		prompt, err := assemblePrompt(tc.Setup, tc.Input)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to assemble prompt for %s: %v\n", tc.Name, err)
+			cr.ActualOutput = ""
+		} else {
+			actualOutput, cost, err := invokeAgent(rubric.Agent, prompt)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: agent invocation failed for %s: %v\n", tc.Name, err)
+				cr.ActualOutput = ""
+			} else {
+				cr.ActualOutput = actualOutput
+				cr.AgentCost = cost
+			}
+		}
+
 		for _, criterion := range rubric.Criteria {
 			if criterion.Type == "cost" {
 				continue // cost is tracked separately
@@ -99,24 +115,25 @@ func evaluate(rubric Rubric, cases []TestCase, gitHash string) AgentResult {
 			}
 
 			if criterion.Deterministic {
-				score.Score, score.Reasoning, score.Skipped = scoreDeterministic(criterion, tc)
+				score.Score, score.Reasoning, score.Skipped = scoreDeterministic(criterion, tc, cr.ActualOutput)
 			} else {
 				// LLM-judged criteria
-				if tc.Output == "" {
+				if cr.ActualOutput == "" {
 					score.Score = 0
 					score.Skipped = true
 					score.Reasoning = "no output available for LLM judging"
 				} else {
-					score.Score, score.Reasoning, score.Skipped = scoreLLMJudge(criterion, tc)
+					judgeCost, judgeScore, reasoning, skipped := scoreLLMJudge(criterion, tc, cr.ActualOutput)
+					cr.JudgeCost.TokensIn += judgeCost.TokensIn
+					cr.JudgeCost.TokensOut += judgeCost.TokensOut
+					cr.JudgeCost.EstimatedUSD += judgeCost.EstimatedUSD
+					score.Score = judgeScore
+					score.Reasoning = reasoning
+					score.Skipped = skipped
 				}
 			}
 
 			cr.Scores = append(cr.Scores, score)
-		}
-
-		// Estimate cost from output length as proxy when no real token data
-		if tc.Output != "" {
-			cr.Cost = estimateCost(tc.Input, tc.Output)
 		}
 
 		result.Cases = append(result.Cases, cr)
@@ -125,12 +142,92 @@ func evaluate(rubric Rubric, cases []TestCase, gitHash string) AgentResult {
 	return result
 }
 
-func scoreDeterministic(criterion Criterion, tc TestCase) (int, string, bool) {
-	if tc.Output == "" {
+// assemblePrompt combines setup entries and input into a complete agent prompt
+func assemblePrompt(setup []SetupEntry, input string) (string, error) {
+	var parts []string
+
+	for _, entry := range setup {
+		switch entry.Type {
+		case "text":
+			if entry.Label != "" {
+				parts = append(parts, fmt.Sprintf("=== %s ===\n%s", entry.Label, entry.Content))
+			} else {
+				parts = append(parts, entry.Content)
+			}
+		case "file":
+			if entry.Path == "" {
+				return "", fmt.Errorf("setup entry '%s' has type 'file' but no path", entry.Label)
+			}
+			content, err := os.ReadFile(entry.Path)
+			if err != nil {
+				return "", fmt.Errorf("failed to read setup file %s: %w", entry.Path, err)
+			}
+			label := entry.Label
+			if label == "" {
+				label = entry.Path
+			}
+			parts = append(parts, fmt.Sprintf("=== %s ===\n%s", label, string(content)))
+		case "url":
+			return "", fmt.Errorf("url setup entries not yet supported")
+		default:
+			return "", fmt.Errorf("unknown setup entry type: %s", entry.Type)
+		}
+	}
+
+	if len(parts) > 0 {
+		parts = append(parts, "=== Task ===")
+	}
+	parts = append(parts, input)
+
+	return strings.Join(parts, "\n\n"), nil
+}
+
+// invokeAgent executes kiro-cli with the given agent and prompt
+func invokeAgent(agent, prompt string) (string, CostInfo, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "kiro-cli", "chat", "--agent", agent, "--no-interactive", "--trust-all-tools")
+	cmd.Stdin = strings.NewReader(prompt)
+
+	output, err := cmd.Output()
+	if err != nil {
+		return "", CostInfo{}, fmt.Errorf("kiro-cli invocation failed: %w", err)
+	}
+
+	result := stripANSISequences(string(output))
+	cost := estimateCost(prompt, result)
+
+	return result, cost, nil
+}
+
+func scoreDeterministic(criterion Criterion, tc TestCase, actualOutput string) (int, string, bool) {
+	output := actualOutput
+	if output == "" {
 		return 0, "no output to evaluate", true
 	}
 
 	maxScore := parseMaxScore(criterion.Scoring)
+
+	// Check against context facts if available
+	contextViolations := 0
+	if len(tc.Context) > 0 {
+		lowerOutput := strings.ToLower(output)
+		for _, fact := range tc.Context {
+			lowerFact := strings.ToLower(fact)
+			// Simple heuristic: if output contradicts a context fact
+			if strings.Contains(lowerFact, "not") || strings.Contains(lowerFact, "no ") {
+				// Look for positive assertions that contradict negative facts
+				factWords := strings.Fields(strings.ReplaceAll(strings.ReplaceAll(lowerFact, "not", ""), "no ", ""))
+				for _, word := range factWords {
+					if len(word) > 3 && strings.Contains(lowerOutput, word) {
+						contextViolations++
+						break
+					}
+				}
+			}
+		}
+	}
 
 	// Heuristic deterministic checks based on criterion name patterns
 	switch {
@@ -139,16 +236,19 @@ func scoreDeterministic(criterion Criterion, tc TestCase) (int, string, bool) {
 		sections := []string{"## ", "### "}
 		found := 0
 		for _, s := range sections {
-			if strings.Contains(tc.Output, s) {
+			if strings.Contains(output, s) {
 				found++
 			}
 		}
 		score := (found * maxScore) / len(sections)
+		if contextViolations > 0 {
+			score = max(1, score-contextViolations)
+		}
 		return score, fmt.Sprintf("found %d/%d expected structural elements", found, len(sections)), false
 
 	case strings.Contains(criterion.Name, "file_reference"):
 		// Extract candidate file paths and verify they exist
-		lines := strings.Split(tc.Output, "\n")
+		lines := strings.Split(output, "\n")
 		var candidates []string
 		for _, word := range lines {
 			for _, w := range strings.Fields(word) {
@@ -158,12 +258,25 @@ func scoreDeterministic(criterion Criterion, tc TestCase) (int, string, bool) {
 				}
 			}
 		}
+
+		// Check against context facts for file existence
+		if len(tc.Context) > 0 {
+			for i, path := range candidates {
+				for _, fact := range tc.Context {
+					if strings.Contains(fact, path) && (strings.Contains(fact, "exists") || strings.Contains(fact, "present")) {
+						candidates[i] = path + " (verified by context)"
+					}
+				}
+			}
+		}
+
 		if len(candidates) == 0 {
 			return 1, "no file references found", false
 		}
 		verified := 0
 		for _, path := range candidates {
-			if _, err := os.Stat(path); err == nil {
+			cleanPath := strings.Split(path, " ")[0]
+			if _, err := os.Stat(cleanPath); err == nil || strings.Contains(path, "verified by context") {
 				verified++
 			}
 		}
@@ -171,11 +284,14 @@ func scoreDeterministic(criterion Criterion, tc TestCase) (int, string, bool) {
 		if score < 1 {
 			score = 1
 		}
-		return score, fmt.Sprintf("%d/%d referenced files verified on disk", verified, len(candidates)), false
+		if contextViolations > 0 {
+			score = max(1, score-contextViolations)
+		}
+		return score, fmt.Sprintf("%d/%d referenced files verified", verified, len(candidates)), false
 
 	case strings.Contains(criterion.Name, "file_naming"):
 		// Check documenter output references correct path format
-		if strings.Contains(tc.Output, "app_docs/feature-") {
+		if strings.Contains(output, "app_docs/feature-") {
 			return maxScore, "output references correct app_docs/feature-* path", false
 		}
 		return 1, "no app_docs/feature-* path found in output", false
@@ -185,32 +301,40 @@ func scoreDeterministic(criterion Criterion, tc TestCase) (int, string, bool) {
 		testablePatterns := []string{"- [ ]", "- [x]", "```", "go test", "go build", "curl ", "exit code", "status code", "returns ", "outputs "}
 		found := 0
 		for _, pattern := range testablePatterns {
-			if strings.Contains(strings.ToLower(tc.Output), pattern) {
+			if strings.Contains(strings.ToLower(output), pattern) {
 				found++
 			}
 		}
+		score := max(1, (found*maxScore)/3)
 		if found >= 3 {
-			return maxScore, fmt.Sprintf("found %d testable criteria indicators", found), false
+			score = maxScore
 		}
-		return max(1, (found*maxScore)/3), fmt.Sprintf("found %d testable criteria indicators", found), false
+		if contextViolations > 0 {
+			score = max(1, score-contextViolations)
+		}
+		return score, fmt.Sprintf("found %d testable criteria indicators", found), false
 
 	case strings.Contains(criterion.Name, "test_execution"):
 		// Check for evidence of actual command execution and results
 		executionIndicators := []string{"exit code", "$ ", "PASS", "FAIL", "ok  \t", "--- FAIL", "--- PASS", "go test", "npm test", "pytest"}
 		found := 0
 		for _, indicator := range executionIndicators {
-			if strings.Contains(tc.Output, indicator) {
+			if strings.Contains(output, indicator) {
 				found++
 			}
 		}
+		score := max(1, (found*maxScore)/2)
 		if found >= 2 {
-			return maxScore, fmt.Sprintf("found %d execution evidence indicators", found), false
+			score = maxScore
 		}
-		return max(1, (found*maxScore)/2), fmt.Sprintf("found %d execution evidence indicators", found), false
+		if contextViolations > 0 {
+			score = max(1, score-contextViolations)
+		}
+		return score, fmt.Sprintf("found %d execution evidence indicators", found), false
 
 	case strings.Contains(criterion.Name, "code_correctness"):
 		// Check for code compilation/execution success indicators
-		lowerOutput := strings.ToLower(tc.Output)
+		lowerOutput := strings.ToLower(output)
 		successIndicators := []string{"build passes", "compiled successfully", "no errors", "exit code 0", "ok  \t"}
 		errorIndicators := []string{"compilation error", "syntax error", "build failed", "does not compile"}
 		successCount := 0
@@ -225,27 +349,44 @@ func scoreDeterministic(criterion Criterion, tc TestCase) (int, string, bool) {
 				errorCount++
 			}
 		}
+
+		score := maxScore / 2
 		if successCount > 0 && errorCount == 0 {
-			return maxScore, "code appears to compile/run successfully", false
+			score = maxScore
 		}
 		if errorCount > 0 {
-			return 1, "compilation or runtime errors detected", false
+			score = 1
 		}
-		return maxScore / 2, "no clear success or error indicators", false
+		if contextViolations > 0 {
+			score = max(1, score-contextViolations)
+		}
+
+		reasoning := "no clear success or error indicators"
+		if successCount > 0 && errorCount == 0 {
+			reasoning = "code appears to compile/run successfully"
+		} else if errorCount > 0 {
+			reasoning = "compilation or runtime errors detected"
+		}
+
+		return score, reasoning, false
 
 	case strings.Contains(criterion.Name, "test_coverage"):
 		// Check for test file references and test execution
 		testPatterns := []string{"_test.go", ".test.js", ".spec.ts", "func Test", "go test", "npm test", "pytest", "describe(", "it("}
 		found := 0
 		for _, pattern := range testPatterns {
-			if strings.Contains(tc.Output, pattern) {
+			if strings.Contains(output, pattern) {
 				found++
 			}
 		}
+		score := max(1, (found*maxScore)/2)
 		if found >= 2 {
-			return maxScore, fmt.Sprintf("found %d test coverage indicators", found), false
+			score = maxScore
 		}
-		return max(1, (found*maxScore)/2), fmt.Sprintf("found %d test coverage indicators", found), false
+		if contextViolations > 0 {
+			score = max(1, score-contextViolations)
+		}
+		return score, fmt.Sprintf("found %d test coverage indicators", found), false
 
 	default:
 		// Unknown deterministic criterion — skip rather than award false credit
@@ -262,7 +403,17 @@ func runKiroCLI(prompt string) ([]byte, error) {
 	return cmd.Output()
 }
 
-func scoreLLMJudge(criterion Criterion, tc TestCase) (int, string, bool) {
+func scoreLLMJudge(criterion Criterion, tc TestCase, actualOutput string) (CostInfo, int, string, bool) {
+	contextSection := ""
+	if len(tc.Context) > 0 {
+		contextSection = fmt.Sprintf("\nCONTEXT FACTS (use for hallucination detection — deduct for contradictions):\n%s\n", strings.Join(tc.Context, "\n"))
+	}
+
+	expectedSection := ""
+	if tc.ExpectedOutput != "" {
+		expectedSection = fmt.Sprintf("\nEXPECTED OUTPUT (compare similarity and completeness):\n%s\n", tc.ExpectedOutput)
+	}
+
 	prompt := fmt.Sprintf(`Evaluate this output against the criterion.
 Wrap your JSON response between ===JSON_START=== and ===JSON_END=== delimiters.
 
@@ -277,23 +428,23 @@ SCORING SCALE:
 3 = Partially meets the criterion with notable room for improvement
 4 = Mostly meets the criterion with minor gaps
 5 = Fully satisfies the criterion
-
-INPUT/CONTEXT:
+%s%s
+INPUT:
 %s
 
-OUTPUT TO EVALUATE:
-%s`, criterion.Name, criterion.Description, tc.Input, tc.Output)
+ACTUAL OUTPUT TO EVALUATE:
+%s`, criterion.Name, criterion.Description, contextSection, expectedSection, tc.Input, actualOutput)
 
 	output, err := runKiroCLI(prompt)
 	if err != nil {
-		return 0, fmt.Sprintf("kiro-cli chat failed: %v", err), true
+		return CostInfo{}, 0, fmt.Sprintf("kiro-cli chat failed: %v", err), true
 	}
 
 	raw := string(output)
 	start := strings.Index(raw, "===JSON_START===")
 	end := strings.Index(raw, "===JSON_END===")
 	if start == -1 || end == -1 || end <= start {
-		return 0, fmt.Sprintf("JSON delimiters not found in output"), true
+		return CostInfo{}, 0, fmt.Sprintf("JSON delimiters not found in output"), true
 	}
 	jsonStr := raw[start+len("===JSON_START===") : end]
 	jsonStr = stripANSISequences(strings.TrimSpace(jsonStr))
@@ -305,11 +456,12 @@ OUTPUT TO EVALUATE:
 	}
 
 	if err := json.Unmarshal([]byte(strings.TrimSpace(jsonStr)), &response); err != nil {
-		return 0, fmt.Sprintf("JSON parse error: %v", err), true
+		return CostInfo{}, 0, fmt.Sprintf("JSON parse error: %v", err), true
 	}
 
 	score := max(1, min(response.Score, 5))
-	return score, response.Reasoning, false
+	cost := estimateCost(prompt, raw)
+	return cost, score, response.Reasoning, false
 }
 
 func estimateCost(input, output string) CostInfo {
@@ -341,9 +493,9 @@ func buildSummary(results []AgentResult, gitHash string) Summary {
 				totalScore += float64(sc.Score)
 				totalMax += float64(sc.MaxScore)
 			}
-			s.TotalCost.TokensIn += c.Cost.TokensIn
-			s.TotalCost.TokensOut += c.Cost.TokensOut
-			s.TotalCost.EstimatedUSD += c.Cost.EstimatedUSD
+			s.TotalCost.TokensIn += c.AgentCost.TokensIn
+			s.TotalCost.TokensOut += c.AgentCost.TokensOut
+			s.TotalCost.EstimatedUSD += c.AgentCost.EstimatedUSD
 		}
 		if totalMax > 0 {
 			s.AgentScores[r.Agent] = totalScore / totalMax
