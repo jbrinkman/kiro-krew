@@ -3,11 +3,15 @@ package github
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
 	"time"
 )
+
+// ErrRateLimited is returned when the GitHub API rate limit is exceeded.
+var ErrRateLimited = errors.New("GitHub API rate limit exceeded")
 
 type Label struct {
 	Name string `json:"name"`
@@ -53,6 +57,9 @@ func ListIssues(repo, label string) ([]Issue, error) {
 	cmd := exec.Command("gh", "issue", "list", "--repo", repo, "--label", label, "--state", "open", "--json", "number,title,body,labels")
 	output, err := cmd.Output()
 	if err != nil {
+		if isRateLimited(err) {
+			return nil, ErrRateLimited
+		}
 		return nil, fmt.Errorf("gh issue list failed: %w", err)
 	}
 
@@ -151,4 +158,14 @@ func GetLatestRelease(repo string) (*Release, error) {
 	}
 
 	return &release, nil
+}
+
+// isRateLimited checks if an exec error from the gh CLI indicates a rate limit.
+func isRateLimited(err error) bool {
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		stderr := string(exitErr.Stderr)
+		return strings.Contains(stderr, "rate limit") || strings.Contains(stderr, "API rate limit exceeded")
+	}
+	return false
 }

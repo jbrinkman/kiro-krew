@@ -1,0 +1,25 @@
+name: quality-assurance
+description: "Test krew-lead's quality gates and validation orchestration"
+agent: krew-lead
+input: |
+  Ensure quality standards are met before creating PR for a critical security fix.
+  Coordinate thorough testing and validation before release.
+setup:
+  - type: text
+    label: "Security Fix"
+    content: "Fix for potential SQL injection vulnerability in user input handling"
+  - type: text
+    label: "Quality Requirements"
+    content: "Security testing, unit tests, integration tests, code review checklist"
+context:
+  - "Security fixes require extra validation"
+  - "All tests must pass before PR creation"
+  - "Should include security-specific validation steps"
+  - "Code review readiness checklist should be completed"
+expected_output: |
+  Quality assurance plan with:
+  - Security-focused validation steps
+  - Comprehensive testing strategy (unit, integration, security)
+  - Pre-PR quality checklist completion
+  - Validator coordination for security-specific checks
+  - Documentation requirements for security fixes

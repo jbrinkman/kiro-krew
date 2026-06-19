@@ -46,8 +46,8 @@ func TestScoreDeterministic_AcceptanceCriteriaQuality(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tc := TestCase{Output: tt.output}
-			score, _, skipped := scoreDeterministic(criterion, tc)
+			tc := TestCase{}
+			score, _, skipped := scoreDeterministic(criterion, tc, tt.output)
 			if score != tt.expectedScore {
 				t.Errorf("expected score %d, got %d", tt.expectedScore, score)
 			}
@@ -98,8 +98,8 @@ func TestScoreDeterministic_TestExecution(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tc := TestCase{Output: tt.output}
-			score, _, skipped := scoreDeterministic(criterion, tc)
+			tc := TestCase{}
+			score, _, skipped := scoreDeterministic(criterion, tc, tt.output)
 			if score != tt.expectedScore {
 				t.Errorf("expected score %d, got %d", tt.expectedScore, score)
 			}
@@ -150,8 +150,8 @@ func TestScoreDeterministic_CodeCorrectness(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tc := TestCase{Output: tt.output}
-			score, _, skipped := scoreDeterministic(criterion, tc)
+			tc := TestCase{}
+			score, _, skipped := scoreDeterministic(criterion, tc, tt.output)
 			if score != tt.expectedScore {
 				t.Errorf("expected score %d, got %d", tt.expectedScore, score)
 			}
@@ -196,8 +196,8 @@ func TestScoreDeterministic_TestCoverage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tc := TestCase{Output: tt.output}
-			score, _, skipped := scoreDeterministic(criterion, tc)
+			tc := TestCase{}
+			score, _, skipped := scoreDeterministic(criterion, tc, tt.output)
 			if score != tt.expectedScore {
 				t.Errorf("expected score %d, got %d", tt.expectedScore, score)
 			}
@@ -246,8 +246,8 @@ func TestScoreDeterministic_ExistingCheckers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tc := TestCase{Output: tt.output}
-			_, _, skipped := scoreDeterministic(tt.criterion, tc)
+			tc := TestCase{}
+			_, _, skipped := scoreDeterministic(tt.criterion, tc, tt.output)
 			if skipped != tt.expectSkip {
 				t.Errorf("expected skipped %v, got %v", tt.expectSkip, skipped)
 			}

@@ -1,0 +1,25 @@
+name: performance-optimization
+description: "Evaluate architect's approach to performance optimization"
+agent: architect
+input: |
+  The GitHub issue polling is causing performance problems. Design a solution to optimize
+  the polling mechanism while maintaining responsiveness.
+setup:
+  - type: text
+    label: "Problem Description"
+    content: "Current polling implementation checks GitHub API every 5 minutes but causes UI freezes during network calls"
+  - type: text
+    label: "Requirements"
+    content: "Maintain real-time feel, reduce API calls, prevent UI blocking, handle rate limits gracefully"
+context:
+  - "Should address API rate limiting"
+  - "UI responsiveness must be maintained"
+  - "Should consider caching strategies"
+  - "Error handling for network failures"
+expected_output: |
+  Optimization plan covering:
+  - Async polling implementation
+  - Intelligent caching strategy
+  - Rate limit handling
+  - Background processing approach
+  - UI feedback mechanisms for polling status

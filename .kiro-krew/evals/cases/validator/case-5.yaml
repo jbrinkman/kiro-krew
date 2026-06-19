@@ -1,0 +1,25 @@
+name: regression-testing
+description: "Test validator's ability to detect regressions from new changes"
+agent: validator
+input: |
+  Validate that recent configuration system changes don't break existing
+  functionality while adding new capabilities.
+setup:
+  - type: text
+    label: "Changes Made"
+    content: "Added environment variable support, hot reloading, validation to config system"
+  - type: text
+    label: "Regression Concerns"
+    content: "Existing YAML configs, backward compatibility, performance impact, startup time"
+context:
+  - "Must verify existing configurations still work"
+  - "New features shouldn't break old behavior"
+  - "Performance should not be significantly degraded"
+  - "Startup time impact should be minimal"
+expected_output: |
+  Regression test results with:
+  - Backward compatibility verification for existing configs
+  - Performance impact analysis (startup time, memory usage)
+  - Functional regression testing of core features
+  - New feature validation without breaking existing behavior
+  - Risk assessment and mitigation recommendations

@@ -15,13 +15,23 @@ type Criterion struct {
 	Type          string `yaml:"type,omitempty" json:"type,omitempty"` // e.g. "cost"
 }
 
+// SetupEntry provides context or files for agent setup.
+type SetupEntry struct {
+	Type    string `yaml:"type" json:"type"`       // text, file, or url
+	Label   string `yaml:"label" json:"label"`     // descriptive label
+	Content string `yaml:"content" json:"content"` // text content or file path or url
+	Path    string `yaml:"path,omitempty" json:"path,omitempty"` // optional path for file entries
+}
+
 // TestCase defines input and expected characteristics for an agent evaluation.
 type TestCase struct {
-	Name        string `yaml:"name" json:"name"`
-	Description string `yaml:"description" json:"description"`
-	Input       string `yaml:"input" json:"input"`
-	Output      string `yaml:"output,omitempty" json:"output,omitempty"` // pre-captured output
-	Agent       string `yaml:"agent" json:"agent"`
+	Name           string       `yaml:"name" json:"name"`
+	Description    string       `yaml:"description" json:"description"`
+	Input          string       `yaml:"input" json:"input"`
+	ExpectedOutput string       `yaml:"expected_output,omitempty" json:"expected_output,omitempty"`
+	Context        []string     `yaml:"context,omitempty" json:"context,omitempty"`
+	Setup          []SetupEntry `yaml:"setup,omitempty" json:"setup,omitempty"`
+	Agent          string       `yaml:"agent" json:"agent"`
 }
 
 // CostInfo tracks token usage and estimated cost.
@@ -43,9 +53,11 @@ type CriterionScore struct {
 
 // CaseResult holds scores and cost for one test case.
 type CaseResult struct {
-	CaseName string           `json:"case_name"`
-	Scores   []CriterionScore `json:"scores"`
-	Cost     CostInfo         `json:"cost"`
+	CaseName     string           `json:"case_name"`
+	ActualOutput string           `json:"actual_output"`
+	Scores       []CriterionScore `json:"scores"`
+	AgentCost    CostInfo         `json:"agent_cost"`
+	JudgeCost    CostInfo         `json:"judge_cost"`
 }
 
 // AgentResult holds all case results for one agent.

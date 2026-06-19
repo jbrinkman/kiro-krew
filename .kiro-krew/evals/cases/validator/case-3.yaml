@@ -1,0 +1,25 @@
+name: performance-validation
+description: "Test validator's assessment of performance optimizations"
+agent: validator
+input: |
+  Validate that the TUI refresh rate optimization actually reduces CPU usage
+  while maintaining user experience quality.
+setup:
+  - type: text
+    label: "Optimization Claims"
+    content: "Reduced from 60fps constant to 1fps idle/60fps active, should significantly reduce CPU usage"
+  - type: text
+    label: "Performance Metrics"
+    content: "Measure CPU usage in idle vs active states, verify responsiveness maintained"
+context:
+  - "Should measure actual performance improvement"
+  - "User experience must not be degraded"
+  - "CPU usage reduction should be quantifiable"
+  - "Responsiveness during active periods is critical"
+expected_output: |
+  Performance validation including:
+  - CPU usage measurements (before/after optimization)
+  - User experience testing (input responsiveness, animation smoothness)
+  - Verification of idle vs active state transitions
+  - Quantified performance improvement metrics
+  - Assessment of any trade-offs or regressions

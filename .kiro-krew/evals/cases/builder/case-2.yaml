@@ -1,0 +1,27 @@
+name: error-handling-implementation
+description: "Test builder's implementation of robust error handling"
+agent: builder
+input: |
+  Implement error handling for the GitHub API polling mechanism. Add retry logic
+  with exponential backoff and graceful degradation when GitHub is unavailable.
+  
+  Task: Enhance internal/watcher/github.go with resilient API calls
+setup:
+  - type: text
+    label: "Requirements"
+    content: "3 retry attempts, exponential backoff (1s, 2s, 4s), log failures, continue operation with last known state"
+  - type: text
+    label: "Current Code"
+    content: "Basic gh CLI calls without error handling in pollGitHub() function"
+context:
+  - "Should use exponential backoff pattern"
+  - "Must log errors appropriately"
+  - "Should not crash the application on API failures"
+  - "Retry logic should be configurable"
+expected_output: |
+  Error handling implementation with:
+  - Retry wrapper function with exponential backoff
+  - Proper error logging at appropriate levels
+  - Graceful fallback to cached state
+  - Configuration for retry attempts and delays
+  - Non-blocking error recovery

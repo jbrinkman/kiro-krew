@@ -1,0 +1,28 @@
+name: error-recovery
+description: "Test krew-lead's handling of agent failures and recovery strategies"
+agent: krew-lead
+input: |
+  Handle a scenario where the builder agent fails during implementation.
+  Decide whether to retry, escalate, or abort based on the failure type.
+setup:
+  - type: text
+    label: "Failure Scenario"
+    content: "Builder agent failed with compilation error after implementing status command"
+  - type: text
+    label: "Error Details"
+    content: "Syntax error in internal/tui/commands.go:45, missing closing brace"
+  - type: text
+    label: "Context"
+    content: "This is attempt #1 of 3 maximum retries allowed"
+context:
+  - "Should analyze the failure type (compilation vs logic error)"
+  - "Compilation errors often indicate simple syntax issues"
+  - "Should retry with additional guidance to builder"
+  - "Must track retry attempts and limit escalation"
+expected_output: |
+  Error recovery strategy including:
+  - Failure analysis and categorization
+  - Decision to retry with specific guidance
+  - Additional context provided to builder about the error
+  - Retry attempt tracking and escalation rules
+  - Fallback plan if retries are exhausted

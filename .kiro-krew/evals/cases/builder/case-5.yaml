@@ -1,0 +1,27 @@
+name: performance-optimization
+description: "Test builder's ability to optimize performance-critical code"
+agent: builder
+input: |
+  Optimize the TUI update mechanism to reduce CPU usage during idle periods.
+  Currently updates run at 60fps constantly, causing unnecessary resource usage.
+  
+  Task: Implement smart refresh in internal/tui/tui.go with event-driven updates
+setup:
+  - type: text
+    label: "Current Implementation"
+    content: "BubbleTea program runs Update() at fixed 60fps using tea.Tick(time.Second/60)"
+  - type: text
+    label: "Optimization Goal"
+    content: "Reduce to 1fps during idle, 60fps during active periods, maintain responsiveness"
+context:
+  - "Should detect user activity vs idle state"
+  - "Must maintain smooth animations during activity"
+  - "CPU usage should drop significantly during idle"
+  - "User experience should remain unchanged"
+expected_output: |
+  Performance optimization including:
+  - Activity detection mechanism (keystrokes, agent updates)
+  - Variable refresh rate implementation
+  - Smooth transition between idle/active modes
+  - CPU usage measurement and verification
+  - Preserved user experience during all states

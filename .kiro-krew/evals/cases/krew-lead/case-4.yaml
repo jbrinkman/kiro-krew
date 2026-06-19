@@ -1,0 +1,25 @@
+name: resource-management
+description: "Test krew-lead's management of worktrees and cleanup procedures"
+agent: krew-lead
+input: |
+  Manage worktree lifecycle for issue #55, including proper cleanup after
+  both successful completion and failure scenarios.
+setup:
+  - type: text
+    label: "Worktree Context"
+    content: "Working in worktree issue-55-67890 on branch spec/issue-55-67890"
+  - type: text
+    label: "Completion Status"
+    content: "Implementation completed successfully, PR created and merged"
+context:
+  - "Successful completion requires worktree cleanup"
+  - "Branch should be merged back and removed"
+  - "Temporary files should be cleaned up"
+  - "Failure scenarios need different cleanup strategy"
+expected_output: |
+  Resource management plan including:
+  - Successful completion cleanup (merge, remove worktree, delete branch)
+  - Failure scenario cleanup (preserve for debugging vs cleanup)
+  - Temporary file and artifact management
+  - Error handling during cleanup operations
+  - Verification that cleanup completed successfully
