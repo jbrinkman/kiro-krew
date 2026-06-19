@@ -11,7 +11,7 @@ input: |
 setup:
   - type: file
     label: "Issue Context"
-    content: "file://.kiro-krew/evals/fixtures/status-command-issue.md"
+    path: ".kiro-krew/evals/fixtures/status-command-issue.md"
   - type: text
     label: "Existing Pattern"
     content: "Other commands follow pattern: handleCommandName() method + switch case in executeCommand()"

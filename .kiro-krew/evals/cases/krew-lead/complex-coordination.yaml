@@ -7,7 +7,7 @@ input: |
 setup:
   - type: file
     label: "Complex Specification"
-    content: "file://.kiro-krew/evals/fixtures/sample-spec.md"
+    path: ".kiro-krew/evals/fixtures/sample-spec.md"
   - type: text
     label: "Phase Dependencies"
     content: "Database schema → Auth package → API handlers → Middleware → Integration tests"

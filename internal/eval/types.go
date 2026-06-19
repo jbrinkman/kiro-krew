@@ -17,9 +17,9 @@ type Criterion struct {
 
 // SetupEntry provides context or files for agent setup.
 type SetupEntry struct {
-	Type    string `yaml:"type" json:"type"`       // text, file, or url
-	Label   string `yaml:"label" json:"label"`     // descriptive label
-	Content string `yaml:"content" json:"content"` // text content or file path or url
+	Type    string `yaml:"type" json:"type"`                     // text, file, or url
+	Label   string `yaml:"label" json:"label"`                   // descriptive label
+	Content string `yaml:"content" json:"content"`               // text content or file path or url
 	Path    string `yaml:"path,omitempty" json:"path,omitempty"` // optional path for file entries
 }
 

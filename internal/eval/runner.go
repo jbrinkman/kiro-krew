@@ -145,7 +145,7 @@ func evaluate(rubric Rubric, cases []TestCase, gitHash string) AgentResult {
 // assemblePrompt combines setup entries and input into a complete agent prompt
 func assemblePrompt(setup []SetupEntry, input string) (string, error) {
 	var parts []string
-	
+
 	for _, entry := range setup {
 		switch entry.Type {
 		case "text":
@@ -155,18 +155,16 @@ func assemblePrompt(setup []SetupEntry, input string) (string, error) {
 				parts = append(parts, entry.Content)
 			}
 		case "file":
-			// Handle file:// prefix in content field
-			filePath := entry.Content
-			if strings.HasPrefix(filePath, "file://") {
-				filePath = strings.TrimPrefix(filePath, "file://")
+			if entry.Path == "" {
+				return "", fmt.Errorf("setup entry '%s' has type 'file' but no path", entry.Label)
 			}
-			content, err := os.ReadFile(filePath)
+			content, err := os.ReadFile(entry.Path)
 			if err != nil {
-				return "", fmt.Errorf("failed to read setup file %s: %w", filePath, err)
+				return "", fmt.Errorf("failed to read setup file %s: %w", entry.Path, err)
 			}
 			label := entry.Label
 			if label == "" {
-				label = entry.Content
+				label = entry.Path
 			}
 			parts = append(parts, fmt.Sprintf("=== %s ===\n%s", label, string(content)))
 		case "url":
@@ -175,12 +173,12 @@ func assemblePrompt(setup []SetupEntry, input string) (string, error) {
 			return "", fmt.Errorf("unknown setup entry type: %s", entry.Type)
 		}
 	}
-	
+
 	if len(parts) > 0 {
 		parts = append(parts, "=== Task ===")
 	}
 	parts = append(parts, input)
-	
+
 	return strings.Join(parts, "\n\n"), nil
 }
 
@@ -191,15 +189,15 @@ func invokeAgent(agent, prompt string) (string, CostInfo, error) {
 
 	cmd := exec.CommandContext(ctx, "kiro-cli", "chat", "--agent", agent, "--no-interactive", "--trust-all-tools")
 	cmd.Stdin = strings.NewReader(prompt)
-	
+
 	output, err := cmd.Output()
 	if err != nil {
 		return "", CostInfo{}, fmt.Errorf("kiro-cli invocation failed: %w", err)
 	}
-	
+
 	result := stripANSISequences(string(output))
 	cost := estimateCost(prompt, result)
-	
+
 	return result, cost, nil
 }
 
@@ -210,7 +208,7 @@ func scoreDeterministic(criterion Criterion, tc TestCase, actualOutput string) (
 	}
 
 	maxScore := parseMaxScore(criterion.Scoring)
-	
+
 	// Check against context facts if available
 	contextViolations := 0
 	if len(tc.Context) > 0 {
@@ -260,7 +258,7 @@ func scoreDeterministic(criterion Criterion, tc TestCase, actualOutput string) (
 				}
 			}
 		}
-		
+
 		// Check against context facts for file existence
 		if len(tc.Context) > 0 {
 			for i, path := range candidates {
@@ -271,7 +269,7 @@ func scoreDeterministic(criterion Criterion, tc TestCase, actualOutput string) (
 				}
 			}
 		}
-		
+
 		if len(candidates) == 0 {
 			return 1, "no file references found", false
 		}
@@ -351,7 +349,7 @@ func scoreDeterministic(criterion Criterion, tc TestCase, actualOutput string) (
 				errorCount++
 			}
 		}
-		
+
 		score := maxScore / 2
 		if successCount > 0 && errorCount == 0 {
 			score = maxScore
@@ -362,14 +360,14 @@ func scoreDeterministic(criterion Criterion, tc TestCase, actualOutput string) (
 		if contextViolations > 0 {
 			score = max(1, score-contextViolations)
 		}
-		
+
 		reasoning := "no clear success or error indicators"
 		if successCount > 0 && errorCount == 0 {
 			reasoning = "code appears to compile/run successfully"
 		} else if errorCount > 0 {
 			reasoning = "compilation or runtime errors detected"
 		}
-		
+
 		return score, reasoning, false
 
 	case strings.Contains(criterion.Name, "test_coverage"):
@@ -406,14 +404,14 @@ func runKiroCLI(prompt string) ([]byte, error) {
 }
 
 func scoreLLMJudge(criterion Criterion, tc TestCase, actualOutput string) (CostInfo, int, string, bool) {
-	contextStr := ""
+	contextSection := ""
 	if len(tc.Context) > 0 {
-		contextStr = fmt.Sprintf("\n\nCONTEXT FACTS (use for hallucination detection):\n%s", strings.Join(tc.Context, "\n"))
+		contextSection = fmt.Sprintf("\nCONTEXT FACTS (use for hallucination detection — deduct for contradictions):\n%s\n", strings.Join(tc.Context, "\n"))
 	}
-	
-	expectedStr := ""
+
+	expectedSection := ""
 	if tc.ExpectedOutput != "" {
-		expectedStr = fmt.Sprintf("\n\nEXPECTED OUTPUT (for similarity comparison):\n%s", tc.ExpectedOutput)
+		expectedSection = fmt.Sprintf("\nEXPECTED OUTPUT (compare similarity and completeness):\n%s\n", tc.ExpectedOutput)
 	}
 
 	prompt := fmt.Sprintf(`Evaluate this output against the criterion.
@@ -430,33 +428,12 @@ SCORING SCALE:
 3 = Partially meets the criterion with notable room for improvement
 4 = Mostly meets the criterion with minor gaps
 5 = Fully satisfies the criterion
-
-%s - Check if output contradicts any context facts (deduct for hallucinations)
-%s - Compare similarity and completeness against expected output
-
+%s%s
 INPUT:
-%s%s%s
+%s
 
 ACTUAL OUTPUT TO EVALUATE:
-%s`, 
-		criterion.Name, 
-		criterion.Description, 
-		func() string { 
-			if contextStr != "" { 
-				return "CONTEXT GUIDANCE:" 
-			} 
-			return "NO CONTEXT PROVIDED"
-		}(),
-		func() string { 
-			if expectedStr != "" { 
-				return "EXPECTED OUTPUT GUIDANCE:" 
-			} 
-			return "NO EXPECTED OUTPUT PROVIDED"
-		}(),
-		tc.Input,
-		contextStr,
-		expectedStr,
-		actualOutput)
+%s`, criterion.Name, criterion.Description, contextSection, expectedSection, tc.Input, actualOutput)
 
 	output, err := runKiroCLI(prompt)
 	if err != nil {

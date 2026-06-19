@@ -8,7 +8,7 @@ input: |
 setup:
   - type: file
     label: "Issue Body"
-    content: "file://.kiro-krew/evals/fixtures/status-command-issue.md"
+    path: ".kiro-krew/evals/fixtures/status-command-issue.md"
   - type: text
     label: "Project Context"
     content: "This is a Go project using BubbleTea for terminal UI. Commands are handled in internal/tui/commands.go"

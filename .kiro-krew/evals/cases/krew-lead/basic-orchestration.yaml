@@ -8,7 +8,7 @@ input: |
 setup:
   - type: file
     label: "Issue Details"
-    content: "file://.kiro-krew/evals/fixtures/status-command-issue.md"
+    path: ".kiro-krew/evals/fixtures/status-command-issue.md"
   - type: text
     label: "Worktree Name"
     content: "issue-42-12345"

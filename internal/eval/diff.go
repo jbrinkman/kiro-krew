@@ -227,22 +227,22 @@ func showOutputChanges(resultA, resultB AgentResult) {
 	// Compare outputs for cases with same name
 	outputsA := make(map[string]string)
 	outputsB := make(map[string]string)
-	
+
 	for _, c := range resultA.Cases {
 		outputsA[c.CaseName] = c.ActualOutput
 	}
 	for _, c := range resultB.Cases {
 		outputsB[c.CaseName] = c.ActualOutput
 	}
-	
+
 	for caseName, outputA := range outputsA {
 		if outputB, exists := outputsB[caseName]; exists && outputA != outputB {
 			fmt.Printf("    Case '%s' output changed:\n", caseName)
-			
+
 			// Truncate long outputs for side-by-side display
 			linesA := strings.Split(strings.TrimSpace(outputA), "\n")
 			linesB := strings.Split(strings.TrimSpace(outputB), "\n")
-			
+
 			maxLines := 3
 			if len(linesA) > maxLines {
 				linesA = append(linesA[:maxLines], "...")
@@ -250,7 +250,7 @@ func showOutputChanges(resultA, resultB AgentResult) {
 			if len(linesB) > maxLines {
 				linesB = append(linesB[:maxLines], "...")
 			}
-			
+
 			fmt.Printf("      Before: %s\n", strings.Join(linesA, " "))
 			fmt.Printf("      After:  %s\n", strings.Join(linesB, " "))
 		}
@@ -260,46 +260,46 @@ func showOutputChanges(resultA, resultB AgentResult) {
 func showCostTrends(summaryA, summaryB Summary, runA, runB, resultsDir string) {
 	agentCostA, judgeCostA := calculateAgentJudgeCosts(runA, resultsDir)
 	agentCostB, judgeCostB := calculateAgentJudgeCosts(runB, resultsDir)
-	
-	fmt.Printf("  Agent tokens:  %d → %d (%+d)\n", 
-		agentCostA.TokensIn+agentCostA.TokensOut, 
+
+	fmt.Printf("  Agent tokens:  %d → %d (%+d)\n",
+		agentCostA.TokensIn+agentCostA.TokensOut,
 		agentCostB.TokensIn+agentCostB.TokensOut,
 		(agentCostB.TokensIn+agentCostB.TokensOut)-(agentCostA.TokensIn+agentCostA.TokensOut))
-	
-	fmt.Printf("  Judge tokens:  %d → %d (%+d)\n", 
-		judgeCostA.TokensIn+judgeCostA.TokensOut, 
+
+	fmt.Printf("  Judge tokens:  %d → %d (%+d)\n",
+		judgeCostA.TokensIn+judgeCostA.TokensOut,
 		judgeCostB.TokensIn+judgeCostB.TokensOut,
 		(judgeCostB.TokensIn+judgeCostB.TokensOut)-(judgeCostA.TokensIn+judgeCostA.TokensOut))
 }
 
 func calculateAgentJudgeCosts(runDir, resultsDir string) (CostInfo, CostInfo) {
 	var agentCost, judgeCost CostInfo
-	
+
 	entries, err := os.ReadDir(filepath.Join(resultsDir, runDir))
 	if err != nil {
 		return agentCost, judgeCost
 	}
-	
+
 	for _, entry := range entries {
 		if !strings.HasSuffix(entry.Name(), ".json") || entry.Name() == "summary.json" {
 			continue
 		}
-		
+
 		result, err := loadAgentResult(filepath.Join(resultsDir, runDir, entry.Name()))
 		if err != nil {
 			continue
 		}
-		
+
 		for _, c := range result.Cases {
 			agentCost.TokensIn += c.AgentCost.TokensIn
 			agentCost.TokensOut += c.AgentCost.TokensOut
 			agentCost.EstimatedUSD += c.AgentCost.EstimatedUSD
-			
+
 			judgeCost.TokensIn += c.JudgeCost.TokensIn
 			judgeCost.TokensOut += c.JudgeCost.TokensOut
 			judgeCost.EstimatedUSD += c.JudgeCost.EstimatedUSD
 		}
 	}
-	
+
 	return agentCost, judgeCost
 }

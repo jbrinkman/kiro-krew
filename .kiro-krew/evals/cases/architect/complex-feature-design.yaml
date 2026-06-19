@@ -7,10 +7,10 @@ input: |
 setup:
   - type: file
     label: "Feature Specification"
-    content: "file://.kiro-krew/evals/fixtures/sample-spec.md"
+    path: ".kiro-krew/evals/fixtures/sample-spec.md"
   - type: file
     label: "Codebase Structure"
-    content: "file://.kiro-krew/evals/fixtures/codebase-context.md"
+    path: ".kiro-krew/evals/fixtures/codebase-context.md"
 context:
   - "Should break down into logical implementation phases"
   - "Database changes should be identified"
