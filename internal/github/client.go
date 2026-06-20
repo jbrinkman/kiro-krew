@@ -137,7 +137,7 @@ func VerifyPRExists(repo string, issueNumber, pid int) (bool, error) {
 }
 
 type Release struct {
-	TagName string `json:"tagName"`
+	TagName string `json:"tag_name"`
 	Name    string `json:"name"`
 }
 
@@ -146,26 +146,22 @@ func GetLatestRelease(repo string) (*Release, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "gh", "release", "view", "--repo", repo, "--json", "tagName,name")
-	output, err := cmd.CombinedOutput()
+	cmd := exec.CommandContext(ctx, "gh", "api", fmt.Sprintf("repos/%s/releases", repo), "--jq", ".[0] | {tag_name, name}")
+	output, err := cmd.Output()
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			return nil, fmt.Errorf("gh release view timed out after 10 seconds")
+			return nil, fmt.Errorf("gh api releases timed out after 10 seconds")
 		}
+		return nil, fmt.Errorf("gh api releases failed: %w", err)
+	}
 
-		// Check for no releases case: exit code 1 with "release not found" in stderr
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
-			if strings.Contains(string(output), "release not found") {
-				return nil, ErrNoReleases
-			}
-		}
-
-		return nil, fmt.Errorf("gh release view failed: %w", err)
+	trimmed := strings.TrimSpace(string(output))
+	if trimmed == "" || trimmed == "null" {
+		return nil, ErrNoReleases
 	}
 
 	var release Release
-	if err := json.Unmarshal(output, &release); err != nil {
+	if err := json.Unmarshal([]byte(trimmed), &release); err != nil {
 		return nil, fmt.Errorf("failed to parse release info: %w", err)
 	}
 
