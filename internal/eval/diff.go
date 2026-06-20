@@ -8,15 +8,6 @@ import (
 	"strings"
 )
 
-// parseDirectoryName extracts git hash from directory name (timestamp-hash or just hash)
-func parseDirectoryName(name string) string {
-	parts := strings.Split(name, "-")
-	if len(parts) >= 2 {
-		return parts[len(parts)-1] // last part is the hash
-	}
-	return name // assume it's just the hash
-}
-
 // resolveRunDirectory handles both old and new format detection
 func resolveRunDirectory(runName string) (string, error) {
 	resultsDir := filepath.Join(".kiro-krew", "evals", "results")

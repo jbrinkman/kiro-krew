@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -61,12 +62,12 @@ func Run(agent string) error {
 		// Task 2: Validate test cases exist
 		cases, err := loadCases(rubric.Agent)
 		if err != nil {
-			fmt.Printf("⚠️  Warning: no test cases for agent %s: %v\n", rubric.Agent, err)
+			fmt.Fprintf(os.Stderr, "⚠️  Warning: no test cases for agent %s: %v\n", rubric.Agent, err)
 			continue
 		}
 
 		fmt.Printf("   Processing %d test cases...\n", len(cases))
-		result := evaluate(rubric, cases, gitHash)
+		result := evaluate(rubric, cases, gitHash, os.Stdout)
 		allResults = append(allResults, result)
 		totalCases += len(result.Cases)
 
@@ -101,34 +102,34 @@ func Run(agent string) error {
 	return nil
 }
 
-func evaluate(rubric Rubric, cases []TestCase, gitHash string) AgentResult {
+func evaluate(rubric Rubric, cases []TestCase, gitHash string, out io.Writer) AgentResult {
 	result := AgentResult{
 		Agent:   rubric.Agent,
 		GitHash: gitHash,
 	}
 
 	for i, tc := range cases {
-		fmt.Printf("   [%d/%d] %s", i+1, len(cases), tc.Name)
+		fmt.Fprintf(out, "   [%d/%d] %s", i+1, len(cases), tc.Name)
 
 		cr := CaseResult{CaseName: tc.Name}
 
 		// Task 4: Structured output - Agent → Case execution
 		prompt, err := assemblePrompt(tc.Setup, tc.Input)
 		if err != nil {
-			fmt.Printf(" ❌ (prompt error)\n")
-			fmt.Printf("      Error: %v\n", err)
+			fmt.Fprintf(out, " ❌ (prompt error)\n")
+			fmt.Fprintf(out, "      Error: %v\n", err)
 			cr.ActualOutput = ""
 		} else {
-			fmt.Printf(" → running agent...")
+			fmt.Fprintf(out, " → running agent...")
 			actualOutput, cost, err := invokeAgent(rubric.Agent, prompt)
 			if err != nil {
-				fmt.Printf(" ❌ (agent failed)\n")
-				fmt.Printf("      Error: %v\n", err)
+				fmt.Fprintf(out, " ❌ (agent failed)\n")
+				fmt.Fprintf(out, "      Error: %v\n", err)
 				cr.ActualOutput = ""
 			} else {
 				cr.ActualOutput = actualOutput
 				cr.AgentCost = cost
-				fmt.Printf(" → evaluating...")
+				fmt.Fprintf(out, " → evaluating...")
 			}
 		}
 
@@ -176,25 +177,29 @@ func evaluate(rubric Rubric, cases []TestCase, gitHash string) AgentResult {
 					maxTotal += s.MaxScore
 				}
 			}
-			pct := float64(totalScore) / float64(maxTotal) * 100
-			if pct >= 80 {
-				fmt.Printf(" ✅ %.0f%%\n", pct)
-			} else if pct >= 60 {
-				fmt.Printf(" ⚠️  %.0f%%\n", pct)
+			if maxTotal == 0 {
+				fmt.Fprintf(out, " ⚠️  no scored criteria\n")
 			} else {
-				fmt.Printf(" ❌ %.0f%%\n", pct)
-			}
+				pct := float64(totalScore) / float64(maxTotal) * 100
+				if pct >= 80 {
+					fmt.Fprintf(out, " ✅ %.0f%%\n", pct)
+				} else if pct >= 60 {
+					fmt.Fprintf(out, " ⚠️  %.0f%%\n", pct)
+				} else {
+					fmt.Fprintf(out, " ❌ %.0f%%\n", pct)
+				}
 
-			// Show criterion breakdown for low scores
-			if pct < 60 {
-				for _, s := range cr.Scores {
-					if !s.Skipped && s.Score < s.MaxScore*3/4 {
-						fmt.Printf("      %s: %d/%d\n", s.Name, s.Score, s.MaxScore)
+				// Show criterion breakdown for low scores
+				if pct < 60 {
+					for _, s := range cr.Scores {
+						if !s.Skipped && s.Score < s.MaxScore*3/4 {
+							fmt.Fprintf(out, "      %s: %d/%d\n", s.Name, s.Score, s.MaxScore)
+						}
 					}
 				}
 			}
 		} else {
-			fmt.Printf(" ❌ no output\n")
+			fmt.Fprintf(out, " ❌ no output\n")
 		}
 
 		result.Cases = append(result.Cases, cr)
@@ -245,9 +250,8 @@ func assemblePrompt(setup []SetupEntry, input string) (string, error) {
 
 // invokeAgent executes kiro-cli with the given agent and prompt, with timeout support
 func invokeAgent(agent, prompt string) (string, CostInfo, error) {
-	// Task 3: Support configurable timeout via environment variable
 	timeoutStr := os.Getenv("KIRO_KREW_EVAL_TIMEOUT")
-	timeout := 2 * time.Minute // default
+	timeout := 2 * time.Minute
 	if timeoutStr != "" {
 		if parsedTimeout, err := time.ParseDuration(timeoutStr); err == nil {
 			timeout = parsedTimeout
@@ -260,45 +264,19 @@ func invokeAgent(agent, prompt string) (string, CostInfo, error) {
 	cmd := exec.CommandContext(ctx, "kiro-cli", "chat", "--agent", agent, "--no-interactive", "--trust-all-tools")
 	cmd.Stdin = strings.NewReader(prompt)
 
-	// Task 3: Show timeout indicator for long-running commands
-	done := make(chan struct{})
-	var output []byte
-	var execErr error
+	start := time.Now()
+	output, err := cmd.Output()
+	elapsed := time.Since(start)
 
-	go func() {
-		defer close(done)
-		output, execErr = cmd.Output()
-	}()
-
-	// Progress indicator for commands > 30 seconds
-	timeoutIndicator := time.NewTimer(30 * time.Second)
-	defer timeoutIndicator.Stop()
-
-	select {
-	case <-done:
-		// Command completed normally
-		if execErr != nil {
-			if ctx.Err() == context.DeadlineExceeded {
-				return "", CostInfo{}, fmt.Errorf("kiro-cli timeout after %v", timeout)
-			}
-			return "", CostInfo{}, fmt.Errorf("kiro-cli invocation failed: %w", execErr)
-		}
-	case <-timeoutIndicator.C:
+	if elapsed > 30*time.Second {
 		fmt.Printf(" (>30s)")
-		// Wait for actual completion or timeout
-		select {
-		case <-done:
-			if execErr != nil {
-				if ctx.Err() == context.DeadlineExceeded {
-					return "", CostInfo{}, fmt.Errorf("kiro-cli timeout after %v", timeout)
-				}
-				return "", CostInfo{}, fmt.Errorf("kiro-cli invocation failed: %w", execErr)
-			}
-		case <-ctx.Done():
+	}
+
+	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
 			return "", CostInfo{}, fmt.Errorf("kiro-cli timeout after %v", timeout)
 		}
-	case <-ctx.Done():
-		return "", CostInfo{}, fmt.Errorf("kiro-cli timeout after %v", timeout)
+		return "", CostInfo{}, fmt.Errorf("kiro-cli invocation failed: %w", err)
 	}
 
 	result := stripANSISequences(string(output))
@@ -695,8 +673,4 @@ func getGitShortHash() (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(out)), nil
-}
-
-func generateTimestampPrefix() string {
-	return time.Now().Format("20060102-150405")
 }
