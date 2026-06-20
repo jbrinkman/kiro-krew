@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/jbrinkman/kiro-krew/internal/agent"
 	"github.com/jbrinkman/kiro-krew/internal/config"
+	"github.com/jbrinkman/kiro-krew/internal/github"
 	"github.com/jbrinkman/kiro-krew/internal/hotkey"
 	"github.com/jbrinkman/kiro-krew/internal/session"
 	"github.com/jbrinkman/kiro-krew/internal/version"
@@ -209,6 +211,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case updateCheckMsg:
 		updateLines := []string{}
 		if msg.err != nil {
+			// Check if error is ErrNoReleases - hide update status section entirely
+			if errors.Is(msg.err, github.ErrNoReleases) {
+				if m.activeOverlay == overlayAbout {
+					// Hide update status section by passing empty slice
+					m.aboutDialog.UpdateStatusLine([]string{})
+					m.overlayContent.content = append(m.aboutDialog.GetFullContent(), "", "Press ESC to close")
+				}
+				// For console mode, don't add any activity lines
+				return m, nil
+			}
+
+			// Other errors - show error message as before
 			updateLines = append(updateLines,
 				m.styles.Warning.Render("Update Status: Unable to check for updates"),
 				m.styles.Error.Render(fmt.Sprintf("  Error: %v", msg.err)),

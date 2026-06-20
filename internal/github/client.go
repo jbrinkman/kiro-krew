@@ -13,6 +13,9 @@ import (
 // ErrRateLimited is returned when the GitHub API rate limit is exceeded.
 var ErrRateLimited = errors.New("GitHub API rate limit exceeded")
 
+// ErrNoReleases indicates no releases exist for the repository
+var ErrNoReleases = errors.New("no releases found")
+
 type Label struct {
 	Name string `json:"name"`
 }
@@ -144,11 +147,20 @@ func GetLatestRelease(repo string) (*Release, error) {
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "gh", "release", "view", "--repo", repo, "--json", "tagName,name")
-	output, err := cmd.Output()
+	output, err := cmd.CombinedOutput()
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
 			return nil, fmt.Errorf("gh release view timed out after 10 seconds")
 		}
+
+		// Check for no releases case: exit code 1 with "release not found" in stderr
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+			if strings.Contains(string(output), "release not found") {
+				return nil, ErrNoReleases
+			}
+		}
+
 		return nil, fmt.Errorf("gh release view failed: %w", err)
 	}
 
