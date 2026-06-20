@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -18,9 +19,144 @@ import (
 // ansiRegex matches all CSI (Control Sequence Introducer) escape sequences.
 var ansiRegex = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
 
+// RunWithOptions executes evaluation with extended CLI options.
+func RunWithOptions(agent string, testcase string, options RunOptions) error {
+	// Start performance profiling
+	StartProfiling()
+	defer func() {
+		profile := GenerateProfile()
+		fmt.Println() // Add spacing before performance report
+		PrintPerformanceReport(profile, nil)
+	}()
+
+	// Handle list command
+	if options.List {
+		return listTestCases(agent)
+	}
+
+	// Handle specific test case execution
+	if testcase != "" {
+		return runSingleTestCase(agent, testcase)
+	}
+
+	// Handle resume
+	if options.Resume {
+		return runWithResume(agent)
+	}
+
+	// Default to original behavior for backward compatibility
+	return Run(agent)
+}
+
+// listTestCases displays available test cases for an agent.
+func listTestCases(agent string) error {
+	if agent == "" {
+		return fmt.Errorf("❌ agent name required for --list")
+	}
+
+	return PrintTestCaseList(agent)
+}
+
+// runSingleTestCase executes a single test case for an agent.
+func runSingleTestCase(agent string, testcase string) error {
+	// Start performance profiling for single test
+	StartProfiling()
+	startupTime := MeasureStartupOverhead()
+	
+	if agent == "" {
+		return fmt.Errorf("❌ agent name required for test case execution")
+	}
+
+	// Validate test case exists using selective module
+	if err := ValidateTestCase(agent, testcase); err != nil {
+		return fmt.Errorf("❌ %w", err)
+	}
+
+	// Get the test case
+	targetCase, err := GetTestCase(agent, testcase)
+	if err != nil {
+		return fmt.Errorf("❌ %w", err)
+	}
+
+	fmt.Printf("🚀 Running single test case: %s/%s\n", agent, testcase)
+	fmt.Printf("📊 Startup overhead: %v\n", startupTime)
+
+	// Load rubric for the agent
+	rubrics, err := loadRubrics(agent)
+	if err != nil {
+		return fmt.Errorf("❌ failed to load rubrics for %s: %w", agent, err)
+	}
+
+	var rubric *Rubric
+	for _, r := range rubrics {
+		if r.Agent == agent {
+			rubric = &r
+			break
+		}
+	}
+
+	if rubric == nil {
+		return fmt.Errorf("❌ rubric not found for agent '%s'", agent)
+	}
+
+	// Setup results directory
+	gitHash, err := getGitShortHash()
+	if err != nil {
+		return fmt.Errorf("failed to get git hash: %w", err)
+	}
+
+	timestamp := generateTimestampPrefix()
+	resultsDir := filepath.Join(".kiro-krew", "evals", "results", timestamp)
+	if err := os.MkdirAll(resultsDir, 0755); err != nil {
+		return fmt.Errorf("failed to create results directory: %w", err)
+	}
+
+	// Run evaluation on single test case
+	result := evaluate(*rubric, []TestCase{*targetCase}, gitHash, os.Stdout)
+
+	// Write result file
+	resultFile := filepath.Join(resultsDir, agent+".json")
+	data, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal result: %w", err)
+	}
+
+	if err := os.WriteFile(resultFile, data, 0644); err != nil {
+		return fmt.Errorf("failed to write result file: %w", err)
+	}
+
+	// Generate and display performance analysis for single test
+	profile := GenerateProfile()
+	
+	// Save performance report
+	if perfErr := SavePerformanceReport(resultsDir, profile, nil); perfErr != nil {
+		fmt.Printf("⚠️  Failed to save performance report: %v\n", perfErr)
+	}
+	
+	fmt.Printf("📂 Results: %s\n", resultsDir)
+	
+	// Display concise performance summary for single test
+	fmt.Printf("\n📊 Performance Summary:\n")
+	fmt.Printf("  Test execution: %v\n", profile.TestCaseTimings[targetCase.Name])
+	fmt.Printf("  Startup overhead: %v\n", profile.StartupOverhead)
+	if len(profile.Bottlenecks) > 0 {
+		fmt.Printf("  Bottlenecks: %d identified (see performance.json)\n", len(profile.Bottlenecks))
+	}
+	
+	return nil
+}
+
 // Run executes the evaluation for all agents (or a specific agent) and writes results.
 func Run(agent string) error {
+	// Start performance profiling
+	StartProfiling()
+	
 	fmt.Println("🚀 Starting evaluation framework...")
+
+	// Measure startup overhead
+	fmt.Print("📊 Measuring kiro-cli startup overhead...")
+	startupTime := MeasureStartupOverhead()
+	fmt.Printf(" %v\n", startupTime)
 
 	// Task 2: Validate rubrics directory exists
 	rubricsDir := filepath.Join(".kiro-krew", "evals", "rubrics")
@@ -53,53 +189,38 @@ func Run(agent string) error {
 		return fmt.Errorf("failed to create results directory: %w", err)
 	}
 
-	var allResults []AgentResult
-	totalCases := 0
-
-	for _, rubric := range rubrics {
-		fmt.Printf("\n📋 Agent: %s\n", rubric.Agent)
-
-		// Task 2: Validate test cases exist
-		cases, err := loadCases(rubric.Agent)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "⚠️  Warning: no test cases for agent %s: %v\n", rubric.Agent, err)
-			continue
-		}
-
-		fmt.Printf("   Processing %d test cases...\n", len(cases))
-		result := evaluate(rubric, cases, gitHash, os.Stdout)
-		allResults = append(allResults, result)
-		totalCases += len(result.Cases)
-
-		data, err := json.MarshalIndent(result, "", "  ")
-		if err != nil {
-			fmt.Printf("❌ Failed to marshal results for %s: %v\n", rubric.Agent, err)
-			return fmt.Errorf("failed to marshal results for %s: %w", rubric.Agent, err)
-		}
-
-		outPath := filepath.Join(resultsDir, rubric.Agent+".json")
-		if err := os.WriteFile(outPath, data, 0644); err != nil {
-			fmt.Printf("❌ Failed to write results for %s: %v\n", rubric.Agent, err)
-			return fmt.Errorf("failed to write results for %s: %w", rubric.Agent, err)
-		}
-
-		fmt.Printf("✅ %s: %d cases completed\n", rubric.Agent, len(result.Cases))
+	// Create progress file to enable resumption
+	progressFile := filepath.Join(resultsDir, ".progress")
+	if err := os.WriteFile(progressFile, []byte("in-progress"), 0644); err != nil {
+		return fmt.Errorf("failed to create progress file: %w", err)
 	}
 
-	fmt.Println("\n📊 Generating evaluation summary...")
-	summary := buildSummary(allResults, gitHash)
-	data, err := json.MarshalIndent(summary, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal summary: %w", err)
+	// Use progressive evaluation
+	err := runProgressiveEvaluation(agent, resultsDir, false)
+	
+	// Generate performance analysis
+	profile := GenerateProfile()
+	
+	// Investigate parallel execution potential if we have an agent specified
+	var benchmark *ParallelBenchmark
+	if agent != "" {
+		fmt.Printf("\n🧪 Investigating parallel execution for %s...\n", agent)
+		if parallelBench, perfErr := InvestigateParallelExecution(agent); perfErr == nil {
+			benchmark = parallelBench
+		} else {
+			fmt.Printf("⚠️  Parallel execution test failed: %v\n", perfErr)
+		}
 	}
-
-	if err := os.WriteFile(filepath.Join(resultsDir, "summary.json"), data, 0644); err != nil {
-		return fmt.Errorf("failed to write summary: %w", err)
+	
+	// Save performance report
+	if perfErr := SavePerformanceReport(resultsDir, profile, benchmark); perfErr != nil {
+		fmt.Printf("⚠️  Failed to save performance report: %v\n", perfErr)
 	}
-
-	fmt.Printf("\n🎉 Evaluation complete: %d total cases across %d agents\n", totalCases, len(allResults))
-	fmt.Printf("📂 Results: %s\n", resultsDir)
-	return nil
+	
+	// Display performance analysis
+	PrintPerformanceReport(profile, benchmark)
+	
+	return err
 }
 
 func evaluate(rubric Rubric, cases []TestCase, gitHash string, out io.Writer) AgentResult {
@@ -111,6 +232,7 @@ func evaluate(rubric Rubric, cases []TestCase, gitHash string, out io.Writer) Ag
 	for i, tc := range cases {
 		fmt.Fprintf(out, "   [%d/%d] %s", i+1, len(cases), tc.Name)
 
+		testStart := time.Now()
 		cr := CaseResult{CaseName: tc.Name}
 
 		// Task 4: Structured output - Agent → Case execution
@@ -121,14 +243,16 @@ func evaluate(rubric Rubric, cases []TestCase, gitHash string, out io.Writer) Ag
 			cr.ActualOutput = ""
 		} else {
 			fmt.Fprintf(out, " → running agent...")
-			actualOutput, cost, err := invokeAgent(rubric.Agent, prompt)
+			actualOutput, cost, errorContext, err := invokeAgent(rubric.Agent, prompt)
 			if err != nil {
 				fmt.Fprintf(out, " ❌ (agent failed)\n")
 				fmt.Fprintf(out, "      Error: %v\n", err)
 				cr.ActualOutput = ""
+				cr.ErrorContext = errorContext
 			} else {
 				cr.ActualOutput = actualOutput
 				cr.AgentCost = cost
+				cr.ErrorContext = errorContext
 				fmt.Fprintf(out, " → evaluating...")
 			}
 		}
@@ -181,16 +305,18 @@ func evaluate(rubric Rubric, cases []TestCase, gitHash string, out io.Writer) Ag
 				fmt.Fprintf(out, " ⚠️  no scored criteria\n")
 			} else {
 				pct := float64(totalScore) / float64(maxTotal) * 100
-				if pct >= 80 {
-					fmt.Fprintf(out, " ✅ %.0f%%\n", pct)
+				threshold := getThreshold(tc)
+
+				if pct >= threshold {
+					fmt.Fprintf(out, " ✅ %.0f%% (threshold: %.0f%%)\n", pct, threshold)
 				} else if pct >= 60 {
-					fmt.Fprintf(out, " ⚠️  %.0f%%\n", pct)
+					fmt.Fprintf(out, " ⚠️  %.0f%% (threshold: %.0f%%)\n", pct, threshold)
 				} else {
-					fmt.Fprintf(out, " ❌ %.0f%%\n", pct)
+					fmt.Fprintf(out, " ❌ %.0f%% (threshold: %.0f%%)\n", pct, threshold)
 				}
 
-				// Show criterion breakdown for low scores
-				if pct < 60 {
+				// Show criterion breakdown for scores below threshold
+				if pct < threshold {
 					for _, s := range cr.Scores {
 						if !s.Skipped && s.Score < s.MaxScore*3/4 {
 							fmt.Fprintf(out, "      %s: %d/%d\n", s.Name, s.Score, s.MaxScore)
@@ -201,6 +327,10 @@ func evaluate(rubric Rubric, cases []TestCase, gitHash string, out io.Writer) Ag
 		} else {
 			fmt.Fprintf(out, " ❌ no output\n")
 		}
+
+		// Track test case completion for performance profiling
+		testDuration := time.Since(testStart)
+		TrackTestCase(tc.Name, testDuration)
 
 		result.Cases = append(result.Cases, cr)
 	}
@@ -249,7 +379,7 @@ func assemblePrompt(setup []SetupEntry, input string) (string, error) {
 }
 
 // invokeAgent executes kiro-cli with the given agent and prompt, with timeout support
-func invokeAgent(agent, prompt string) (string, CostInfo, error) {
+func invokeAgent(agent, prompt string) (string, CostInfo, *ErrorContext, error) {
 	timeoutStr := os.Getenv("KIRO_KREW_EVAL_TIMEOUT")
 	timeout := 2 * time.Minute
 	if timeoutStr != "" {
@@ -264,25 +394,69 @@ func invokeAgent(agent, prompt string) (string, CostInfo, error) {
 	cmd := exec.CommandContext(ctx, "kiro-cli", "chat", "--agent", agent, "--no-interactive", "--trust-all-tools")
 	cmd.Stdin = strings.NewReader(prompt)
 
+	// Capture working directory
+	workingDir, _ := os.Getwd()
+
+	// Capture relevant environment variables
+	envVars := make(map[string]string)
+	for _, key := range []string{"KIRO_KREW_EVAL_TIMEOUT", "PATH", "HOME"} {
+		if val := os.Getenv(key); val != "" {
+			envVars[key] = val
+		}
+	}
+
 	start := time.Now()
-	output, err := cmd.Output()
+	var stdout, stderr []byte
+	var err error
+
+	// Use CombinedOutput to capture both stdout and stderr
+	output := &strings.Builder{}
+	errOutput := &strings.Builder{}
+
+	cmd.Stdout = output
+	cmd.Stderr = errOutput
+
+	err = cmd.Run()
 	elapsed := time.Since(start)
 
 	if elapsed > 30*time.Second {
 		fmt.Printf(" (>30s)")
 	}
 
-	if err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			return "", CostInfo{}, fmt.Errorf("kiro-cli timeout after %v", timeout)
+	stdout = []byte(output.String())
+	stderr = []byte(errOutput.String())
+
+	// Create error context for any execution issues
+	var errorContext *ErrorContext
+	if err != nil || len(stderr) > 0 {
+		exitCode := 0
+		if exitError, ok := err.(*exec.ExitError); ok {
+			exitCode = exitError.ExitCode()
 		}
-		return "", CostInfo{}, fmt.Errorf("kiro-cli invocation failed: %w", err)
+
+		errorContext = &ErrorContext{
+			Command:     fmt.Sprintf("kiro-cli chat --agent %s --no-interactive --trust-all-tools", agent),
+			WorkingDir:  workingDir,
+			Environment: envVars,
+			Stderr:      string(stderr),
+			ExitCode:    exitCode,
+		}
 	}
 
-	result := stripANSISequences(string(output))
+	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			if errorContext != nil {
+				errorContext.Stderr = fmt.Sprintf("timeout after %v\n%s", timeout, errorContext.Stderr)
+			}
+			return "", CostInfo{}, errorContext, fmt.Errorf("kiro-cli timeout after %v", timeout)
+		}
+		return "", CostInfo{}, errorContext, fmt.Errorf("kiro-cli invocation failed: %w", err)
+	}
+
+	result := stripANSISequences(string(stdout))
 	cost := estimateCost(prompt, result)
 
-	return result, cost, nil
+	return result, cost, errorContext, nil
 }
 
 func scoreDeterministic(criterion Criterion, tc TestCase, actualOutput string) (int, string, bool) {
@@ -667,10 +841,487 @@ func stripANSISequences(s string) string {
 	return ansiRegex.ReplaceAllString(s, "")
 }
 
+// getThreshold returns the success threshold for a test case (defaults to 80%).
+func getThreshold(tc TestCase) float64 {
+	if tc.MinScore != nil {
+		return *tc.MinScore
+	}
+	return 80.0 // Default 80% threshold
+}
+
+func generateTimestampPrefix() string {
+	return time.Now().Format("2006-01-02T15-04-05")
+}
+
 func getGitShortHash() (string, error) {
 	out, err := exec.Command("git", "rev-parse", "--short", "HEAD").Output()
 	if err != nil {
 		return "", err
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+// runWithResume finds the most recent incomplete evaluation and resumes it.
+func runWithResume(agent string) error {
+	fmt.Println("🔄 Scanning for incomplete evaluations...")
+
+	resultsBaseDir := filepath.Join(".kiro-krew", "evals", "results")
+	entries, err := os.ReadDir(resultsBaseDir)
+	if err != nil {
+		return fmt.Errorf("❌ failed to read results directory: %w", err)
+	}
+
+	var latestDir string
+	var latestTime time.Time
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		progressFile := filepath.Join(resultsBaseDir, entry.Name(), ".progress")
+		if _, err := os.Stat(progressFile); err == nil {
+			// Found incomplete evaluation
+			info, err := entry.Info()
+			if err == nil && info.ModTime().After(latestTime) {
+				latestDir = filepath.Join(resultsBaseDir, entry.Name())
+				latestTime = info.ModTime()
+			}
+		}
+	}
+
+	if latestDir == "" {
+		fmt.Println("📄 No incomplete evaluations found, starting fresh...")
+		return Run(agent)
+	}
+
+	fmt.Printf("📂 Resuming evaluation from: %s\n", latestDir)
+	return runProgressiveEvaluation(agent, latestDir, true)
+}
+
+// runProgressiveEvaluation runs evaluation with progressive result saving.
+func runProgressiveEvaluation(agent, resultsDir string, isResume bool) error {
+	gitHash, err := getGitShortHash()
+	if err != nil {
+		return fmt.Errorf("failed to get git hash: %w", err)
+	}
+
+	// Acquire lock to prevent concurrent evaluations
+	lockFile, err := acquireResultLock(resultsDir)
+	if err != nil {
+		return err
+	}
+	defer releaseResultLock(lockFile)
+
+	rubrics, err := loadRubrics(agent)
+	if err != nil {
+		return err
+	}
+
+	if len(rubrics) == 0 {
+		return fmt.Errorf("❌ Fatal: no rubrics found")
+	}
+
+	for _, rubric := range rubrics {
+		fmt.Printf("\n📋 Agent: %s\n", rubric.Agent)
+
+		cases, err := loadCases(rubric.Agent)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "⚠️  Warning: no test cases for agent %s: %v\n", rubric.Agent, err)
+			continue
+		}
+
+		result := evaluateProgressive(rubric, cases, gitHash, os.Stdout, resultsDir, isResume)
+
+		// Final save
+		if err := saveProgressiveResult(resultsDir, rubric.Agent, result, gitHash); err != nil {
+			return fmt.Errorf("failed to save final result: %w", err)
+		}
+
+		fmt.Printf("✅ %s: %d cases completed\n", rubric.Agent, len(result.Cases))
+	}
+
+	// Clean up progress file on completion
+	progressFile := filepath.Join(resultsDir, ".progress")
+	os.Remove(progressFile)
+
+	fmt.Printf("\n🎉 Evaluation complete\n")
+	fmt.Printf("📂 Results: %s\n", resultsDir)
+	return nil
+}
+
+// evaluateProgressive runs evaluation with progressive result saving after each test case.
+func evaluateProgressive(rubric Rubric, cases []TestCase, gitHash string, out io.Writer, resultsDir string, isResume bool) AgentResult {
+	result := AgentResult{
+		Agent:   rubric.Agent,
+		GitHash: gitHash,
+	}
+
+	// If resuming, load existing results
+	if isResume {
+		if existingData, err := os.ReadFile(filepath.Join(resultsDir, rubric.Agent+".json")); err == nil {
+			var existing AgentResult
+			if json.Unmarshal(existingData, &existing) == nil {
+				result = existing
+			}
+		}
+	}
+
+	for i, tc := range cases {
+		// Skip if already completed during resume
+		if isResume && isTestCaseCompleted(resultsDir, rubric.Agent, tc.Name) {
+			fmt.Fprintf(out, "   [%d/%d] %s ✅ (already completed)\n", i+1, len(cases), tc.Name)
+			continue
+		}
+
+		fmt.Fprintf(out, "   [%d/%d] %s", i+1, len(cases), tc.Name)
+
+		// Track test case start time for performance profiling
+		testStart := time.Now()
+
+		cr := CaseResult{CaseName: tc.Name}
+
+		// Execute test case
+		prompt, err := assemblePrompt(tc.Setup, tc.Input)
+		if err != nil {
+			fmt.Fprintf(out, " ❌ (prompt error)\n")
+			fmt.Fprintf(out, "      Error: %v\n", err)
+			cr.ActualOutput = ""
+		} else {
+			fmt.Fprintf(out, " → running agent...")
+			actualOutput, cost, errorContext, err := invokeAgent(rubric.Agent, prompt)
+			if err != nil {
+				fmt.Fprintf(out, " ❌ (agent failed)\n")
+				fmt.Fprintf(out, "      Error: %v\n", err)
+				cr.ActualOutput = ""
+				cr.ErrorContext = errorContext
+			} else {
+				cr.ActualOutput = actualOutput
+				cr.AgentCost = cost
+				cr.ErrorContext = errorContext
+				fmt.Fprintf(out, " → evaluating...")
+			}
+		}
+
+		// Score the test case
+		for _, criterion := range rubric.Criteria {
+			if criterion.Type == "cost" {
+				continue
+			}
+
+			score := CriterionScore{
+				Name:          criterion.Name,
+				MaxScore:      parseMaxScore(criterion.Scoring),
+				Deterministic: criterion.Deterministic,
+			}
+
+			if criterion.Deterministic {
+				score.Score, score.Reasoning, score.Skipped = scoreDeterministic(criterion, tc, cr.ActualOutput)
+			} else {
+				if cr.ActualOutput == "" {
+					score.Score = 0
+					score.Skipped = true
+					score.Reasoning = "no output available for LLM judging"
+				} else {
+					judgeCost, judgeScore, reasoning, skipped := scoreLLMJudge(criterion, tc, cr.ActualOutput)
+					cr.JudgeCost.TokensIn += judgeCost.TokensIn
+					cr.JudgeCost.TokensOut += judgeCost.TokensOut
+					cr.JudgeCost.EstimatedUSD += judgeCost.EstimatedUSD
+					score.Score = judgeScore
+					score.Reasoning = reasoning
+					score.Skipped = skipped
+				}
+			}
+
+			cr.Scores = append(cr.Scores, score)
+		}
+
+		// Add or update the case result
+		found := false
+		for j, existing := range result.Cases {
+			if existing.CaseName == tc.Name {
+				result.Cases[j] = cr
+				found = true
+				break
+			}
+		}
+		if !found {
+			result.Cases = append(result.Cases, cr)
+		}
+
+		// Progressive save after each test case
+		if err := saveProgressiveResult(resultsDir, rubric.Agent, result, gitHash); err != nil {
+			fmt.Fprintf(out, " ⚠️ (save failed: %v)\n", err)
+		}
+
+		// Track test case completion time for performance profiling
+		testDuration := time.Since(testStart)
+		TrackTestCase(tc.Name, testDuration)
+
+		// Display result
+		if cr.ActualOutput != "" {
+			totalScore := 0
+			maxTotal := 0
+			for _, s := range cr.Scores {
+				if !s.Skipped {
+					totalScore += s.Score
+					maxTotal += s.MaxScore
+				}
+			}
+			if maxTotal == 0 {
+				fmt.Fprintf(out, " ⚠️  no scored criteria\n")
+			} else {
+				pct := float64(totalScore) / float64(maxTotal) * 100
+				threshold := getThreshold(tc)
+
+				if pct >= threshold {
+					fmt.Fprintf(out, " ✅ %.0f%% (threshold: %.0f%%)\n", pct, threshold)
+				} else if pct >= 60 {
+					fmt.Fprintf(out, " ⚠️  %.0f%% (threshold: %.0f%%)\n", pct, threshold)
+				} else {
+					fmt.Fprintf(out, " ❌ %.0f%% (threshold: %.0f%%)\n", pct, threshold)
+				}
+
+				if pct < threshold {
+					for _, s := range cr.Scores {
+						if !s.Skipped && s.Score < s.MaxScore*3/4 {
+							fmt.Fprintf(out, "      %s: %d/%d\n", s.Name, s.Score, s.MaxScore)
+						}
+					}
+				}
+			}
+		} else {
+			fmt.Fprintf(out, " ❌ no output\n")
+		}
+	}
+
+	return result
+}
+
+// acquireResultLock creates an exclusive lock file to prevent concurrent writes.
+func acquireResultLock(resultsDir string) (*os.File, error) {
+	lockPath := filepath.Join(resultsDir, ".lock")
+	lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+	if err != nil {
+		return nil, fmt.Errorf("failed to acquire result lock (evaluation may be running elsewhere): %w", err)
+	}
+	return lockFile, nil
+}
+
+// releaseResultLock removes the lock file.
+func releaseResultLock(lockFile *os.File) {
+	if lockFile != nil {
+		lockFile.Close()
+		os.Remove(lockFile.Name())
+	}
+}
+
+// saveProgressiveResult immediately saves a test case result and updates summary.
+func saveProgressiveResult(resultsDir, agent string, result AgentResult, gitHash string) error {
+	// Write individual agent result
+	agentFile := filepath.Join(resultsDir, agent+".json")
+	data, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal agent result: %w", err)
+	}
+
+	if err := os.WriteFile(agentFile, data, 0644); err != nil {
+		return fmt.Errorf("failed to write agent result: %w", err)
+	}
+
+	// Update incremental summary
+	summaryFile := filepath.Join(resultsDir, "summary.json")
+	return updateIncrementalSummary(summaryFile, result, gitHash)
+}
+
+// updateIncrementalSummary adds/updates an agent's results in the summary file.
+func updateIncrementalSummary(summaryFile string, agentResult AgentResult, gitHash string) error {
+	var summary Summary
+
+	// Load existing summary if it exists
+	if data, err := os.ReadFile(summaryFile); err == nil {
+		json.Unmarshal(data, &summary)
+	}
+
+	// Initialize if empty
+	if summary.AgentScores == nil {
+		summary.AgentScores = make(map[string]float64)
+		summary.GitHash = gitHash
+	}
+
+	// Calculate and update agent score
+	var totalScore, totalMax float64
+	var agentCost CostInfo
+
+	for _, c := range agentResult.Cases {
+		for _, sc := range c.Scores {
+			if !sc.Skipped {
+				totalScore += float64(sc.Score)
+				totalMax += float64(sc.MaxScore)
+			}
+		}
+		agentCost.TokensIn += c.AgentCost.TokensIn
+		agentCost.TokensOut += c.AgentCost.TokensOut
+		agentCost.EstimatedUSD += c.AgentCost.EstimatedUSD
+
+		agentCost.TokensIn += c.JudgeCost.TokensIn
+		agentCost.TokensOut += c.JudgeCost.TokensOut
+		agentCost.EstimatedUSD += c.JudgeCost.EstimatedUSD
+	}
+
+	if totalMax > 0 {
+		summary.AgentScores[agentResult.Agent] = totalScore / totalMax
+	}
+
+	// Update total cost (this is cumulative across all agents)
+	summary.TotalCost = agentCost
+
+	// Write updated summary
+	data, err := json.MarshalIndent(summary, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal summary: %w", err)
+	}
+
+	return os.WriteFile(summaryFile, data, 0644)
+}
+
+// isTestCaseCompleted checks if a test case result already exists.
+func isTestCaseCompleted(resultsDir, agent, testCaseName string) bool {
+	agentFile := filepath.Join(resultsDir, agent+".json")
+	data, err := os.ReadFile(agentFile)
+	if err != nil {
+		return false
+	}
+
+	var result AgentResult
+	if err := json.Unmarshal(data, &result); err != nil {
+		return false
+	}
+
+	for _, caseResult := range result.Cases {
+		if caseResult.CaseName == testCaseName {
+			return true
+		}
+	}
+
+	return false
+}
+
+// RunPerformanceInvestigation conducts comprehensive performance analysis.
+func RunPerformanceInvestigation(agent string) error {
+	fmt.Println("🔍 Starting comprehensive performance investigation...")
+	
+	if agent == "" {
+		return fmt.Errorf("❌ agent name required for performance investigation")
+	}
+	
+	// Start profiling
+	StartProfiling()
+	
+	// Measure startup overhead multiple times for accuracy
+	fmt.Println("📊 Measuring startup overhead (3 samples)...")
+	var startupTimes []time.Duration
+	for i := 0; i < 3; i++ {
+		startupTime := MeasureStartupOverhead()
+		startupTimes = append(startupTimes, startupTime)
+		fmt.Printf("  Sample %d: %v\n", i+1, startupTime)
+	}
+	
+	// Calculate average startup time
+	var totalStartup time.Duration
+	for _, t := range startupTimes {
+		totalStartup += t
+	}
+	avgStartup := totalStartup / time.Duration(len(startupTimes))
+	fmt.Printf("  Average: %v\n", avgStartup)
+	
+	// Load test cases for analysis
+	cases, err := loadCases(agent)
+	if err != nil {
+		return fmt.Errorf("failed to load test cases for %s: %w", agent, err)
+	}
+	
+	if len(cases) == 0 {
+		fmt.Printf("⚠️  No test cases found for agent %s\n", agent)
+		return nil
+	}
+	
+	fmt.Printf("📋 Found %d test cases for performance analysis\n", len(cases))
+	
+	// Run parallel execution benchmark
+	fmt.Println("\n🚀 Benchmarking sequential vs parallel execution...")
+	benchmark, err := InvestigateParallelExecution(agent)
+	if err != nil {
+		fmt.Printf("⚠️  Parallel execution benchmark failed: %v\n", err)
+	}
+	
+	// Analyze test case complexity
+	fmt.Println("\n📈 Analyzing test case complexity...")
+	for i, tc := range cases {
+		if i >= 3 { // Limit to first 3 cases for quick analysis
+			fmt.Printf("  ... (analyzing remaining %d cases)\n", len(cases)-i)
+			break
+		}
+		
+		promptSize := len(tc.Input)
+		if len(tc.Setup) > 0 {
+			for _, setup := range tc.Setup {
+				promptSize += len(setup.Content)
+			}
+		}
+		
+		fmt.Printf("  %s: %d chars input\n", tc.Name, promptSize)
+	}
+	
+	// Create results directory for performance report
+	timestamp := generateTimestampPrefix()
+	gitHash, _ := getGitShortHash()
+	resultsDir := filepath.Join(".kiro-krew", "evals", "results", timestamp+"-perf-"+gitHash)
+	if err := os.MkdirAll(resultsDir, 0755); err != nil {
+		return fmt.Errorf("failed to create results directory: %w", err)
+	}
+	
+	// Generate comprehensive performance profile
+	profile := GenerateProfile()
+	
+	// Add startup analysis to profile
+	profile.StartupOverhead = avgStartup
+	
+	// Save detailed performance report
+	if err := SavePerformanceReport(resultsDir, profile, benchmark); err != nil {
+		fmt.Printf("⚠️  Failed to save performance report: %v\n", err)
+	}
+	
+	// Display comprehensive analysis
+	fmt.Println("\n🎯 Performance Investigation Results:")
+	fmt.Println("=====================================")
+	
+	PrintPerformanceReport(profile, benchmark)
+	
+	// Additional recommendations specific to investigation mode
+	fmt.Println("\n🔬 Investigation-Specific Findings:")
+	if len(startupTimes) > 1 {
+		// Calculate startup variance
+		var variance time.Duration
+		for _, t := range startupTimes {
+			diff := t - avgStartup
+			if diff < 0 {
+				diff = -diff
+			}
+			variance += diff
+		}
+		variance /= time.Duration(len(startupTimes))
+		
+		if variance > avgStartup/10 { // More than 10% variance
+			fmt.Printf("  ⚠️  High startup variance detected (%v), consider system load factors\n", variance)
+		}
+	}
+	
+	if benchmark != nil && benchmark.Speedup < 1.2 {
+		fmt.Printf("  💡 Limited parallel benefits due to startup overhead\n")
+	}
+	
+	fmt.Printf("\n📂 Detailed report saved to: %s/performance.json\n", resultsDir)
+	
+	return nil
 }
