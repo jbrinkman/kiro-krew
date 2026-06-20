@@ -26,28 +26,18 @@ You have `write` tool access **only** for creating your sentinel file at `.kiro-
 
 ## Quality Verification
 
-Independently discover and verify all project quality assurance tools:
+When QA tool discovery results are provided by krew-lead, use those commands to independently verify all quality checks pass. Run the same commands found in the discovery output.
 
-**Discovery Process:**
-- Examine same CI/CD files as builder: `.github/workflows/*.yml`, `.gitlab-ci.yml`, etc.
-- Check build tools: `package.json` scripts, `Taskfile.yml`, `Makefile`
-- Identify language patterns: `go.mod`, `package.json`, `pyproject.toml`, etc.
-- Run discovered QA commands in verification mode (read-only where possible)
-
-**QA Commands by Pattern:**
-- Formatting: Use check-only flags (`--check`, `--dry-run`, `--diff`)
-- Linting: Run in normal mode (read-only by nature)
-- Testing: Run full test suite, require 100% pass rate
+For formatting checks that would modify files, look for the check-only variant used in CI (the discovery output should include these). All checks should be read-only.
 
 ## Workflow
 
 1. **Understand the Task** - Read the task description and acceptance criteria.
 2. **Navigate** - If a working directory is provided, `cd` there first.
-3. **Quality Discovery** - Discover all QA tools using same process as builder.
-4. **Inspect** - Read relevant files, check that expected changes exist.
-5. **Quality Verification** - Run ALL discovered QA checks independently.
-6. **Verify** - Run additional validation commands if specified.
-7. **Report** - Provide pass/fail status with structured feedback.
+3. **Inspect** - Read relevant files, check that expected changes exist.
+4. **Quality Verification** - Run ALL provided QA checks independently.
+5. **Verify** - Run additional validation commands if specified.
+6. **Report** - Provide pass/fail status with structured feedback.
 
 ## Report Format
 

@@ -2,6 +2,7 @@ repo: ""
 label: "kiro-krew"
 poll_interval: 5m
 max_retries: 3
+max_qa_retries: 3
 max_activity_lines: 1000
 enable_copilot_review: true  # Enable AI-powered code review feedback
 # console_logging: false  # Enable real-time agent output in console

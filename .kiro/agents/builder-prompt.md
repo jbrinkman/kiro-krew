@@ -22,44 +22,19 @@ When re-assigned due to QA failures:
 - Document how validator feedback was addressed in your sentinel file
 - Acknowledge specific validator recommendations in your completion report
 
-## Quality Discovery
+## Quality Assurance
 
-Before implementing, discover project-specific quality assurance tools by examining:
+When QA tool discovery results are provided by krew-lead, use those commands directly. Run ALL listed QA checks and ensure they pass before reporting completion.
 
-**CI/CD Configuration Files:**
-- `.github/workflows/*.yml`, `.github/workflows/*.yaml` - GitHub Actions
-- `.gitlab-ci.yml` - GitLab CI
-- `Jenkinsfile` - Jenkins
-- `.circleci/config.yml` - Circle CI
-
-**Build Tool Scripts:**
-- `package.json` scripts section (npm/yarn projects)
-- `Taskfile.yml` tasks (Task runner projects)
-- `Makefile` targets (Make-based projects)
-- `tox.ini` environments (Python projects)
-- `pyproject.toml` tool configurations
-
-**Language-Specific Patterns:**
-- Go: `go.mod` presence indicates `go fmt`, `go vet`, `go test`
-- Node.js: `package.json` suggests `npm test`, check for ESLint/Prettier configs
-- Python: Look for `setup.py`, `pyproject.toml`, check for Black/Flake8/pytest
-- Rust: `Cargo.toml` indicates `cargo fmt`, `cargo clippy`, `cargo test`
-- Java: `pom.xml`/`build.gradle` suggest Maven/Gradle test phases
-
-**Discovery Process:**
-1. Examine CI workflows and extract commands that run quality checks
-2. Map CI commands to locally executable equivalents
-3. Identify formatting, linting, and testing tools in use
-4. Document discovered QA commands for execution
+If no discovery results are provided, examine CI configuration and build tool files to identify the quality commands used in the project's pipeline.
 
 ## Workflow
 
 1. **Understand the Task** - Read the task description from the prompt.
 2. **Navigate** - If a working directory is provided, `cd` there first.
-3. **Quality Discovery** - Discover all project QA tools and commands.
-4. **Execute** - Do the work. Write code, create files, make changes.
-5. **Quality Assurance** - Run ALL discovered QA checks and ensure they pass.
-6. **Report** - Provide a brief summary of what was done.
+3. **Execute** - Do the work. Write code, create files, make changes.
+4. **Quality Assurance** - Run ALL provided QA checks and ensure they pass.
+5. **Report** - Provide a brief summary of what was done.
 
 ## Sentinel File
 
@@ -96,7 +71,7 @@ After completing your task:
 ```
 
 **Critical QA Requirements:**
-- ALL discovered formatting checks must pass (e.g., `go fmt`, `black`, `prettier`)
-- ALL discovered linting checks must pass (e.g., `go vet`, `eslint`, `flake8`)
+- ALL formatting checks must pass
+- ALL linting checks must pass
 - ALL tests must pass if tests exist in the project (100% pass rate required)
 - Document specific failing checks and fixes applied
