@@ -1,0 +1,19 @@
+name: default-threshold-test
+description: "Test case using default 80% success threshold"
+agent: architect
+input: |
+  Create a specification for GitHub issue #100: "Add standard feature"
+  
+  This should use the default 80% threshold.
+setup:
+  - type: text
+    label: "Project Context"
+    content: "This is a Go project requiring standard quality specifications."
+context:
+  - "Architect should create a specification"
+  - "Spec should include basic implementation tasks"
+expected_output: |
+  A specification that includes:
+  - Problem statement
+  - Implementation tasks
+  - Basic requirements

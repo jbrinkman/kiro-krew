@@ -32,6 +32,7 @@ type TestCase struct {
 	Context        []string     `yaml:"context,omitempty" json:"context,omitempty"`
 	Setup          []SetupEntry `yaml:"setup,omitempty" json:"setup,omitempty"`
 	Agent          string       `yaml:"agent" json:"agent"`
+	MinScore       *float64     `yaml:"min_score,omitempty" json:"min_score,omitempty"` // Success threshold (0-100), defaults to 80%
 }
 
 // CostInfo tracks token usage and estimated cost.
@@ -58,6 +59,16 @@ type CaseResult struct {
 	Scores       []CriterionScore `json:"scores"`
 	AgentCost    CostInfo         `json:"agent_cost"`
 	JudgeCost    CostInfo         `json:"judge_cost"`
+	ErrorContext *ErrorContext    `json:"error_context,omitempty"`
+}
+
+// ErrorContext captures execution details for debugging failed tests.
+type ErrorContext struct {
+	Command     string            `json:"command"`
+	WorkingDir  string            `json:"working_dir"`
+	Environment map[string]string `json:"environment,omitempty"`
+	Stderr      string            `json:"stderr,omitempty"`
+	ExitCode    int               `json:"exit_code,omitempty"`
 }
 
 // AgentResult holds all case results for one agent.
@@ -65,6 +76,12 @@ type AgentResult struct {
 	Agent   string       `json:"agent"`
 	GitHash string       `json:"git_hash"`
 	Cases   []CaseResult `json:"cases"`
+}
+
+// RunOptions configures evaluation execution.
+type RunOptions struct {
+	List   bool // List available test cases
+	Resume bool // Resume from interrupted evaluation
 }
 
 // Summary holds aggregate results for an eval run.
