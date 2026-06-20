@@ -1,14 +1,12 @@
 package eval
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 )
@@ -193,6 +191,9 @@ func identifyBottlenecks(profile *PerfProfile) []Bottleneck {
 	}
 
 	// Check for slow test cases
+	if len(profile.TestCaseTimings) == 0 {
+		return bottlenecks
+	}
 	totalTime := profile.TotalEvalTime
 	avgTime := totalTime / time.Duration(len(profile.TestCaseTimings))
 
@@ -281,13 +282,18 @@ func InvestigateParallelExecution(agent string) (*ParallelBenchmark, error) {
 		if err != nil {
 			continue
 		}
-		invokeAgent(agent, prompt)
+		_, _, _, invokeErr := invokeAgent(agent, prompt)
+		if invokeErr != nil {
+			return nil, fmt.Errorf("sequential benchmark failed: %w", invokeErr)
+		}
 	}
 	seqDuration := time.Since(startSeq)
 
 	// Parallel execution
 	startPar := time.Now()
 	var wg sync.WaitGroup
+	var parallelErr error
+	var errMu sync.Mutex
 	for _, tc := range testCases {
 		wg.Add(1)
 		go func(testCase TestCase) {
@@ -296,11 +302,20 @@ func InvestigateParallelExecution(agent string) (*ParallelBenchmark, error) {
 			if err != nil {
 				return
 			}
-			invokeAgent(agent, prompt)
+			_, _, _, invokeErr := invokeAgent(agent, prompt)
+			if invokeErr != nil {
+				errMu.Lock()
+				parallelErr = invokeErr
+				errMu.Unlock()
+			}
 		}(tc)
 	}
 	wg.Wait()
 	parDuration := time.Since(startPar)
+
+	if parallelErr != nil {
+		return nil, fmt.Errorf("parallel benchmark failed: %w", parallelErr)
+	}
 
 	speedup := float64(seqDuration) / float64(parDuration)
 

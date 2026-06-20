@@ -9,8 +9,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -62,7 +62,7 @@ func runSingleTestCase(agent string, testcase string) error {
 	// Start performance profiling for single test
 	StartProfiling()
 	startupTime := MeasureStartupOverhead()
-	
+
 	if agent == "" {
 		return fmt.Errorf("❌ agent name required for test case execution")
 	}
@@ -127,14 +127,14 @@ func runSingleTestCase(agent string, testcase string) error {
 
 	// Generate and display performance analysis for single test
 	profile := GenerateProfile()
-	
+
 	// Save performance report
 	if perfErr := SavePerformanceReport(resultsDir, profile, nil); perfErr != nil {
 		fmt.Printf("⚠️  Failed to save performance report: %v\n", perfErr)
 	}
-	
+
 	fmt.Printf("📂 Results: %s\n", resultsDir)
-	
+
 	// Display concise performance summary for single test
 	fmt.Printf("\n📊 Performance Summary:\n")
 	fmt.Printf("  Test execution: %v\n", profile.TestCaseTimings[targetCase.Name])
@@ -142,7 +142,7 @@ func runSingleTestCase(agent string, testcase string) error {
 	if len(profile.Bottlenecks) > 0 {
 		fmt.Printf("  Bottlenecks: %d identified (see performance.json)\n", len(profile.Bottlenecks))
 	}
-	
+
 	return nil
 }
 
@@ -150,7 +150,7 @@ func runSingleTestCase(agent string, testcase string) error {
 func Run(agent string) error {
 	// Start performance profiling
 	StartProfiling()
-	
+
 	fmt.Println("🚀 Starting evaluation framework...")
 
 	// Measure startup overhead
@@ -196,30 +196,19 @@ func Run(agent string) error {
 	}
 
 	// Use progressive evaluation
-	err := runProgressiveEvaluation(agent, resultsDir, false)
-	
+	err = runProgressiveEvaluation(agent, resultsDir, false)
+
 	// Generate performance analysis
 	profile := GenerateProfile()
-	
-	// Investigate parallel execution potential if we have an agent specified
-	var benchmark *ParallelBenchmark
-	if agent != "" {
-		fmt.Printf("\n🧪 Investigating parallel execution for %s...\n", agent)
-		if parallelBench, perfErr := InvestigateParallelExecution(agent); perfErr == nil {
-			benchmark = parallelBench
-		} else {
-			fmt.Printf("⚠️  Parallel execution test failed: %v\n", perfErr)
-		}
-	}
-	
+
 	// Save performance report
-	if perfErr := SavePerformanceReport(resultsDir, profile, benchmark); perfErr != nil {
+	if perfErr := SavePerformanceReport(resultsDir, profile, nil); perfErr != nil {
 		fmt.Printf("⚠️  Failed to save performance report: %v\n", perfErr)
 	}
-	
+
 	// Display performance analysis
-	PrintPerformanceReport(profile, benchmark)
-	
+	PrintPerformanceReport(profile, nil)
+
 	return err
 }
 
@@ -399,7 +388,7 @@ func invokeAgent(agent, prompt string) (string, CostInfo, *ErrorContext, error) 
 
 	// Capture relevant environment variables
 	envVars := make(map[string]string)
-	for _, key := range []string{"KIRO_KREW_EVAL_TIMEOUT", "PATH", "HOME"} {
+	for _, key := range []string{"KIRO_KREW_EVAL_TIMEOUT"} {
 		if val := os.Getenv(key); val != "" {
 			envVars[key] = val
 		}
@@ -849,10 +838,6 @@ func getThreshold(tc TestCase) float64 {
 	return 80.0 // Default 80% threshold
 }
 
-func generateTimestampPrefix() string {
-	return time.Now().Format("2006-01-02T15-04-05")
-}
-
 func getGitShortHash() (string, error) {
 	out, err := exec.Command("git", "rev-parse", "--short", "HEAD").Output()
 	if err != nil {
@@ -1099,12 +1084,34 @@ func evaluateProgressive(rubric Rubric, cases []TestCase, gitHash string, out io
 }
 
 // acquireResultLock creates an exclusive lock file to prevent concurrent writes.
+// Writes the current PID to detect stale locks from crashed processes.
 func acquireResultLock(resultsDir string) (*os.File, error) {
 	lockPath := filepath.Join(resultsDir, ".lock")
+
+	// Check for stale lock
+	if data, err := os.ReadFile(lockPath); err == nil {
+		if pid, err := strconv.Atoi(strings.TrimSpace(string(data))); err == nil {
+			// Check if process is still running
+			proc, err := os.FindProcess(pid)
+			if err != nil || proc.Signal(nil) != nil {
+				// Process not running — remove stale lock
+				os.Remove(lockPath)
+			} else {
+				return nil, fmt.Errorf("evaluation already running (PID %d)", pid)
+			}
+		} else {
+			// Malformed lock file — remove it
+			os.Remove(lockPath)
+		}
+	}
+
 	lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
 	if err != nil {
 		return nil, fmt.Errorf("failed to acquire result lock (evaluation may be running elsewhere): %w", err)
 	}
+
+	// Write PID for stale detection
+	fmt.Fprintf(lockFile, "%d", os.Getpid())
 	return lockFile, nil
 }
 
@@ -1210,14 +1217,14 @@ func isTestCaseCompleted(resultsDir, agent, testCaseName string) bool {
 // RunPerformanceInvestigation conducts comprehensive performance analysis.
 func RunPerformanceInvestigation(agent string) error {
 	fmt.Println("🔍 Starting comprehensive performance investigation...")
-	
+
 	if agent == "" {
 		return fmt.Errorf("❌ agent name required for performance investigation")
 	}
-	
+
 	// Start profiling
 	StartProfiling()
-	
+
 	// Measure startup overhead multiple times for accuracy
 	fmt.Println("📊 Measuring startup overhead (3 samples)...")
 	var startupTimes []time.Duration
@@ -1226,7 +1233,7 @@ func RunPerformanceInvestigation(agent string) error {
 		startupTimes = append(startupTimes, startupTime)
 		fmt.Printf("  Sample %d: %v\n", i+1, startupTime)
 	}
-	
+
 	// Calculate average startup time
 	var totalStartup time.Duration
 	for _, t := range startupTimes {
@@ -1234,27 +1241,27 @@ func RunPerformanceInvestigation(agent string) error {
 	}
 	avgStartup := totalStartup / time.Duration(len(startupTimes))
 	fmt.Printf("  Average: %v\n", avgStartup)
-	
+
 	// Load test cases for analysis
 	cases, err := loadCases(agent)
 	if err != nil {
 		return fmt.Errorf("failed to load test cases for %s: %w", agent, err)
 	}
-	
+
 	if len(cases) == 0 {
 		fmt.Printf("⚠️  No test cases found for agent %s\n", agent)
 		return nil
 	}
-	
+
 	fmt.Printf("📋 Found %d test cases for performance analysis\n", len(cases))
-	
+
 	// Run parallel execution benchmark
 	fmt.Println("\n🚀 Benchmarking sequential vs parallel execution...")
 	benchmark, err := InvestigateParallelExecution(agent)
 	if err != nil {
 		fmt.Printf("⚠️  Parallel execution benchmark failed: %v\n", err)
 	}
-	
+
 	// Analyze test case complexity
 	fmt.Println("\n📈 Analyzing test case complexity...")
 	for i, tc := range cases {
@@ -1262,17 +1269,17 @@ func RunPerformanceInvestigation(agent string) error {
 			fmt.Printf("  ... (analyzing remaining %d cases)\n", len(cases)-i)
 			break
 		}
-		
+
 		promptSize := len(tc.Input)
 		if len(tc.Setup) > 0 {
 			for _, setup := range tc.Setup {
 				promptSize += len(setup.Content)
 			}
 		}
-		
+
 		fmt.Printf("  %s: %d chars input\n", tc.Name, promptSize)
 	}
-	
+
 	// Create results directory for performance report
 	timestamp := generateTimestampPrefix()
 	gitHash, _ := getGitShortHash()
@@ -1280,24 +1287,24 @@ func RunPerformanceInvestigation(agent string) error {
 	if err := os.MkdirAll(resultsDir, 0755); err != nil {
 		return fmt.Errorf("failed to create results directory: %w", err)
 	}
-	
+
 	// Generate comprehensive performance profile
 	profile := GenerateProfile()
-	
+
 	// Add startup analysis to profile
 	profile.StartupOverhead = avgStartup
-	
+
 	// Save detailed performance report
 	if err := SavePerformanceReport(resultsDir, profile, benchmark); err != nil {
 		fmt.Printf("⚠️  Failed to save performance report: %v\n", err)
 	}
-	
+
 	// Display comprehensive analysis
 	fmt.Println("\n🎯 Performance Investigation Results:")
 	fmt.Println("=====================================")
-	
+
 	PrintPerformanceReport(profile, benchmark)
-	
+
 	// Additional recommendations specific to investigation mode
 	fmt.Println("\n🔬 Investigation-Specific Findings:")
 	if len(startupTimes) > 1 {
@@ -1311,17 +1318,17 @@ func RunPerformanceInvestigation(agent string) error {
 			variance += diff
 		}
 		variance /= time.Duration(len(startupTimes))
-		
+
 		if variance > avgStartup/10 { // More than 10% variance
 			fmt.Printf("  ⚠️  High startup variance detected (%v), consider system load factors\n", variance)
 		}
 	}
-	
+
 	if benchmark != nil && benchmark.Speedup < 1.2 {
 		fmt.Printf("  💡 Limited parallel benefits due to startup overhead\n")
 	}
-	
+
 	fmt.Printf("\n📂 Detailed report saved to: %s/performance.json\n", resultsDir)
-	
+
 	return nil
 }

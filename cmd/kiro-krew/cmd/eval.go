@@ -23,17 +23,17 @@ var evalCmd = &cobra.Command{
 		if len(args) > 1 {
 			testcase = args[1]
 		}
-		
+
 		// Use --case flag if provided
 		if evalCase != "" {
 			testcase = evalCase
 		}
-		
+
 		// Handle performance investigation
 		if evalPerf {
 			return eval.RunPerformanceInvestigation(agent)
 		}
-		
+
 		return eval.RunWithOptions(agent, testcase, eval.RunOptions{
 			List:   evalList,
 			Resume: evalResume,
@@ -55,7 +55,7 @@ func init() {
 	evalCmd.Flags().BoolVar(&evalResume, "resume", false, "Resume interrupted evaluation from last completed test")
 	evalCmd.Flags().StringVar(&evalCase, "case", "", "Run specific test case")
 	evalCmd.Flags().BoolVar(&evalPerf, "perf", false, "Run performance investigation and profiling")
-	
+
 	evalCmd.AddCommand(diffCmd)
 	rootCmd.AddCommand(evalCmd)
 }
