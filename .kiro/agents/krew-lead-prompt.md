@@ -17,7 +17,17 @@ Extract the issue number, repo, and worktree name from this message and use them
 3. **Delegate to Architect**: Spawn the `architect` agent to analyze issue and create design specification. Pass the issue details including number, title, and body.
 4. **Read Architect's Spec**: Read the spec file at `.kiro-krew/specs/issue-<number>-*.md`
 5. **Execute Tasks**: Delegate implementation tasks to the `builder` agent. Pass the spec content and specific tasks.
-6. **Pre-Merge Validation**: Delegate to the `validator` agent to verify implementation meets requirements. Pass acceptance criteria.
+6. **Quality Assurance Loop**: Enforce quality gates before PR creation:
+   1. **Discover QA Tools**: Use the `@discover-qa-tools` skill to identify project QA commands. Check if `.kiro-krew/artifacts/qa-tools.md` exists and is less than 24 hours old — if so, reuse it; otherwise regenerate.
+   2. **Validate Implementation**: Delegate to `validator` agent with QA commands from discovery output
+   3. **Check QA Status**: Read validator sentinel file for QA verification results
+   4. **QA Feedback Loop**: If validator reports QA failures:
+      - Parse validator feedback for specific failing checks and fixes
+      - Re-delegate to `builder` with validator feedback, QA commands, and retry attempt number
+      - Increment QA loop iteration counter
+      - Repeat validation step
+      - Continue until validator reports PASS or QA retry limit reached
+   5. **QA Success Gate**: Only proceed to step 7 when validator reports all QA checks PASS
 7. **Push Branch**: Stage, detect binary files, clean them, then commit and push:
    1. Run `git add -A` to stage all changes
    2. Check for binary files among newly staged files: `git diff --cached --name-only --diff-filter=A`. For each file, check if it's executable (`-x`) or matches binary patterns (`.exe`, `.so`, `.dylib`, `.dll`, `.o`, `.a`, or names matching `kiro-krew*`, `*-test`, `*-validate`)
@@ -79,8 +89,18 @@ Do NOT use any other agent names. Do NOT use `kiro_default` or `default`.
 - Apply `<label>-failed` label
 - Halt execution and escalate to human intervention
 
+### QA Loop Retry Policy
+
+**QA iterations are tracked separately from general agent retries:**
+- QA retry limit is configured via `max_qa_retries` in project config
+- QA iteration tags: `[qa-attempt:1]`, `[qa-attempt:2]`, etc.
+- If QA retry limit exceeded, create QA-specific incident report
+- QA failures do not count against general retry attempts
+- Builder re-delegation for QA fixes includes specific validator feedback
+
 ### Attempt Tracking
 - All task delegations must include `[attempt:N]` tags in messages
+- QA loop delegations include `[qa-attempt:N]` tags
 - Track failure context across attempts
 - Preserve error logs and diagnostic information for incident reporting
 

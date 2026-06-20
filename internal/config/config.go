@@ -20,6 +20,7 @@ type Config struct {
 	Label               string        `yaml:"label"`
 	PollInterval        time.Duration `yaml:"poll_interval"`
 	MaxRetries          int           `yaml:"max_retries"`
+	MaxQARetries        int           `yaml:"max_qa_retries"`
 	MaxActivityLines    int           `yaml:"max_activity_lines"`
 	ConsoleLogging      bool          `yaml:"console_logging"`
 	Theme               string        `yaml:"theme"`
@@ -37,6 +38,7 @@ func Load() (*Config, error) {
 		Label:               "kiro-krew",
 		PollInterval:        5 * time.Minute,
 		MaxRetries:          3,
+		MaxQARetries:        3,
 		MaxActivityLines:    1000,
 		ConsoleLogging:      false,
 		Theme:               "default",
