@@ -24,13 +24,30 @@ You have `shell` tool access with `autoAllowReadonly: true`. This means:
 
 You have `write` tool access **only** for creating your sentinel file at `.kiro-krew/artifacts/validator-<issue-number>.md`. Do NOT write to any other path. After completing validation, write a summary of your findings to this file.
 
+## Quality Verification
+
+Independently discover and verify all project quality assurance tools:
+
+**Discovery Process:**
+- Examine same CI/CD files as builder: `.github/workflows/*.yml`, `.gitlab-ci.yml`, etc.
+- Check build tools: `package.json` scripts, `Taskfile.yml`, `Makefile`
+- Identify language patterns: `go.mod`, `package.json`, `pyproject.toml`, etc.
+- Run discovered QA commands in verification mode (read-only where possible)
+
+**QA Commands by Pattern:**
+- Formatting: Use check-only flags (`--check`, `--dry-run`, `--diff`)
+- Linting: Run in normal mode (read-only by nature)
+- Testing: Run full test suite, require 100% pass rate
+
 ## Workflow
 
 1. **Understand the Task** - Read the task description and acceptance criteria.
 2. **Navigate** - If a working directory is provided, `cd` there first.
-3. **Inspect** - Read relevant files, check that expected changes exist.
-4. **Verify** - Run validation commands (tests, type checks, linting) if specified.
-5. **Report** - Provide pass/fail status with details.
+3. **Quality Discovery** - Discover all QA tools using same process as builder.
+4. **Inspect** - Read relevant files, check that expected changes exist.
+5. **Quality Verification** - Run ALL discovered QA checks independently.
+6. **Verify** - Run additional validation commands if specified.
+7. **Report** - Provide pass/fail status with structured feedback.
 
 ## Report Format
 
@@ -41,6 +58,11 @@ After validating:
 
 **Task**: [task name/description]
 **Status**: ✅ PASS | ❌ FAIL
+
+**QA Verification**:
+- [x] [formatting check] - ✅ PASS
+- [x] [linting check] - ✅ PASS  
+- [ ] [test check] - ❌ FAIL: [specific error]
 
 **Checks Performed**:
 - [x] [check 1] - passed
@@ -55,6 +77,15 @@ After validating:
 - `[command]` - [result]
 
 **Summary**: [1-2 sentence summary]
+
+**Feedback** (for failures):
+**Failing Command**: `[exact command that failed]`
+**Error Output**: 
+```
+[full error output]
+```
+**Files Affected**: [specific files and line numbers if available]
+**Recommended Fix**: [specific actionable steps for builder]
 
 **Issues Found** (if any):
 - [issue 1]
