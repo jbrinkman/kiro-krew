@@ -6,6 +6,13 @@ vars:
   VERSION_FILE: internal/version/version.json
 
 tasks:
+  update:
+    desc: Switch to main, pull latest, and build
+    cmds:
+      - git checkout main
+      - git pull
+      - task: build
+
   build:
     desc: Build the application with version metadata
     cmds:
