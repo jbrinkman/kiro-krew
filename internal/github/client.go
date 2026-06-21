@@ -13,6 +13,9 @@ import (
 // ErrRateLimited is returned when the GitHub API rate limit is exceeded.
 var ErrRateLimited = errors.New("GitHub API rate limit exceeded")
 
+// ErrNoReleases indicates no releases exist for the repository
+var ErrNoReleases = errors.New("no releases found")
+
 type Label struct {
 	Name string `json:"name"`
 }
@@ -134,7 +137,7 @@ func VerifyPRExists(repo string, issueNumber, pid int) (bool, error) {
 }
 
 type Release struct {
-	TagName string `json:"tagName"`
+	TagName string `json:"tag_name"`
 	Name    string `json:"name"`
 }
 
@@ -143,17 +146,22 @@ func GetLatestRelease(repo string) (*Release, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "gh", "release", "view", "--repo", repo, "--json", "tagName,name")
+	cmd := exec.CommandContext(ctx, "gh", "api", fmt.Sprintf("repos/%s/releases", repo), "--jq", ".[0] | {tag_name, name}")
 	output, err := cmd.Output()
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			return nil, fmt.Errorf("gh release view timed out after 10 seconds")
+			return nil, fmt.Errorf("gh api releases timed out after 10 seconds")
 		}
-		return nil, fmt.Errorf("gh release view failed: %w", err)
+		return nil, fmt.Errorf("gh api releases failed: %w", err)
+	}
+
+	trimmed := strings.TrimSpace(string(output))
+	if trimmed == "" || trimmed == "null" {
+		return nil, ErrNoReleases
 	}
 
 	var release Release
-	if err := json.Unmarshal(output, &release); err != nil {
+	if err := json.Unmarshal([]byte(trimmed), &release); err != nil {
 		return nil, fmt.Errorf("failed to parse release info: %w", err)
 	}
 
