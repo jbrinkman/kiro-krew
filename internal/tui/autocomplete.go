@@ -122,8 +122,22 @@ func (a *AutocompleteInput) handleKeyMsg(msg tea.KeyMsg) (*AutocompleteInput, te
 		return a, nil
 
 	case "enter":
-		// Don't handle enter here - let parent handle command execution
-		// But hide dropdown
+		// Apply selected suggestion if dropdown is visible, similar to Tab
+		if a.state.ghostText != "" {
+			a.textinput.SetValue(a.state.ghostText)
+			a.textinput.CursorEnd()
+			a.updateAutocomplete()
+			return a, nil
+		}
+		if a.state.showDropdown && len(a.state.suggestions) > 0 {
+			selected := a.state.suggestions[a.state.selectedIndex]
+			a.textinput.SetValue(selected)
+			a.textinput.CursorEnd()
+			a.updateAutocomplete()
+			return a, nil
+		}
+
+		// No dropdown/selection - hide dropdown and pass through to parent
 		a.state.showDropdown = false
 		a.state.ghostText = ""
 
