@@ -282,7 +282,7 @@ func InvestigateParallelExecution(agent string) (*ParallelBenchmark, error) {
 		if err != nil {
 			continue
 		}
-		_, _, _, invokeErr := invokeAgent(agent, prompt)
+		_, _, _, invokeErr := invokeAgent(agent, prompt, nil)
 		if invokeErr != nil {
 			return nil, fmt.Errorf("sequential benchmark failed: %w", invokeErr)
 		}
@@ -302,7 +302,7 @@ func InvestigateParallelExecution(agent string) (*ParallelBenchmark, error) {
 			if err != nil {
 				return
 			}
-			_, _, _, invokeErr := invokeAgent(agent, prompt)
+			_, _, _, invokeErr := invokeAgent(agent, prompt, nil)
 			if invokeErr != nil {
 				errMu.Lock()
 				parallelErr = invokeErr

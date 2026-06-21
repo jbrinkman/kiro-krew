@@ -1,6 +1,8 @@
 package eval
 
-import "time"
+import (
+	"github.com/jbrinkman/kiro-krew/internal/eval/sandbox"
+)
 
 // Rubric defines scoring criteria for an agent.
 type Rubric struct {
@@ -98,18 +100,11 @@ type Summary struct {
 
 // ContainerConfig configures containerized execution
 type ContainerConfig struct {
-	Image          string            `json:"image"`
-	ResourceLimits ResourceLimits    `json:"resource_limits"`
-	Environment    map[string]string `json:"environment"`
-	WorkspaceDir   string            `json:"workspace_dir"`
-	MockGitHub     bool              `json:"mock_github"`
-}
-
-// ResourceLimits defines container resource constraints
-type ResourceLimits struct {
-	CPULimit    float64       `json:"cpu_limit"`    // cores
-	MemoryLimit int64         `json:"memory_limit"` // bytes
-	Timeout     time.Duration `json:"timeout"`      // execution timeout
+	Image          string                 `json:"image"`
+	ResourceLimits sandbox.ResourceLimits `json:"resource_limits"`
+	Environment    map[string]string      `json:"environment"`
+	WorkspaceDir   string                 `json:"workspace_dir"`
+	MockGitHub     bool                   `json:"mock_github"`
 }
 
 // ProjectDetection holds results from project type detection

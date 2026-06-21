@@ -28,6 +28,14 @@ func NewContainer(imageName string) (*Container, error) {
 		return nil, err
 	}
 
+	// Verify Docker is running
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := cli.Ping(ctx); err != nil {
+		cli.Close()
+		return nil, fmt.Errorf("Docker is not running. Start Docker and try again: %w", err)
+	}
+
 	return &Container{
 		client:    cli,
 		imageName: imageName,
@@ -122,7 +130,8 @@ func (c *Container) Cleanup(ctx context.Context) error {
 	}
 
 	timeout := 10 * time.Second
-	err := c.client.ContainerStop(ctx, c.containerID, container.StopOptions{Timeout: &timeout})
+	timeoutSec := int(timeout.Seconds())
+	err := c.client.ContainerStop(ctx, c.containerID, container.StopOptions{Timeout: &timeoutSec})
 	if err != nil {
 		return err
 	}

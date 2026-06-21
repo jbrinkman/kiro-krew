@@ -62,8 +62,8 @@ func (c *Container) ConfigureMockGitHubPath(ctx context.Context) error {
 
 // GitHubMockResponse represents a mock GitHub API response
 type GitHubMockResponse struct {
-	IssueNumber int    `json:"number,omitempty"`
-	PRNumber    int    `json:"number,omitempty"`
+	IssueNumber int    `json:"issue_number,omitempty"`
+	PRNumber    int    `json:"pr_number,omitempty"`
 	URL         string `json:"url,omitempty"`
 	Status      string `json:"status,omitempty"`
 }

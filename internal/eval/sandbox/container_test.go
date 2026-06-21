@@ -260,7 +260,9 @@ ENV PATH=$PATH:/usr/local/go/bin:$GOPATH/bin
 }
 
 func TestGitHubCLIMocking(t *testing.T) {
-	// Test that mock GitHub CLI is properly configured
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
 	testdataDir := "testdata/github-cli-mock"
 
 	// Check mock script exists
@@ -322,7 +324,7 @@ func TestContainerTimeout(t *testing.T) {
 	require.NoError(t, err)
 
 	// This should timeout due to context deadline
-	err = c.ExecWithOutput(ctx, []string{"sleep", "5"})
+	_, err = c.ExecWithOutput(ctx, []string{"sleep", "5"})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "context deadline exceeded")
 
