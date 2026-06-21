@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/docker/docker/api/types/container"
 	"github.com/jbrinkman/kiro-krew/internal/eval/sandbox"
 	"gopkg.in/yaml.v3"
 )
@@ -426,51 +427,45 @@ func createContainerConfig(resourceLimits map[string]string) *ContainerConfig {
 func invokeAgentInContainer(agent, prompt string, cConfig *ContainerConfig) (string, CostInfo, *ErrorContext, error) {
 	ctx := context.Background()
 
-	// Measure container creation time
+	// Phase 1: Container startup
 	createStart := time.Now()
 
-	// Create container
-	container, err := sandbox.NewContainer(cConfig.Image)
+	c, err := sandbox.NewContainer(cConfig.Image)
 	if err != nil {
-		// Provide structured error handling with actionable messages
-		if strings.Contains(err.Error(), "Docker is not running") {
-			return "", CostInfo{}, nil, fmt.Errorf("❌ Docker is not running. Start Docker and try again")
-		}
-		if strings.Contains(err.Error(), "Cannot connect to the Docker daemon") {
-			return "", CostInfo{}, nil, fmt.Errorf("❌ Docker daemon not accessible. Check Docker installation and permissions")
-		}
 		return "", CostInfo{}, nil, fmt.Errorf("creating container: %w", err)
 	}
-	defer container.Close()
+	defer c.Close()
 
-	// Display container startup logging
-	container.LogStartup(cConfig.ResourceLimits)
-
-	createDuration := time.Since(createStart)
-	fmt.Printf("  Container creation: %v\n", createDuration)
-
-	// Set up GitHub mocking if enabled
-	var env []string
-	if cConfig.MockGitHub {
-		env = append(env, "GITHUB_API_URL=http://localhost:8080")
+	hostConfig := sandbox.NewHostConfigWithLimits(cConfig.ResourceLimits)
+	containerCfg := &container.Config{
+		Image: cConfig.Image,
+		Cmd:   []string{"sleep", "3600"},
 	}
-	for k, v := range cConfig.Environment {
-		env = append(env, k+"="+v)
+	if err := c.Create(ctx, containerCfg, hostConfig); err != nil {
+		return "", CostInfo{}, nil, fmt.Errorf("creating container: %w", err)
+	}
+	defer c.Cleanup(ctx)
+
+	if err := c.Start(ctx); err != nil {
+		return "", CostInfo{}, nil, fmt.Errorf("starting container: %w", err)
 	}
 
-	// Execute kiro-cli in container with timeout
+	c.LogStartup(cConfig.ResourceLimits)
+	fmt.Printf("  Container startup: %v\n", time.Since(createStart))
+
+	// Phase 2: Command execution
 	timeoutCtx, cancel := context.WithTimeout(ctx, cConfig.ResourceLimits.Timeout)
 	defer cancel()
 
 	cmd := []string{"kiro-cli", "chat", "--agent", agent, "--no-interactive", "--trust-all-tools"}
 
 	executionStart := time.Now()
-	output, err := container.ExecWithOutput(timeoutCtx, cmd)
+	output, err := c.ExecWithOutput(timeoutCtx, cmd)
 	executionDuration := time.Since(executionStart)
 
 	if err != nil {
 		// Enhanced error context with container information
-		shortID, imageName := container.GetContainerInfo()
+		shortID, imageName := c.GetContainerInfo()
 		errorContext := &ErrorContext{
 			Command:        strings.Join(cmd, " "),
 			WorkingDir:     cConfig.WorkspaceDir,

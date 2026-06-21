@@ -25,10 +25,6 @@ type Container struct {
 
 // LogStartup displays container creation details with resource limits
 func (c *Container) LogStartup(limits ResourceLimits) {
-	if c.containerID == "" {
-		return
-	}
-
 	shortID := c.containerID
 	if len(shortID) > 7 {
 		shortID = shortID[:7]
@@ -38,7 +34,7 @@ func (c *Container) LogStartup(limits ResourceLimits) {
 	cpuCores := float64(limits.CPUQuota) / 1000000.0
 	memoryMB := limits.Memory / (1024 * 1024)
 
-	fmt.Printf("Starting sandbox container: %s [%s] (%.1f CPU, %dMB RAM, %v timeout)\n",
+	fmt.Printf("🐳 Starting sandbox container: %s [%s] (%.1f CPU, %dMB RAM, %v timeout)\n",
 		c.imageName, shortID, cpuCores, memoryMB, limits.Timeout)
 }
 
