@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jbrinkman/kiro-krew/internal/eval/sandbox"
 	"gopkg.in/yaml.v3"
 )
 
@@ -21,6 +22,12 @@ var ansiRegex = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
 
 // RunWithOptions executes evaluation with extended CLI options.
 func RunWithOptions(agent string, testcase string, options RunOptions) error {
+	// Configure container sandboxing
+	var cConfig *ContainerConfig
+	if options.Sandbox && !options.NoSandbox {
+		cConfig = createContainerConfig(options.ResourceLimit)
+	}
+
 	// Start performance profiling
 	StartProfiling()
 	defer func() {
@@ -45,7 +52,7 @@ func RunWithOptions(agent string, testcase string, options RunOptions) error {
 	}
 
 	// Default to original behavior for backward compatibility
-	return Run(agent)
+	return Run(agent, cConfig)
 }
 
 // listTestCases displays available test cases for an agent.
@@ -112,7 +119,7 @@ func runSingleTestCase(agent string, testcase string) error {
 	}
 
 	// Run evaluation on single test case
-	result := evaluate(*rubric, []TestCase{*targetCase}, gitHash, os.Stdout)
+	result := evaluate(*rubric, []TestCase{*targetCase}, gitHash, os.Stdout, nil)
 
 	// Write result file
 	resultFile := filepath.Join(resultsDir, agent+".json")
@@ -147,7 +154,7 @@ func runSingleTestCase(agent string, testcase string) error {
 }
 
 // Run executes the evaluation for all agents (or a specific agent) and writes results.
-func Run(agent string) error {
+func Run(agent string, cConfig *ContainerConfig) error {
 	// Start performance profiling
 	StartProfiling()
 
@@ -196,7 +203,7 @@ func Run(agent string) error {
 	}
 
 	// Use progressive evaluation
-	err = runProgressiveEvaluation(agent, resultsDir, false)
+	err = runProgressiveEvaluation(agent, resultsDir, false, cConfig)
 
 	// Generate performance analysis
 	profile := GenerateProfile()
@@ -212,7 +219,7 @@ func Run(agent string) error {
 	return err
 }
 
-func evaluate(rubric Rubric, cases []TestCase, gitHash string, out io.Writer) AgentResult {
+func evaluate(rubric Rubric, cases []TestCase, gitHash string, out io.Writer, cConfig *ContainerConfig) AgentResult {
 	result := AgentResult{
 		Agent:   rubric.Agent,
 		GitHash: gitHash,
@@ -232,7 +239,7 @@ func evaluate(rubric Rubric, cases []TestCase, gitHash string, out io.Writer) Ag
 			cr.ActualOutput = ""
 		} else {
 			fmt.Fprintf(out, " → running agent...")
-			actualOutput, cost, errorContext, err := invokeAgent(rubric.Agent, prompt)
+			actualOutput, cost, errorContext, err := invokeAgent(rubric.Agent, prompt, cConfig)
 			if err != nil {
 				fmt.Fprintf(out, " ❌ (agent failed)\n")
 				fmt.Fprintf(out, "      Error: %v\n", err)
@@ -368,7 +375,98 @@ func assemblePrompt(setup []SetupEntry, input string) (string, error) {
 }
 
 // invokeAgent executes kiro-cli with the given agent and prompt, with timeout support
-func invokeAgent(agent, prompt string) (string, CostInfo, *ErrorContext, error) {
+func invokeAgent(agent, prompt string, cConfig *ContainerConfig) (string, CostInfo, *ErrorContext, error) {
+	// Use container execution if configured
+	if cConfig != nil {
+		return invokeAgentInContainer(agent, prompt, cConfig)
+	}
+
+	return invokeAgentNative(agent, prompt)
+}
+
+// createContainerConfig builds container configuration from CLI options
+func createContainerConfig(resourceLimits map[string]string) *ContainerConfig {
+	config := &ContainerConfig{
+		Image:        "alpine:3.19",
+		WorkspaceDir: "/workspace",
+		MockGitHub:   true,
+		Environment: map[string]string{
+			"KIRO_CLI_DISABLE_TELEMETRY": "1",
+		},
+		ResourceLimits: sandbox.ResourceLimits{
+			CPUQuota: 1000000,            // 1.0 core
+			Memory:   1024 * 1024 * 1024, // 1GB
+			Timeout:  5 * time.Minute,
+		},
+	}
+
+	// Apply resource limit overrides
+	if resourceLimits != nil {
+		if cpu := resourceLimits["cpu"]; cpu != "" {
+			if cpuFloat, err := strconv.ParseFloat(cpu, 64); err == nil {
+				config.ResourceLimits.CPUQuota = int64(cpuFloat * 1000000)
+			}
+		}
+		if memory := resourceLimits["memory"]; memory != "" {
+			if memInt, err := strconv.ParseInt(memory, 10, 64); err == nil {
+				config.ResourceLimits.Memory = memInt
+			}
+		}
+		if timeout := resourceLimits["timeout"]; timeout != "" {
+			if timeoutDur, err := time.ParseDuration(timeout); err == nil {
+				config.ResourceLimits.Timeout = timeoutDur
+			}
+		}
+	}
+
+	return config
+}
+
+// invokeAgentInContainer executes kiro-cli in a Docker container
+func invokeAgentInContainer(agent, prompt string, cConfig *ContainerConfig) (string, CostInfo, *ErrorContext, error) {
+	ctx := context.Background()
+
+	// Create container
+	container, err := sandbox.NewContainer(cConfig.Image)
+	if err != nil {
+		return "", CostInfo{}, nil, fmt.Errorf("creating container: %w", err)
+	}
+	defer container.Close()
+
+	// Set up GitHub mocking if enabled
+	var env []string
+	if cConfig.MockGitHub {
+		env = append(env, "GITHUB_API_URL=http://localhost:8080")
+	}
+	for k, v := range cConfig.Environment {
+		env = append(env, k+"="+v)
+	}
+
+	// Execute kiro-cli in container with timeout
+	timeoutCtx, cancel := context.WithTimeout(ctx, cConfig.ResourceLimits.Timeout)
+	defer cancel()
+
+	cmd := []string{"kiro-cli", "chat", "--agent", agent, "--no-interactive", "--trust-all-tools"}
+	output, err := container.ExecWithOutput(timeoutCtx, cmd)
+
+	if err != nil {
+		errorContext := &ErrorContext{
+			Command:     strings.Join(cmd, " "),
+			WorkingDir:  cConfig.WorkspaceDir,
+			Environment: cConfig.Environment,
+			Stderr:      err.Error(),
+		}
+		return "", CostInfo{}, errorContext, fmt.Errorf("container execution failed: %w", err)
+	}
+
+	result := stripANSISequences(output)
+	cost := estimateCost(prompt, result)
+
+	return result, cost, nil, nil
+}
+
+// invokeAgentNative executes kiro-cli natively (original implementation)
+func invokeAgentNative(agent, prompt string) (string, CostInfo, *ErrorContext, error) {
 	timeoutStr := os.Getenv("KIRO_KREW_EVAL_TIMEOUT")
 	timeout := 2 * time.Minute
 	if timeoutStr != "" {
@@ -877,15 +975,15 @@ func runWithResume(agent string) error {
 
 	if latestDir == "" {
 		fmt.Println("📄 No incomplete evaluations found, starting fresh...")
-		return Run(agent)
+		return Run(agent, nil)
 	}
 
 	fmt.Printf("📂 Resuming evaluation from: %s\n", latestDir)
-	return runProgressiveEvaluation(agent, latestDir, true)
+	return runProgressiveEvaluation(agent, latestDir, true, nil)
 }
 
 // runProgressiveEvaluation runs evaluation with progressive result saving.
-func runProgressiveEvaluation(agent, resultsDir string, isResume bool) error {
+func runProgressiveEvaluation(agent, resultsDir string, isResume bool, cConfig *ContainerConfig) error {
 	gitHash, err := getGitShortHash()
 	if err != nil {
 		return fmt.Errorf("failed to get git hash: %w", err)
@@ -916,7 +1014,7 @@ func runProgressiveEvaluation(agent, resultsDir string, isResume bool) error {
 			continue
 		}
 
-		result := evaluateProgressive(rubric, cases, gitHash, os.Stdout, resultsDir, isResume)
+		result := evaluateProgressive(rubric, cases, gitHash, os.Stdout, resultsDir, isResume, cConfig)
 
 		// Final save
 		if err := saveProgressiveResult(resultsDir, rubric.Agent, result, gitHash); err != nil {
@@ -936,7 +1034,7 @@ func runProgressiveEvaluation(agent, resultsDir string, isResume bool) error {
 }
 
 // evaluateProgressive runs evaluation with progressive result saving after each test case.
-func evaluateProgressive(rubric Rubric, cases []TestCase, gitHash string, out io.Writer, resultsDir string, isResume bool) AgentResult {
+func evaluateProgressive(rubric Rubric, cases []TestCase, gitHash string, out io.Writer, resultsDir string, isResume bool, cConfig *ContainerConfig) AgentResult {
 	result := AgentResult{
 		Agent:   rubric.Agent,
 		GitHash: gitHash,
@@ -974,7 +1072,7 @@ func evaluateProgressive(rubric Rubric, cases []TestCase, gitHash string, out io
 			cr.ActualOutput = ""
 		} else {
 			fmt.Fprintf(out, " → running agent...")
-			actualOutput, cost, errorContext, err := invokeAgent(rubric.Agent, prompt)
+			actualOutput, cost, errorContext, err := invokeAgent(rubric.Agent, prompt, cConfig)
 			if err != nil {
 				fmt.Fprintf(out, " ❌ (agent failed)\n")
 				fmt.Fprintf(out, "      Error: %v\n", err)

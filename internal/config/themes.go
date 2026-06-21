@@ -145,6 +145,9 @@ func getDefaultTheme() *Theme {
 }
 
 func LoadTheme(name string) (*Theme, error) {
+	if name == "default" {
+		return getDefaultTheme(), nil
+	}
 	if !validThemeNamePattern.MatchString(name) {
 		return nil, fmt.Errorf("invalid theme name '%s': only alphanumeric, '-', and '_' characters are allowed", name)
 	}
