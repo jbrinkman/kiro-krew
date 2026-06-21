@@ -23,7 +23,7 @@ type Container struct {
 
 // NewContainer creates a new container manager
 func NewContainer(imageName string) (*Container, error) {
-	cli, err := client.NewClientWithOpts(client.FromEnv)
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return nil, err
 	}
