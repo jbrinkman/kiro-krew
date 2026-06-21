@@ -23,6 +23,30 @@ type Container struct {
 	imageName   string
 }
 
+// LogStartup displays container creation details with resource limits
+func (c *Container) LogStartup(limits ResourceLimits) {
+	shortID := c.containerID
+	if len(shortID) > 7 {
+		shortID = shortID[:7]
+	}
+
+	// Convert resource limits to human-readable format
+	cpuCores := float64(limits.CPUQuota) / 1000000.0
+	memoryMB := limits.Memory / (1024 * 1024)
+
+	fmt.Printf("🐳 Starting sandbox container: %s [%s] (%.1f CPU, %dMB RAM, %v timeout)\n",
+		c.imageName, shortID, cpuCores, memoryMB, limits.Timeout)
+}
+
+// GetContainerInfo returns container ID and resource information
+func (c *Container) GetContainerInfo() (string, string) {
+	shortID := c.containerID
+	if len(shortID) > 7 {
+		shortID = shortID[:7]
+	}
+	return shortID, c.imageName
+}
+
 // NewContainer creates a new container manager
 func NewContainer(imageName string) (*Container, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
