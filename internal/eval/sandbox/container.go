@@ -1,6 +1,8 @@
 package sandbox
 
 import (
+	"archive/tar"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -69,15 +71,32 @@ func (c *Container) Start(ctx context.Context) error {
 	return c.client.ContainerStart(ctx, c.containerID, container.StartOptions{})
 }
 
-// CopyTo copies files to the container
+// CopyTo copies a file to the container
 func (c *Container) CopyTo(ctx context.Context, destPath string, srcPath string) error {
-	file, err := os.Open(srcPath)
+	content, err := os.ReadFile(srcPath)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
 
-	return c.client.CopyToContainer(ctx, c.containerID, filepath.Dir(destPath), file, container.CopyToContainerOptions{})
+	// Docker CopyToContainer requires a tar archive
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	header := &tar.Header{
+		Name: filepath.Base(destPath),
+		Mode: 0755,
+		Size: int64(len(content)),
+	}
+	if err := tw.WriteHeader(header); err != nil {
+		return err
+	}
+	if _, err := tw.Write(content); err != nil {
+		return err
+	}
+	if err := tw.Close(); err != nil {
+		return err
+	}
+
+	return c.client.CopyToContainer(ctx, c.containerID, filepath.Dir(destPath), &buf, container.CopyToContainerOptions{})
 }
 
 // Exec executes a command in the container
