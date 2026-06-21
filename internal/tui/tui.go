@@ -228,6 +228,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.styles.Error.Render(fmt.Sprintf("  Error: %v", msg.err)),
 			)
 		} else {
+			// Check for empty/invalid TagName - treat as no releases
+			if msg.release == nil || strings.TrimSpace(msg.release.TagName) == "" {
+				if m.activeOverlay == overlayAbout {
+					m.aboutDialog.UpdateStatusLine([]string{})
+					m.overlayContent.content = append(m.aboutDialog.GetFullContent(), "", "Press ESC to close")
+				}
+				return m, nil
+			}
 			current := version.Version
 			latest := msg.release.TagName
 			if current == "dev" {
