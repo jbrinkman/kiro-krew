@@ -68,11 +68,14 @@ type CaseResult struct {
 
 // ErrorContext captures execution details for debugging failed tests.
 type ErrorContext struct {
-	Command     string            `json:"command"`
-	WorkingDir  string            `json:"working_dir"`
-	Environment map[string]string `json:"environment,omitempty"`
-	Stderr      string            `json:"stderr,omitempty"`
-	ExitCode    int               `json:"exit_code,omitempty"`
+	Command        string            `json:"command"`
+	WorkingDir     string            `json:"working_dir"`
+	Environment    map[string]string `json:"environment,omitempty"`
+	Stderr         string            `json:"stderr,omitempty"`
+	ExitCode       int               `json:"exit_code,omitempty"`
+	ContainerID    string            `json:"container_id,omitempty"`    // Container short ID for sandbox mode
+	ContainerImage string            `json:"container_image,omitempty"` // Container image name
+	DockerError    string            `json:"docker_error,omitempty"`    // Docker-specific error details
 }
 
 // AgentResult holds all case results for one agent.

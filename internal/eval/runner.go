@@ -426,12 +426,28 @@ func createContainerConfig(resourceLimits map[string]string) *ContainerConfig {
 func invokeAgentInContainer(agent, prompt string, cConfig *ContainerConfig) (string, CostInfo, *ErrorContext, error) {
 	ctx := context.Background()
 
+	// Measure container creation time
+	createStart := time.Now()
+
 	// Create container
 	container, err := sandbox.NewContainer(cConfig.Image)
 	if err != nil {
+		// Provide structured error handling with actionable messages
+		if strings.Contains(err.Error(), "Docker is not running") {
+			return "", CostInfo{}, nil, fmt.Errorf("❌ Docker is not running. Start Docker and try again")
+		}
+		if strings.Contains(err.Error(), "Cannot connect to the Docker daemon") {
+			return "", CostInfo{}, nil, fmt.Errorf("❌ Docker daemon not accessible. Check Docker installation and permissions")
+		}
 		return "", CostInfo{}, nil, fmt.Errorf("creating container: %w", err)
 	}
 	defer container.Close()
+
+	// Display container startup logging
+	container.LogStartup(cConfig.ResourceLimits)
+
+	createDuration := time.Since(createStart)
+	fmt.Printf("  Container creation: %v\n", createDuration)
 
 	// Set up GitHub mocking if enabled
 	var env []string
@@ -447,17 +463,40 @@ func invokeAgentInContainer(agent, prompt string, cConfig *ContainerConfig) (str
 	defer cancel()
 
 	cmd := []string{"kiro-cli", "chat", "--agent", agent, "--no-interactive", "--trust-all-tools"}
+
+	executionStart := time.Now()
 	output, err := container.ExecWithOutput(timeoutCtx, cmd)
+	executionDuration := time.Since(executionStart)
 
 	if err != nil {
+		// Enhanced error context with container information
+		shortID, imageName := container.GetContainerInfo()
 		errorContext := &ErrorContext{
-			Command:     strings.Join(cmd, " "),
-			WorkingDir:  cConfig.WorkspaceDir,
-			Environment: cConfig.Environment,
-			Stderr:      err.Error(),
+			Command:        strings.Join(cmd, " "),
+			WorkingDir:     cConfig.WorkspaceDir,
+			Environment:    cConfig.Environment,
+			Stderr:         err.Error(),
+			ContainerID:    shortID,
+			ContainerImage: imageName,
+			DockerError:    err.Error(),
 		}
+
+		// Provide actionable error messages for common container issues
+		if strings.Contains(err.Error(), "timeout") || timeoutCtx.Err() == context.DeadlineExceeded {
+			return "", CostInfo{}, errorContext, fmt.Errorf("⏱️ Container execution timeout after %v. Consider increasing --resource-limit timeout=", cConfig.ResourceLimits.Timeout)
+		}
+		if strings.Contains(err.Error(), "out of memory") || strings.Contains(err.Error(), "OOMKilled") {
+			memoryMB := cConfig.ResourceLimits.Memory / (1024 * 1024)
+			return "", CostInfo{}, errorContext, fmt.Errorf("💾 Container ran out of memory (%dMB limit). Consider increasing --resource-limit memory=", memoryMB)
+		}
+		if strings.Contains(err.Error(), "no such image") || strings.Contains(err.Error(), "pull access denied") {
+			return "", CostInfo{}, errorContext, fmt.Errorf("❌ Failed to pull image %s: %v. Check internet connection", imageName, err)
+		}
+
 		return "", CostInfo{}, errorContext, fmt.Errorf("container execution failed: %w", err)
 	}
+
+	fmt.Printf("  Execution time: %v\n", executionDuration)
 
 	result := stripANSISequences(output)
 	cost := estimateCost(prompt, result)
