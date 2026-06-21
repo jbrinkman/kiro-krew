@@ -1,5 +1,7 @@
 package eval
 
+import "time"
+
 // Rubric defines scoring criteria for an agent.
 type Rubric struct {
 	Agent    string      `yaml:"agent" json:"agent"`
@@ -80,8 +82,11 @@ type AgentResult struct {
 
 // RunOptions configures evaluation execution.
 type RunOptions struct {
-	List   bool // List available test cases
-	Resume bool // Resume from interrupted evaluation
+	List          bool              // List available test cases
+	Resume        bool              // Resume from interrupted evaluation
+	Sandbox       bool              // Enable container sandboxing
+	NoSandbox     bool              // Explicitly disable sandboxing
+	ResourceLimit map[string]string // Resource limit overrides (cpu, memory, timeout)
 }
 
 // Summary holds aggregate results for an eval run.
@@ -89,4 +94,27 @@ type Summary struct {
 	GitHash     string             `json:"git_hash"`
 	TotalCost   CostInfo           `json:"total_cost"`
 	AgentScores map[string]float64 `json:"agent_scores"` // agent -> average score
+}
+
+// ContainerConfig configures containerized execution
+type ContainerConfig struct {
+	Image          string            `json:"image"`
+	ResourceLimits ResourceLimits    `json:"resource_limits"`
+	Environment    map[string]string `json:"environment"`
+	WorkspaceDir   string            `json:"workspace_dir"`
+	MockGitHub     bool              `json:"mock_github"`
+}
+
+// ResourceLimits defines container resource constraints
+type ResourceLimits struct {
+	CPULimit    float64       `json:"cpu_limit"`    // cores
+	MemoryLimit int64         `json:"memory_limit"` // bytes
+	Timeout     time.Duration `json:"timeout"`      // execution timeout
+}
+
+// ProjectDetection holds results from project type detection
+type ProjectDetection struct {
+	ProjectType  string            `json:"project_type"`
+	ConfigFiles  []string          `json:"config_files"`
+	Dependencies map[string]string `json:"dependencies"`
 }

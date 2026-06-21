@@ -1,15 +1,20 @@
 package cmd
 
 import (
+	"strings"
+
 	"github.com/jbrinkman/kiro-krew/internal/eval"
 	"github.com/spf13/cobra"
 )
 
 var (
-	evalList   bool
-	evalResume bool
-	evalCase   string
-	evalPerf   bool
+	evalList          bool
+	evalResume        bool
+	evalCase          string
+	evalPerf          bool
+	evalSandbox       bool
+	evalNoSandbox     bool
+	evalResourceLimit []string
 )
 
 var evalCmd = &cobra.Command{
@@ -34,9 +39,21 @@ var evalCmd = &cobra.Command{
 			return eval.RunPerformanceInvestigation(agent)
 		}
 
+		// Parse resource limits
+		resourceLimits := make(map[string]string)
+		for _, limit := range evalResourceLimit {
+			parts := strings.SplitN(limit, "=", 2)
+			if len(parts) == 2 {
+				resourceLimits[parts[0]] = parts[1]
+			}
+		}
+
 		return eval.RunWithOptions(agent, testcase, eval.RunOptions{
-			List:   evalList,
-			Resume: evalResume,
+			List:          evalList,
+			Resume:        evalResume,
+			Sandbox:       evalSandbox,
+			NoSandbox:     evalNoSandbox,
+			ResourceLimit: resourceLimits,
 		})
 	},
 }
@@ -55,6 +72,9 @@ func init() {
 	evalCmd.Flags().BoolVar(&evalResume, "resume", false, "Resume interrupted evaluation from last completed test")
 	evalCmd.Flags().StringVar(&evalCase, "case", "", "Run specific test case")
 	evalCmd.Flags().BoolVar(&evalPerf, "perf", false, "Run performance investigation and profiling")
+	evalCmd.Flags().BoolVar(&evalSandbox, "sandbox", false, "Enable container sandboxing for agent execution")
+	evalCmd.Flags().BoolVar(&evalNoSandbox, "no-sandbox", false, "Explicitly disable container sandboxing")
+	evalCmd.Flags().StringSliceVar(&evalResourceLimit, "resource-limit", nil, "Override resource limits (cpu=1.0, memory=1073741824, timeout=5m)")
 
 	evalCmd.AddCommand(diffCmd)
 	rootCmd.AddCommand(evalCmd)

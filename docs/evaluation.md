@@ -193,6 +193,190 @@ Treat evaluations like unit tests:
 - **Performance tracking**: Monitor cost and quality over time
 - **Documentation**: Results serve as behavioral specifications
 
+## Container Sandboxing
+
+The evaluation framework includes container sandboxing for secure, isolated agent testing using Docker.
+
+### Using the --sandbox Flag
+
+Run agent evaluations in Docker containers for complete isolation:
+
+```bash
+# Run all agents in sandbox containers
+kiro-krew eval --sandbox
+
+# Run specific agent in sandbox
+kiro-krew eval --sandbox architect
+
+# List available agents (detects project type)
+kiro-krew eval --sandbox --list architect
+```
+
+The `--sandbox` flag automatically:
+- Detects project type (Go, Node.js, Python, Rust, Java)
+- Generates appropriate Dockerfile with required toolchains
+- Creates isolated container with resource limits
+- Mocks GitHub CLI operations
+- Copies project files and runs evaluations safely
+
+### Project Detection
+
+The sandbox automatically detects project types and installs required toolchains:
+
+| Project Type | Detection Files | Toolchain Installed |
+|--------------|-----------------|-------------------|
+| Go | `go.mod`, `go.sum` | Go compiler and tools |
+| Node.js | `package.json` | Node.js and npm |
+| Python | `requirements.txt`, `pyproject.toml` | Python and pip |
+| Rust | `Cargo.toml` | Rust and Cargo |
+| Java | `pom.xml`, `build.gradle` | OpenJDK and Maven/Gradle |
+| Task | `Taskfile.yml` | Task runner |
+
+Multi-language projects are supported - all detected toolchains will be installed.
+
+### Resource Limits
+
+Containers run with strict resource limits to prevent runaway processes:
+
+| Resource | Default Limit | Environment Variable |
+|----------|---------------|----------------------|
+| CPU | 1.0 core (1,000,000 μs) | `KIRO_KREW_EVAL_CPU_QUOTA` |
+| Memory | 512MB | `KIRO_KREW_EVAL_MEMORY_LIMIT` |
+| Timeout | 5 minutes | `KIRO_KREW_EVAL_TIMEOUT` |
+| Network | Disabled | N/A |
+
+Configure resource limits via environment variables:
+
+```bash
+# Restrict to 0.5 CPU cores and 256MB memory
+KIRO_KREW_EVAL_CPU_QUOTA=500000 \
+KIRO_KREW_EVAL_MEMORY_LIMIT=268435456 \
+kiro-krew eval --sandbox architect
+
+# Set 30-second timeout for quick tests
+KIRO_KREW_EVAL_TIMEOUT=30s \
+kiro-krew eval --sandbox builder
+```
+
+### GitHub CLI Mocking
+
+The sandbox includes a mocked GitHub CLI (`gh`) that returns realistic responses without making real API calls:
+
+```bash
+# Mocked commands return test data:
+gh auth status          # ✓ Logged in as sandbox-user (mocked)
+gh issue create         # Returns mock issue URL
+gh pr create           # Returns mock PR URL
+gh issue list          # Returns mock issue JSON
+```
+
+This enables testing GitHub-dependent workflows safely without:
+- Making real API requests
+- Requiring authentication
+- Creating test repositories
+- Rate limiting issues
+
+### Dynamic Dockerfile Generation
+
+Containers use dynamically generated Dockerfiles based on detected project types:
+
+```dockerfile
+FROM alpine:3.19
+
+# Install essential tools
+RUN apk add --no-cache \
+    git \
+    curl \
+    bash \
+    ca-certificates
+
+# Install detected toolchains (example: Go + Node.js project)
+# Install Go
+RUN apk add --no-cache go
+ENV GOPATH=/home/sandbox/go
+ENV PATH=$PATH:/usr/local/go/bin:$GOPATH/bin
+
+# Install Node.js
+RUN apk add --no-cache nodejs npm
+ENV NODE_PATH=/usr/lib/node_modules
+
+# Setup sandbox user and workspace
+RUN adduser -D -s /bin/bash sandbox
+WORKDIR /workspace
+USER sandbox
+CMD ["/bin/bash"]
+```
+
+### Container Lifecycle
+
+Each evaluation follows this container lifecycle:
+
+1. **Detection** - Analyze project files to determine required toolchains
+2. **Generation** - Create Dockerfile with appropriate base image and tools
+3. **Build** - Build Docker image with generated Dockerfile
+4. **Create** - Create container with resource limits and security settings
+5. **Copy** - Copy project files and mock GitHub CLI into container
+6. **Execute** - Run agent evaluation inside container
+7. **Cleanup** - Stop and remove container, clean up temporary files
+
+### Troubleshooting Container Issues
+
+**Docker not running:**
+```bash
+# Ensure Docker daemon is running
+sudo systemctl start docker   # Linux
+open -a Docker               # macOS
+```
+
+**Permission denied:**
+```bash
+# Add user to docker group (Linux)
+sudo usermod -aG docker $USER
+newgrp docker
+```
+
+**Out of memory:**
+```bash
+# Check container resource usage
+docker stats
+
+# Increase memory limit
+KIRO_KREW_EVAL_MEMORY_LIMIT=1073741824 kiro-krew eval --sandbox
+```
+
+**Timeout errors:**
+```bash
+# Increase timeout for complex evaluations
+KIRO_KREW_EVAL_TIMEOUT=10m kiro-krew eval --sandbox
+```
+
+**Build failures:**
+```bash
+# Check Docker logs for build issues
+docker logs <container-id>
+
+# Verify project detection
+kiro-krew eval --sandbox --list
+```
+
+**Network connectivity (for debugging only):**
+The sandbox disables network access by default. To enable for debugging:
+```bash
+# ⚠️ Only for debugging - reduces security
+KIRO_KREW_EVAL_NETWORK_MODE=bridge kiro-krew eval --sandbox
+```
+
+### Security Considerations
+
+Container sandboxing provides multiple security layers:
+
+- **Process isolation** - Containers run in separate namespaces
+- **Resource limits** - CPU and memory usage restricted
+- **Network isolation** - No external network access by default
+- **User isolation** - Runs as non-root `sandbox` user
+- **GitHub mocking** - No real API calls or authentication required
+- **Temporary containers** - Automatically cleaned up after evaluation
+
 ## Comparing Runs
 
 The `eval diff` command shows:

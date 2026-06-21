@@ -13,14 +13,23 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jbrinkman/kiro-krew/internal/eval/sandbox"
 	"gopkg.in/yaml.v3"
 )
 
 // ansiRegex matches all CSI (Control Sequence Introducer) escape sequences.
 var ansiRegex = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
 
+// Global container configuration
+var containerConfig *ContainerConfig
+
 // RunWithOptions executes evaluation with extended CLI options.
 func RunWithOptions(agent string, testcase string, options RunOptions) error {
+	// Configure container sandboxing
+	if options.Sandbox && !options.NoSandbox {
+		containerConfig = createContainerConfig(options.ResourceLimit)
+	}
+
 	// Start performance profiling
 	StartProfiling()
 	defer func() {
@@ -369,6 +378,97 @@ func assemblePrompt(setup []SetupEntry, input string) (string, error) {
 
 // invokeAgent executes kiro-cli with the given agent and prompt, with timeout support
 func invokeAgent(agent, prompt string) (string, CostInfo, *ErrorContext, error) {
+	// Use container execution if configured
+	if containerConfig != nil {
+		return invokeAgentInContainer(agent, prompt)
+	}
+
+	return invokeAgentNative(agent, prompt)
+}
+
+// createContainerConfig builds container configuration from CLI options
+func createContainerConfig(resourceLimits map[string]string) *ContainerConfig {
+	config := &ContainerConfig{
+		Image:        "alpine:3.19",
+		WorkspaceDir: "/workspace",
+		MockGitHub:   true,
+		Environment: map[string]string{
+			"KIRO_CLI_DISABLE_TELEMETRY": "1",
+		},
+		ResourceLimits: ResourceLimits{
+			CPULimit:    1.0,
+			MemoryLimit: 1024 * 1024 * 1024, // 1GB
+			Timeout:     5 * time.Minute,
+		},
+	}
+
+	// Apply resource limit overrides
+	if resourceLimits != nil {
+		if cpu := resourceLimits["cpu"]; cpu != "" {
+			if cpuFloat, err := strconv.ParseFloat(cpu, 64); err == nil {
+				config.ResourceLimits.CPULimit = cpuFloat
+			}
+		}
+		if memory := resourceLimits["memory"]; memory != "" {
+			if memInt, err := strconv.ParseInt(memory, 10, 64); err == nil {
+				config.ResourceLimits.MemoryLimit = memInt
+			}
+		}
+		if timeout := resourceLimits["timeout"]; timeout != "" {
+			if timeoutDur, err := time.ParseDuration(timeout); err == nil {
+				config.ResourceLimits.Timeout = timeoutDur
+			}
+		}
+	}
+
+	return config
+}
+
+// invokeAgentInContainer executes kiro-cli in a Docker container
+func invokeAgentInContainer(agent, prompt string) (string, CostInfo, *ErrorContext, error) {
+	ctx := context.Background()
+
+	// Create container
+	container, err := sandbox.NewContainer(containerConfig.Image)
+	if err != nil {
+		return "", CostInfo{}, nil, fmt.Errorf("creating container: %w", err)
+	}
+	defer container.Close()
+
+	// Set up GitHub mocking if enabled
+	var env []string
+	if containerConfig.MockGitHub {
+		env = append(env, "GITHUB_API_URL=http://localhost:8080")
+	}
+	for k, v := range containerConfig.Environment {
+		env = append(env, k+"="+v)
+	}
+
+	// Execute kiro-cli in container with timeout
+	timeoutCtx, cancel := context.WithTimeout(ctx, containerConfig.ResourceLimits.Timeout)
+	defer cancel()
+
+	cmd := []string{"kiro-cli", "chat", "--agent", agent, "--no-interactive", "--trust-all-tools"}
+	output, err := container.ExecWithOutput(timeoutCtx, cmd)
+
+	if err != nil {
+		errorContext := &ErrorContext{
+			Command:     strings.Join(cmd, " "),
+			WorkingDir:  containerConfig.WorkspaceDir,
+			Environment: containerConfig.Environment,
+			Stderr:      err.Error(),
+		}
+		return "", CostInfo{}, errorContext, fmt.Errorf("container execution failed: %w", err)
+	}
+
+	result := stripANSISequences(output)
+	cost := estimateCost(prompt, result)
+
+	return result, cost, nil, nil
+}
+
+// invokeAgentNative executes kiro-cli natively (original implementation)
+func invokeAgentNative(agent, prompt string) (string, CostInfo, *ErrorContext, error) {
 	timeoutStr := os.Getenv("KIRO_KREW_EVAL_TIMEOUT")
 	timeout := 2 * time.Minute
 	if timeoutStr != "" {
