@@ -165,6 +165,10 @@ func GetLatestRelease(repo string) (*Release, error) {
 		return nil, fmt.Errorf("failed to parse release info: %w", err)
 	}
 
+	if strings.TrimSpace(release.TagName) == "" {
+		return nil, ErrNoReleases
+	}
+
 	return &release, nil
 }
 
