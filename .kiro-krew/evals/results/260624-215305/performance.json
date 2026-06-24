@@ -1,0 +1,23 @@
+{
+  "profile": {
+    "startup_overhead": 11627209,
+    "test_case_timings": {
+      "basic-functionality-verification": 83312270916
+    },
+    "agent_invocations": 1,
+    "total_eval_time": 83344944417,
+    "memory_usage": {
+      "max_heap_mb": 2.109375,
+      "max_stack_mb": 0.46875,
+      "goroutines_peak": 1
+    },
+    "parallel_potential": {
+      "independent_tests": null,
+      "estimated_speedup": 1,
+      "safe_parallelization": false,
+      "recommended_workers": 1
+    },
+    "bottlenecks": null
+  },
+  "timestamp": "2026-06-24T17:54:29.295219-04:00"
+}
