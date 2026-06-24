@@ -90,15 +90,33 @@ tasks:
         echo "Updated to version: {{.VERSION}}"
 
   build:release:
-    desc: Build release artifacts for macOS only
+    desc: Build release artifacts for all platforms
     cmds:
       - mkdir -p {{.BUILD_DIR}}/release
       - task: build:macos
+      - task: build:linux:amd64
+      - task: build:linux:arm64
 
   build:macos:
     desc: Build for macOS arm64
     cmds:
       - GOOS=darwin GOARCH=arm64 go build -ldflags "-s -w -X github.com/jbrinkman/kiro-krew/internal/version.BuildDate={{.BUILD_TIME}}" -o {{.BUILD_DIR}}/release/kiro-krew ./cmd/kiro-krew
+    vars:
+      BUILD_TIME:
+        sh: date -u +%Y-%m-%dT%H:%M:%SZ
+
+  build:linux:amd64:
+    desc: Build for Linux amd64
+    cmds:
+      - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w -X github.com/jbrinkman/kiro-krew/internal/version.BuildDate={{.BUILD_TIME}}" -o {{.BUILD_DIR}}/release/kiro-krew-linux-amd64 ./cmd/kiro-krew
+    vars:
+      BUILD_TIME:
+        sh: date -u +%Y-%m-%dT%H:%M:%SZ
+
+  build:linux:arm64:
+    desc: Build for Linux arm64
+    cmds:
+      - CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "-s -w -X github.com/jbrinkman/kiro-krew/internal/version.BuildDate={{.BUILD_TIME}}" -o {{.BUILD_DIR}}/release/kiro-krew-linux-arm64 ./cmd/kiro-krew
     vars:
       BUILD_TIME:
         sh: date -u +%Y-%m-%dT%H:%M:%SZ
