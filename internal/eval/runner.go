@@ -26,7 +26,7 @@ var ansiRegex = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
 func checkDockerAvailability() error {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		return fmt.Errorf("Docker is not running. Start Docker and try again: %w", err)
+		return err
 	}
 	defer cli.Close()
 
@@ -45,11 +45,11 @@ func RunWithOptions(agent string, testcase string, options RunOptions) error {
 	// Configure container sandboxing
 	var cConfig *ContainerConfig
 	if options.Sandbox && !options.NoSandbox {
-		cConfig = createContainerConfig(options.ResourceLimit)
-		// Early Docker availability check
+		// Early Docker availability check before any configuration work
 		if err := checkDockerAvailability(); err != nil {
 			return err
 		}
+		cConfig = createContainerConfig(options.ResourceLimit)
 	}
 
 	// Start performance profiling
@@ -212,13 +212,6 @@ func Run(agent string, cConfig *ContainerConfig) error {
 
 	if len(rubrics) == 0 {
 		return fmt.Errorf("❌ Fatal: no rubrics found in .kiro-krew/evals/rubrics/")
-	}
-
-	// Early Docker availability check if container config is provided
-	if cConfig != nil {
-		if err := checkDockerAvailability(); err != nil {
-			return err
-		}
 	}
 
 	timestamp := generateTimestampPrefix()
