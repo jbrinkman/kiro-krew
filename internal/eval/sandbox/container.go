@@ -226,6 +226,31 @@ func (c *Container) loadTemplate(projectType ProjectType) (string, error) {
 	return string(content), nil
 }
 
+// InstallKiroCLI installs kiro-cli binary in the container for the detected architecture
+func (c *Container) InstallKiroCLI(ctx context.Context) error {
+	// Detect container architecture
+	arch, err := c.ExecWithOutput(ctx, []string{"uname", "-m"})
+	if err != nil {
+		return fmt.Errorf("detecting architecture: %w", err)
+	}
+
+	// Map architecture names to kiro-cli variants
+	var variant string
+	switch arch {
+	case "x86_64":
+		variant = "linux-musl-amd64"
+	case "aarch64":
+		variant = "linux-musl-arm64"
+	default:
+		return fmt.Errorf("unsupported architecture: %s", arch)
+	}
+
+	// Install kiro-cli using the installer script
+	installCmd := fmt.Sprintf("curl -fsSL https://install.kiro.dev | KIRO_CLI_VARIANT=%s sh", variant)
+
+	return c.Exec(ctx, []string{"sh", "-c", installCmd})
+}
+
 // Close closes the Docker client
 func (c *Container) Close() error {
 	return c.client.Close()

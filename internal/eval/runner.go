@@ -460,10 +460,22 @@ func invokeAgentInContainer(agent, prompt string, cConfig *ContainerConfig) (str
 	defer c.Close()
 
 	hostConfig := sandbox.NewHostConfigWithLimits(cConfig.ResourceLimits)
-	containerCfg := &container.Config{
-		Image: cConfig.Image,
-		Cmd:   []string{"sleep", "3600"},
+
+	// Configure environment variables from host system and container config
+	envVars := []string{
+		"KIRO_CLI_DISABLE_TELEMETRY=1",
 	}
+	for key, value := range cConfig.Environment {
+		envVars = append(envVars, fmt.Sprintf("%s=%s", key, value))
+	}
+
+	containerCfg := &container.Config{
+		Image:      cConfig.Image,
+		Cmd:        []string{"sleep", "3600"},
+		Env:        envVars,
+		WorkingDir: cConfig.WorkspaceDir,
+	}
+
 	if err := c.Create(ctx, containerCfg, hostConfig); err != nil {
 		return "", CostInfo{}, nil, fmt.Errorf("creating container: %w", err)
 	}
@@ -476,7 +488,28 @@ func invokeAgentInContainer(agent, prompt string, cConfig *ContainerConfig) (str
 	c.LogStartup(cConfig.ResourceLimits)
 	fmt.Printf("  Container startup: %v\n", time.Since(createStart))
 
-	// Phase 2: Command execution
+	// Phase 2: Container setup - Install kiro-cli and configure mocking
+	setupStart := time.Now()
+
+	// Install kiro-cli binary
+	if err := c.InstallKiroCLI(ctx); err != nil {
+		return "", CostInfo{}, nil, fmt.Errorf("installing kiro-cli: %w", err)
+	}
+
+	// Setup GitHub mocking if enabled
+	if cConfig.MockGitHub {
+		if err := c.SetupGitHubMocking(ctx, cConfig.WorkspaceDir); err != nil {
+			return "", CostInfo{}, nil, fmt.Errorf("setting up GitHub mocking: %w", err)
+		}
+
+		if err := c.ConfigureMockGitHubPath(ctx); err != nil {
+			return "", CostInfo{}, nil, fmt.Errorf("configuring mock GitHub PATH: %w", err)
+		}
+	}
+
+	fmt.Printf("  Container setup: %v\n", time.Since(setupStart))
+
+	// Phase 3: Command execution
 	timeoutCtx, cancel := context.WithTimeout(ctx, cConfig.ResourceLimits.Timeout)
 	defer cancel()
 
