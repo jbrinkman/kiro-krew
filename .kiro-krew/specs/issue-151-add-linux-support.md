@@ -18,7 +18,7 @@ The approach leverages Go's built-in cross-compilation capabilities and follows 
 - `README.md` - Add Linux installation instructions
 
 ### Files Created:
-- None (all changes are modifications to existing files)
+- `.kiro-krew/specs/issue-151-add-linux-support.md`
 
 ### Files Referenced:
 - `cmd/kiro-krew/` - Main application entry point

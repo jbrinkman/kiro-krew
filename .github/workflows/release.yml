@@ -52,6 +52,9 @@ jobs:
         task version:set VERSION=$VERSION
         task build:release
         
+        # Verify all expected binaries exist
+        ls dist/release/kiro-krew dist/release/kiro-krew-linux-amd64 dist/release/kiro-krew-linux-arm64
+        
         gh release create v$VERSION \
           --title "Release v$VERSION" \
           --notes "Manual release v$VERSION" \

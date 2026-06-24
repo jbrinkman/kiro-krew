@@ -36,13 +36,13 @@ curl -L https://github.com/jbrinkman/kiro-krew/releases/latest/download/kiro-kre
 chmod +x kiro-krew
 sudo mv kiro-krew /usr/local/bin/
 
-# For ARM64 (aarch64)  
+# For ARM64 (aarch64)
 curl -L https://github.com/jbrinkman/kiro-krew/releases/latest/download/kiro-krew-linux-arm64 -o kiro-krew
 chmod +x kiro-krew
 sudo mv kiro-krew /usr/local/bin/
 
 # Check your architecture
-uname -m  # x86_64 = AMD64, aarch64 = ARM64
+uname -m  # x86_64 = AMD64, aarch64/arm64 = ARM64
 ```
 
 ### Build from Source
