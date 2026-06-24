@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/client"
 	"github.com/jbrinkman/kiro-krew/internal/eval/sandbox"
 	"gopkg.in/yaml.v3"
 )
@@ -21,11 +22,33 @@ import (
 // ansiRegex matches all CSI (Control Sequence Introducer) escape sequences.
 var ansiRegex = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
 
+// checkDockerAvailability verifies Docker daemon is running and accessible
+func checkDockerAvailability() error {
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		return err
+	}
+	defer cli.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if _, err := cli.Ping(ctx); err != nil {
+		return fmt.Errorf("Docker is not running. Start Docker and try again: %w", err)
+	}
+
+	return nil
+}
+
 // RunWithOptions executes evaluation with extended CLI options.
 func RunWithOptions(agent string, testcase string, options RunOptions) error {
 	// Configure container sandboxing
 	var cConfig *ContainerConfig
 	if options.Sandbox && !options.NoSandbox {
+		// Early Docker availability check before any configuration work
+		if err := checkDockerAvailability(); err != nil {
+			return err
+		}
 		cConfig = createContainerConfig(options.ResourceLimit)
 	}
 
