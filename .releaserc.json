@@ -12,7 +12,7 @@
     [
       "@semantic-release/exec",
       {
-        "prepareCmd": "task version:set VERSION=${nextRelease.version}"
+        "prepareCmd": "task version:set VERSION=${nextRelease.version} && task build:release"
       }
     ],
     [
@@ -20,16 +20,8 @@
       {
         "assets": [
           {
-            "path": "dist/release/kiro-krew-linux-amd64",
-            "label": "kiro-krew Linux AMD64"
-          },
-          {
-            "path": "dist/release/kiro-krew-macos-arm64", 
+            "path": "dist/release/kiro-krew",
             "label": "kiro-krew macOS ARM64"
-          },
-          {
-            "path": "dist/release/kiro-krew-windows-amd64.exe",
-            "label": "kiro-krew Windows AMD64"
           }
         ]
       }
