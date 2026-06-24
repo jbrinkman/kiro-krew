@@ -79,7 +79,13 @@ tasks:
       vars: [VERSION]
     cmds:
       - |
-        jq --arg version "{{.VERSION}}" '.version = $version' {{.VERSION_FILE}} > {{.VERSION_FILE}}.tmp
+        BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+        COMMIT_HASH=$(git rev-parse --short HEAD 2>/dev/null || echo "dev")
+        jq --arg version "{{.VERSION}}" \
+           --arg timestamp "$BUILD_TIME" \
+           --arg hash "$COMMIT_HASH" \
+           '.version = $version | .build_timestamp = $timestamp | .commit_hash = $hash' \
+           {{.VERSION_FILE}} > {{.VERSION_FILE}}.tmp
         mv {{.VERSION_FILE}}.tmp {{.VERSION_FILE}}
         echo "Updated to version: {{.VERSION}}"
 
@@ -92,7 +98,7 @@ tasks:
   build:macos:
     desc: Build for macOS arm64
     cmds:
-      - GOOS=darwin GOARCH=arm64 go build -ldflags "-s -w -X github.com/jbrinkman/kiro-krew/internal/version.BuildDate={{.BUILD_TIME}}" -o {{.BUILD_DIR}}/release/kiro-krew-macos-arm64 ./cmd/kiro-krew
+      - GOOS=darwin GOARCH=arm64 go build -ldflags "-s -w -X github.com/jbrinkman/kiro-krew/internal/version.BuildDate={{.BUILD_TIME}}" -o {{.BUILD_DIR}}/release/kiro-krew ./cmd/kiro-krew
     vars:
       BUILD_TIME:
         sh: date -u +%Y-%m-%dT%H:%M:%SZ
