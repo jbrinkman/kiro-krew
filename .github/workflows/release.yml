@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to release (leave empty for auto-detection)'
+        description: 'Version to release (leave empty for semantic-release)'
         required: false
         default: ''
 
@@ -28,41 +28,37 @@ jobs:
       uses: actions/setup-go@v6
       with:
         go-version: '1.25.0'
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
         
     - name: Install Task
       run: |
         sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
+
+    - name: Install dependencies
+      run: npm ci
         
-    - name: Determine next version
-      id: version
+    - name: Manual version release
+      if: ${{ github.event.inputs.version != '' }}
       run: |
-        if [ -n "${{ github.event.inputs.version }}" ]; then
-          echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
-        else
-          # Auto-detect version based on current version
-          CURRENT_VERSION=$(jq -r '.version' internal/version/version.json)
-          # Simple increment for now - can be enhanced with semantic-release
-          NEXT_VERSION=$(echo $CURRENT_VERSION | awk -F. '{$NF = $NF + 1;} 1' | sed 's/ /./g')
-          echo "version=$NEXT_VERSION" >> $GITHUB_OUTPUT
-        fi
+        VERSION=${{ github.event.inputs.version }}
+        echo "Manual release: $VERSION"
+        task version:set VERSION=$VERSION
+        task build:release
         
-    - name: Set version
-      run: task version:set VERSION=${{ steps.version.outputs.version }}
-      
-    - name: Build release artifacts
-      run: task build:release
-      
-    - name: Create release and upload assets
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: v${{ steps.version.outputs.version }}
-        name: Release v${{ steps.version.outputs.version }}
-        body: |
-          Release v${{ steps.version.outputs.version }}
-          
-          ## Changes
-          Auto-generated release from GitHub Actions.
-        draft: false
-        prerelease: false
-        files: |
-          ./dist/release/kiro-krew-macos-arm64
+        gh release create v$VERSION \
+          --title "Release v$VERSION" \
+          --notes "Manual release v$VERSION" \
+          ./dist/release/kiro-krew#"kiro-krew macOS ARM64"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Semantic release
+      if: ${{ github.event.inputs.version == '' }}
+      run: npx semantic-release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

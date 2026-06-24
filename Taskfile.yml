@@ -79,7 +79,13 @@ tasks:
       vars: [VERSION]
     cmds:
       - |
-        jq --arg version "{{.VERSION}}" '.version = $version' {{.VERSION_FILE}} > {{.VERSION_FILE}}.tmp
+        BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+        COMMIT_HASH=$(git rev-parse --short HEAD 2>/dev/null || echo "dev")
+        jq --arg version "{{.VERSION}}" \
+           --arg timestamp "$BUILD_TIME" \
+           --arg hash "$COMMIT_HASH" \
+           '.version = $version | .build_timestamp = $timestamp | .commit_hash = $hash' \
+           {{.VERSION_FILE}} > {{.VERSION_FILE}}.tmp
         mv {{.VERSION_FILE}}.tmp {{.VERSION_FILE}}
         echo "Updated to version: {{.VERSION}}"
 
