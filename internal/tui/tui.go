@@ -598,13 +598,16 @@ func (m model) renderBaseView() string {
 
 func (m model) View() tea.View {
 	if m.quitting {
-		return tea.NewView("Goodbye!\n")
+		v := tea.NewView("Goodbye!\n")
+		v.MouseMode = tea.MouseModeCellMotion
+		return v
 	}
 
 	// Wait for window size before rendering full layout
 	if m.height == 0 {
 		v := tea.NewView(m.input.View())
 		v.AltScreen = true
+		v.MouseMode = tea.MouseModeCellMotion
 		return v
 	}
 
@@ -633,6 +636,7 @@ func (m model) View() tea.View {
 
 	v := tea.NewView(content)
 	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
 	return v
 }
 
@@ -920,7 +924,7 @@ func Run(w *watcher.Watcher, m *agent.Manager, cfg *config.Config) error {
 		}
 	}()
 
-	p := tea.NewProgram(mdl, tea.WithMouseCellMotion())
+	p := tea.NewProgram(mdl)
 	_, err = p.Run()
 	return err
 }
