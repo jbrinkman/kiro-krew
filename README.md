@@ -21,11 +21,31 @@ The system uses `kiro-cli` agents working in isolated git worktrees. Each issue 
 
 ## Installation
 
+### Using Go Install
+
 ```bash
 go install github.com/jbrinkman/kiro-krew@latest
 ```
 
-Or build from source:
+### Download Prebuilt Binaries
+
+#### Linux
+```bash
+# For AMD64 (x86_64)
+curl -L https://github.com/jbrinkman/kiro-krew/releases/latest/download/kiro-krew-linux-amd64 -o kiro-krew
+chmod +x kiro-krew
+sudo mv kiro-krew /usr/local/bin/
+
+# For ARM64 (aarch64)  
+curl -L https://github.com/jbrinkman/kiro-krew/releases/latest/download/kiro-krew-linux-arm64 -o kiro-krew
+chmod +x kiro-krew
+sudo mv kiro-krew /usr/local/bin/
+
+# Check your architecture
+uname -m  # x86_64 = AMD64, aarch64 = ARM64
+```
+
+### Build from Source
 
 ```bash
 git clone https://github.com/jbrinkman/kiro-krew.git

@@ -55,7 +55,9 @@ jobs:
         gh release create v$VERSION \
           --title "Release v$VERSION" \
           --notes "Manual release v$VERSION" \
-          ./dist/release/kiro-krew#"kiro-krew macOS ARM64"
+          ./dist/release/kiro-krew#"kiro-krew macOS ARM64" \
+          ./dist/release/kiro-krew-linux-amd64#"kiro-krew Linux AMD64" \
+          ./dist/release/kiro-krew-linux-arm64#"kiro-krew Linux ARM64"
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         
