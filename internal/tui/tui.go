@@ -920,7 +920,7 @@ func Run(w *watcher.Watcher, m *agent.Manager, cfg *config.Config) error {
 		}
 	}()
 
-	p := tea.NewProgram(mdl)
+	p := tea.NewProgram(mdl, tea.WithMouseCellMotion())
 	_, err = p.Run()
 	return err
 }
