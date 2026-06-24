@@ -7,7 +7,6 @@ import (
 	"io"
 	"os/exec"
 	"sync"
-	"syscall"
 )
 
 // PlannerProcess manages a kiro-cli subprocess for planning sessions
@@ -46,7 +45,7 @@ func NewPlannerProcess() (*PlannerProcess, error) {
 	}
 
 	// Set process group for clean termination
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	setSysProcAttr(cmd)
 
 	process := &PlannerProcess{
 		cmd:    cmd,
@@ -104,7 +103,7 @@ func (p *PlannerProcess) Suspend() error {
 		return fmt.Errorf("process not running")
 	}
 
-	return syscall.Kill(-p.cmd.Process.Pid, syscall.SIGSTOP)
+	return suspendProcess(p.cmd.Process.Pid)
 }
 
 // Resume resumes the suspended subprocess by sending SIGCONT
@@ -113,7 +112,7 @@ func (p *PlannerProcess) Resume() error {
 		return fmt.Errorf("process not running")
 	}
 
-	return syscall.Kill(-p.cmd.Process.Pid, syscall.SIGCONT)
+	return resumeProcess(p.cmd.Process.Pid)
 }
 
 // Stop terminates the subprocess gracefully
@@ -122,7 +121,7 @@ func (p *PlannerProcess) Stop() error {
 
 	if p.cmd.Process != nil {
 		// Send SIGTERM to the process group
-		err := syscall.Kill(-p.cmd.Process.Pid, syscall.SIGTERM)
+		err := terminateProcess(p.cmd.Process.Pid)
 		if err != nil {
 			// Force kill if graceful termination fails
 			_ = p.cmd.Process.Kill()
