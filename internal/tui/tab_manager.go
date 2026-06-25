@@ -131,6 +131,7 @@ func (tm *TabManager) CloseTab(index int) bool {
 	}
 
 	tm.tabs = append(tm.tabs[:index], tm.tabs[index+1:]...)
+	tm.ClearHover()
 
 	// Maintain active tab index
 	if tm.activeTab >= len(tm.tabs) && len(tm.tabs) > 0 {
@@ -244,7 +245,7 @@ func (tm *TabManager) RenderTabHeaders(width int, styles *Styles) string {
 		if i == tm.activeTab {
 			styledTab = styles.TabActive.Render(title)
 		} else if i == tm.hoveredTab {
-			styledTab = styles.TabInactive.Copy().Underline(true).Render(title)
+			styledTab = styles.TabInactiveHover.Render(title)
 		} else {
 			styledTab = styles.TabInactive.Render(title)
 		}
