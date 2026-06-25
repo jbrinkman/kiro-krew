@@ -97,6 +97,9 @@ func Load() (*Config, error) {
 	if cfg.Sandbox.MemoryMB <= 0 {
 		return nil, fmt.Errorf("sandbox.memory_mb must be greater than 0")
 	}
+	if cfg.Sandbox.MemoryMB < 256 {
+		return nil, fmt.Errorf("sandbox.memory_mb must be at least 256")
+	}
 	if cfg.Sandbox.Timeout <= 0 {
 		return nil, fmt.Errorf("sandbox.timeout must be greater than 0")
 	}

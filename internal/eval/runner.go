@@ -50,7 +50,11 @@ func RunWithOptions(agent string, testcase string, options RunOptions) error {
 		if err := checkDockerAvailability(); err != nil {
 			return err
 		}
-		cConfig = createContainerConfig(nil, options.ResourceLimit)
+		var sandboxCfg *config.SandboxConfig
+		if cfg, err := config.Load(); err == nil {
+			sandboxCfg = &cfg.Sandbox
+		}
+		cConfig = createContainerConfig(sandboxCfg, options.ResourceLimit)
 	}
 
 	// Start performance profiling

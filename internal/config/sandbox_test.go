@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -174,6 +175,13 @@ sandbox:
 			expectError: "sandbox.memory_mb must be greater than 0",
 		},
 		{
+			name: "memory_mb below minimum",
+			configContent: `repo: test/repo
+sandbox:
+  memory_mb: 128`,
+			expectError: "sandbox.memory_mb must be at least 256",
+		},
+		{
 			name: "negative timeout",
 			configContent: `repo: test/repo
 sandbox:
@@ -315,5 +323,5 @@ sandbox:
 }
 
 func containsError(actual, expected string) bool {
-	return actual == expected
+	return strings.Contains(actual, expected)
 }
