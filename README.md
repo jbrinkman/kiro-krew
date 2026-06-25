@@ -83,7 +83,6 @@ This creates:
 - `.kiro-krew/config.yaml` — watcher configuration
 - `.kiro-krew/scripts/` — worktree management scripts
 - `.kiro/agents/` — agent configurations (krew-lead, architect, builder, validator, documenter)
-- `.kiro/skills/plan-with-krew/` — issue planning skill
 
 ### 2. Configure
 
@@ -249,16 +248,6 @@ Agent configs live in `.kiro/agents/`. Each agent has a JSON config and a prompt
   "model": "claude-sonnet-4"
 }
 ```
-
-## Planning Skill
-
-The `@plan-with-krew` skill helps create well-structured GitHub issues:
-
-```
-@plan-with-krew Add user authentication with JWT tokens
-```
-
-It collaborates with you to refine requirements, then creates a GitHub issue with problem statement, user story, acceptance criteria, and constraints. Optionally applies the `kiro-krew` label for immediate automated processing.
 
 ## GitHub Integration
 
