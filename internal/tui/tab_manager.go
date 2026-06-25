@@ -9,17 +9,19 @@ import (
 
 // TabManager manages the lifecycle and state of all tabs
 type TabManager struct {
-	tabs      []Tab
-	activeTab int
-	width     int
-	height    int
+	tabs       []Tab
+	activeTab  int
+	hoveredTab int
+	width      int
+	height     int
 }
 
 // NewTabManager creates a new tab manager
 func NewTabManager() *TabManager {
 	return &TabManager{
-		tabs:      make([]Tab, 0),
-		activeTab: 0,
+		tabs:       make([]Tab, 0),
+		activeTab:  0,
+		hoveredTab: -1,
 	}
 }
 
@@ -155,6 +157,23 @@ func (tm *TabManager) GetActiveTabIndex() int {
 	return tm.activeTab
 }
 
+// SetHoveredTab updates the hover state to the specified tab index
+func (tm *TabManager) SetHoveredTab(index int) {
+	if index >= 0 && index < len(tm.tabs) {
+		tm.hoveredTab = index
+	}
+}
+
+// GetHoveredTab returns the current hovered tab index (-1 if no tab is hovered)
+func (tm *TabManager) GetHoveredTab() int {
+	return tm.hoveredTab
+}
+
+// ClearHover resets the hover state to no tab hovered
+func (tm *TabManager) ClearHover() {
+	tm.hoveredTab = -1
+}
+
 // CloseCurrentTab closes the currently active tab if it's closable
 func (tm *TabManager) CloseCurrentTab() bool {
 	return tm.CloseTab(tm.activeTab)
@@ -224,6 +243,8 @@ func (tm *TabManager) RenderTabHeaders(width int, styles *Styles) string {
 		var styledTab string
 		if i == tm.activeTab {
 			styledTab = styles.TabActive.Render(title)
+		} else if i == tm.hoveredTab {
+			styledTab = styles.TabInactive.Copy().Underline(true).Render(title)
 		} else {
 			styledTab = styles.TabInactive.Render(title)
 		}
@@ -254,6 +275,42 @@ func (tm *TabManager) RestoreOrFocusAgentTab(agentID string, manager *agent.Mana
 	// Set the new tab as active (it will be the last one added)
 	tm.SetActiveTab(len(tm.tabs) - 1)
 	return true
+}
+
+// HandleTabHeaderHover handles mouse hover over tab headers.
+// Sets hover state based on mouse position using same logic as HandleTabHeaderClick.
+func (tm *TabManager) HandleTabHeaderHover(x int) {
+	if len(tm.tabs) == 0 {
+		tm.ClearHover()
+		return
+	}
+
+	position := 0
+	separatorWidth := 1 // "│"
+
+	for i, tab := range tm.tabs {
+		title := tab.Title()
+		if len(title) > 15 {
+			title = title[:12] + "..."
+		}
+
+		// Calculate tab width including padding and optional close button
+		tabWidth := len(title) + tabPadding
+		if tab.IsClosable() {
+			tabWidth += len(closeBtnText)
+		}
+
+		// Check if mouse is within this tab
+		if x >= position && x < position+tabWidth {
+			tm.SetHoveredTab(i)
+			return
+		}
+
+		position += tabWidth + separatorWidth
+	}
+
+	// Mouse is not over any tab
+	tm.ClearHover()
 }
 
 // HandleTabHeaderClick handles mouse clicks on tab headers.

@@ -15,9 +15,10 @@ type Styles struct {
 	Error     lipgloss.Style
 
 	// Tab header styles
-	TabActive   lipgloss.Style
-	TabInactive lipgloss.Style
-	TabClose    lipgloss.Style
+	TabActive        lipgloss.Style
+	TabInactive      lipgloss.Style
+	TabInactiveHover lipgloss.Style
+	TabClose         lipgloss.Style
 
 	// Overlay styles
 	OverlayBorder     lipgloss.Style
@@ -51,6 +52,10 @@ func NewStyles(theme *config.Theme) *Styles {
 		TabInactive: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(theme.Colors.TextMuted)).
 			Padding(0, 1),
+		TabInactiveHover: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(theme.Colors.TextMuted)).
+			Padding(0, 1).
+			Underline(true),
 		TabClose: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(theme.Colors.Warning)).
 			Bold(true),
