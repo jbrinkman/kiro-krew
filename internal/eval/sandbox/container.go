@@ -209,7 +209,7 @@ func (c *Container) ExecWithOutput(ctx context.Context, cmd []string) (string, e
 	}
 
 	if inspect.ExitCode != 0 {
-		return "", fmt.Errorf("command failed with exit code %d: %s", inspect.ExitCode, strings.TrimSpace(string(output)))
+		return strings.TrimSpace(string(output)), fmt.Errorf("command failed with exit code %d: %s", inspect.ExitCode, strings.TrimSpace(string(output)))
 	}
 
 	return strings.TrimSpace(string(output)), nil

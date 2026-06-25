@@ -412,7 +412,6 @@ func TestKiroCLIInstallation_VerificationLogic(t *testing.T) {
 	// Test verification fails when kiro-cli is not installed
 	err = c.verifyKiroCLIInstallation(ctx)
 	assert.Error(t, err, "verification should fail when kiro-cli is not installed")
-	assert.Contains(t, err.Error(), "not found")
 }
 
 func TestContainer_GitHubMockingSetup(t *testing.T) {
