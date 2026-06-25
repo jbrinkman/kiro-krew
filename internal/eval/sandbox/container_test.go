@@ -317,3 +317,130 @@ func TestContainerTimeout(t *testing.T) {
 		t.Log("exec completed before timeout — skipping timeout assertion")
 	}
 }
+
+func TestContainer_WorkspacePermissions(t *testing.T) {
+	skipIfNoDocker(t)
+
+	ctx := context.Background()
+	c, err := NewContainer("alpine:3.19")
+	require.NoError(t, err)
+	defer c.Close()
+
+	limits := DefaultLimits()
+	config := &container.Config{
+		Image: "alpine:3.19",
+		Cmd:   []string{"sleep", "30"},
+	}
+	hostConfig := NewHostConfigWithLimits(limits)
+
+	err = c.Create(ctx, config, hostConfig)
+	require.NoError(t, err)
+
+	err = c.Start(ctx)
+	require.NoError(t, err)
+	defer c.Cleanup(ctx)
+
+	// Test workspace directory is writable
+	_, err = c.ExecWithOutput(ctx, []string{"mkdir", "-p", "/workspace/test"})
+	assert.NoError(t, err, "workspace should be writable")
+
+	// Test file creation in workspace
+	_, err = c.ExecWithOutput(ctx, []string{"sh", "-c", "echo 'test' > /workspace/test/file.txt"})
+	assert.NoError(t, err, "should be able to create files in workspace")
+
+	// Verify file content
+	output, err := c.ExecWithOutput(ctx, []string{"cat", "/workspace/test/file.txt"})
+	assert.NoError(t, err)
+	assert.Contains(t, output, "test")
+}
+
+func TestExecWithOutput_ErrorHandling(t *testing.T) {
+	skipIfNoDocker(t)
+
+	ctx := context.Background()
+	c, err := NewContainer("alpine:3.19")
+	require.NoError(t, err)
+	defer c.Close()
+
+	config := &container.Config{
+		Image: "alpine:3.19",
+		Cmd:   []string{"sleep", "30"},
+	}
+
+	err = c.Create(ctx, config, &container.HostConfig{})
+	require.NoError(t, err)
+
+	err = c.Start(ctx)
+	require.NoError(t, err)
+	defer c.Cleanup(ctx)
+
+	// Test successful command
+	output, err := c.ExecWithOutput(ctx, []string{"echo", "success"})
+	assert.NoError(t, err)
+	assert.Contains(t, output, "success")
+
+	// Test failing command should return error
+	_, err = c.ExecWithOutput(ctx, []string{"false"})
+	assert.Error(t, err, "failing command should return error")
+	assert.Contains(t, err.Error(), "exit code 1")
+
+	// Test non-existent command should return error
+	_, err = c.ExecWithOutput(ctx, []string{"nonexistent-command"})
+	assert.Error(t, err, "non-existent command should return error")
+}
+
+func TestKiroCLIInstallation_VerificationLogic(t *testing.T) {
+	skipIfNoDocker(t)
+
+	ctx := context.Background()
+	c, err := NewContainer("alpine:3.19")
+	require.NoError(t, err)
+	defer c.Close()
+
+	config := &container.Config{
+		Image: "alpine:3.19",
+		Cmd:   []string{"sleep", "30"},
+	}
+
+	err = c.Create(ctx, config, &container.HostConfig{})
+	require.NoError(t, err)
+
+	err = c.Start(ctx)
+	require.NoError(t, err)
+	defer c.Cleanup(ctx)
+
+	// Test verification fails when kiro-cli is not installed
+	err = c.verifyKiroCLIInstallation(ctx)
+	assert.Error(t, err, "verification should fail when kiro-cli is not installed")
+}
+
+func TestContainer_GitHubMockingSetup(t *testing.T) {
+	skipIfNoDocker(t)
+
+	ctx := context.Background()
+	c, err := NewContainer("alpine:3.19")
+	require.NoError(t, err)
+	defer c.Close()
+
+	limits := DefaultLimits()
+	config := &container.Config{
+		Image: "alpine:3.19",
+		Cmd:   []string{"sleep", "30"},
+	}
+	hostConfig := NewHostConfigWithLimits(limits)
+
+	err = c.Create(ctx, config, hostConfig)
+	require.NoError(t, err)
+
+	err = c.Start(ctx)
+	require.NoError(t, err)
+	defer c.Cleanup(ctx)
+
+	// Test basic directory creation
+	_, err = c.ExecWithOutput(ctx, []string{"mkdir", "-p", "/workspace/test"})
+	assert.NoError(t, err, "should be able to create directories in workspace")
+
+	// Test file creation
+	_, err = c.ExecWithOutput(ctx, []string{"touch", "/workspace/test/file"})
+	assert.NoError(t, err, "should be able to create files in workspace")
+}

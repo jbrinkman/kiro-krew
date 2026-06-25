@@ -44,6 +44,12 @@ func NewHostConfigWithLimits(limits ResourceLimits) *container.HostConfig {
 			Memory:    limits.Memory,
 		},
 		NetworkMode: "none", // Disable network access for security
+		// Configure writable workspace directory with tmpfs.
+		// Note: tmpfs shadows any files placed at /workspace during image build;
+		// project files must be copied in after container start (e.g., via CopyTo).
+		Tmpfs: map[string]string{
+			"/workspace": "rw,nosuid,size=512m",
+		},
 	}
 	return hostConfig
 }

@@ -202,6 +202,16 @@ func (c *Container) ExecWithOutput(ctx context.Context, cmd []string) (string, e
 		return "", err
 	}
 
+	// Check execution result for exit code
+	inspect, err := c.client.ContainerExecInspect(ctx, resp.ID)
+	if err != nil {
+		return "", err
+	}
+
+	if inspect.ExitCode != 0 {
+		return strings.TrimSpace(string(output)), fmt.Errorf("command failed with exit code %d: %s", inspect.ExitCode, strings.TrimSpace(string(output)))
+	}
+
 	return strings.TrimSpace(string(output)), nil
 }
 
@@ -326,6 +336,7 @@ func (c *Container) verifyKiroCLIInstallation(ctx context.Context) error {
 		return fmt.Errorf("kiro-cli --version returned empty output")
 	}
 
+	// Only print success message after all verification passes
 	fmt.Printf("✅ kiro-cli installation verified: %s\n", version)
 	return nil
 }
