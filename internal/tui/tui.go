@@ -322,6 +322,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case tea.MouseMotionMsg:
+		// Handle mouse motion for tab hover effects when no overlay active
+		if m.activeOverlay == overlayNone {
+			mouse := msg.Mouse()
+			// Only process hover when mouse is within tab header area
+			if mouse.Y < tabHeaderHeight {
+				m.tabManager.HandleTabHeaderHover(mouse.X)
+			} else {
+				m.tabManager.ClearHover()
+			}
+		}
+		return m, nil
+
 	case tea.MouseClickMsg:
 		// Handle mouse clicks on tab headers when no overlay active
 		if m.activeOverlay == overlayNone {
@@ -599,7 +612,7 @@ func (m model) renderBaseView() string {
 func (m model) View() tea.View {
 	if m.quitting {
 		v := tea.NewView("Goodbye!\n")
-		v.MouseMode = tea.MouseModeCellMotion
+		v.MouseMode = tea.MouseModeAllMotion
 		return v
 	}
 
@@ -607,7 +620,7 @@ func (m model) View() tea.View {
 	if m.height == 0 {
 		v := tea.NewView(m.input.View())
 		v.AltScreen = true
-		v.MouseMode = tea.MouseModeCellMotion
+		v.MouseMode = tea.MouseModeAllMotion
 		return v
 	}
 
@@ -636,7 +649,7 @@ func (m model) View() tea.View {
 
 	v := tea.NewView(content)
 	v.AltScreen = true
-	v.MouseMode = tea.MouseModeCellMotion
+	v.MouseMode = tea.MouseModeAllMotion
 	return v
 }
 
