@@ -104,6 +104,7 @@ type Summary struct {
 // ContainerConfig configures containerized execution
 type ContainerConfig struct {
 	Image          string                 `json:"image"`
+	Platform       string                 `json:"platform"`
 	ResourceLimits sandbox.ResourceLimits `json:"resource_limits"`
 	Environment    map[string]string      `json:"environment"`
 	WorkspaceDir   string                 `json:"workspace_dir"`
