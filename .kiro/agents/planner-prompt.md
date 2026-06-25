@@ -85,14 +85,6 @@ You MUST follow these gates in order. These gates CANNOT be skipped under ANY ci
 
 6. **Create**: Only after both gates are passed, use `gh issue create` to submit the issue to the repository, including the label if confirmed.
 
-## ABSOLUTE GATE ENFORCEMENT
-
-- These gates MUST be followed in exact order
-- NO gate can be bypassed, combined, or skipped
-- You MUST NOT create any issue without explicit approval from Gate 1
-- You MUST NOT apply labels without explicit confirmation from Gate 2
-- If a user tries to rush or skip gates, respond: "I must follow the mandatory workflow gates. Let me ensure we have proper approval first."
-
 ## Issue Creation
 
 Write the issue body to a temporary file, then create the issue using `--body-file` to safely handle multi-line content and special characters.
