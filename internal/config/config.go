@@ -15,6 +15,14 @@ type SessionConfig struct {
 	SessionsDir        string        `yaml:"sessions_dir"`
 }
 
+type SandboxConfig struct {
+	Image        string        `yaml:"image"`
+	WorkspaceDir string        `yaml:"workspace_dir"`
+	CPUCores     float64       `yaml:"cpu_cores"`
+	MemoryMB     int           `yaml:"memory_mb"`
+	Timeout      time.Duration `yaml:"timeout"`
+}
+
 type Config struct {
 	Repo                string        `yaml:"repo"`
 	Label               string        `yaml:"label"`
@@ -26,6 +34,7 @@ type Config struct {
 	Theme               string        `yaml:"theme"`
 	EnableCopilotReview bool          `yaml:"enable_copilot_review"`
 	Session             SessionConfig `yaml:"session"`
+	Sandbox             SandboxConfig `yaml:"sandbox"`
 	LoadedTheme         *Theme        `yaml:"-"`
 }
 
@@ -47,6 +56,13 @@ func Load() (*Config, error) {
 			MaxHistoryMessages: 100,
 			MaxAge:             24 * time.Hour,
 			SessionsDir:        ".kiro-krew/sessions",
+		},
+		Sandbox: SandboxConfig{
+			Image:        "alpine:3.19",
+			WorkspaceDir: "/workspace",
+			CPUCores:     1.0,
+			MemoryMB:     1024,
+			Timeout:      5 * time.Minute,
 		},
 	}
 
@@ -72,6 +88,23 @@ func Load() (*Config, error) {
 	}
 	if cfg.Session.SessionsDir == "" {
 		return nil, fmt.Errorf("session.sessions_dir cannot be empty")
+	}
+
+	// Validate sandbox config
+	if cfg.Sandbox.CPUCores <= 0 {
+		return nil, fmt.Errorf("sandbox.cpu_cores must be greater than 0")
+	}
+	if cfg.Sandbox.MemoryMB <= 0 {
+		return nil, fmt.Errorf("sandbox.memory_mb must be greater than 0")
+	}
+	if cfg.Sandbox.Timeout <= 0 {
+		return nil, fmt.Errorf("sandbox.timeout must be greater than 0")
+	}
+	if cfg.Sandbox.Image == "" {
+		return nil, fmt.Errorf("sandbox.image cannot be empty")
+	}
+	if cfg.Sandbox.WorkspaceDir == "" {
+		return nil, fmt.Errorf("sandbox.workspace_dir cannot be empty")
 	}
 
 	// Load the specified theme

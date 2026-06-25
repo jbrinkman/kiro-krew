@@ -15,6 +15,7 @@ import (
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
+	"github.com/jbrinkman/kiro-krew/internal/config"
 	"github.com/jbrinkman/kiro-krew/internal/eval/sandbox"
 	"gopkg.in/yaml.v3"
 )
@@ -49,7 +50,7 @@ func RunWithOptions(agent string, testcase string, options RunOptions) error {
 		if err := checkDockerAvailability(); err != nil {
 			return err
 		}
-		cConfig = createContainerConfig(options.ResourceLimit)
+		cConfig = createContainerConfig(nil, options.ResourceLimit)
 	}
 
 	// Start performance profiling
@@ -409,7 +410,7 @@ func invokeAgent(agent, prompt string, cConfig *ContainerConfig) (string, CostIn
 }
 
 // createContainerConfig builds container configuration from CLI options
-func createContainerConfig(resourceLimits map[string]string) *ContainerConfig {
+func createContainerConfig(sandboxCfg *config.SandboxConfig, resourceLimits map[string]string) *ContainerConfig {
 	// Detect host architecture for platform-aware container creation
 	platform, err := sandbox.DetectHostArchitecture()
 	if err != nil {
@@ -417,18 +418,43 @@ func createContainerConfig(resourceLimits map[string]string) *ContainerConfig {
 		platform = "linux/amd64"
 	}
 
+	// Use config values with fallbacks to defaults
+	image := "alpine:3.19"
+	workspaceDir := "/workspace"
+	cpuCores := 1.0
+	memoryMB := 1024
+	timeout := 5 * time.Minute
+
+	if sandboxCfg != nil {
+		if sandboxCfg.Image != "" {
+			image = sandboxCfg.Image
+		}
+		if sandboxCfg.WorkspaceDir != "" {
+			workspaceDir = sandboxCfg.WorkspaceDir
+		}
+		if sandboxCfg.CPUCores > 0 {
+			cpuCores = sandboxCfg.CPUCores
+		}
+		if sandboxCfg.MemoryMB > 0 {
+			memoryMB = sandboxCfg.MemoryMB
+		}
+		if sandboxCfg.Timeout > 0 {
+			timeout = sandboxCfg.Timeout
+		}
+	}
+
 	config := &ContainerConfig{
-		Image:        "alpine:3.19",
-		WorkspaceDir: "/workspace",
+		Image:        image,
+		WorkspaceDir: workspaceDir,
 		MockGitHub:   true,
 		Platform:     platform,
 		Environment: map[string]string{
 			"KIRO_CLI_DISABLE_TELEMETRY": "1",
 		},
 		ResourceLimits: sandbox.ResourceLimits{
-			CPUQuota: 1000000,            // 1.0 core
-			Memory:   1024 * 1024 * 1024, // 1GB
-			Timeout:  5 * time.Minute,
+			CPUQuota: int64(cpuCores * 1000000),     // Convert cores to microseconds
+			Memory:   int64(memoryMB * 1024 * 1024), // Convert MB to bytes
+			Timeout:  timeout,
 		},
 	}
 
