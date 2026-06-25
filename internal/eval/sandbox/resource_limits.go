@@ -44,6 +44,10 @@ func NewHostConfigWithLimits(limits ResourceLimits) *container.HostConfig {
 			Memory:    limits.Memory,
 		},
 		NetworkMode: "none", // Disable network access for security
+		// Configure writable workspace directory with tmpfs
+		Tmpfs: map[string]string{
+			"/workspace": "rw,noexec,nosuid,size=512m",
+		},
 	}
 	return hostConfig
 }
