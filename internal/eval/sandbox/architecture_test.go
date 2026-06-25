@@ -5,7 +5,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/stretchr/testify/assert"
@@ -210,7 +209,7 @@ func TestPlatformSpecificImagePulling(t *testing.T) {
 
 	config := &container.Config{
 		Image: "alpine:3.19",
-		Cmd:   []string{"echo", "platform-test"},
+		Cmd:   []string{"sleep", "30"},
 	}
 	hostConfig := NewHostConfigWithLimits(DefaultLimits())
 
@@ -223,9 +222,6 @@ func TestPlatformSpecificImagePulling(t *testing.T) {
 
 		err = c.Start(ctx)
 		require.NoError(t, err)
-
-		// Wait a moment for container to be ready
-		time.Sleep(500 * time.Millisecond)
 
 		// Verify the container runs with the expected architecture
 		output, err := c.ExecWithOutput(ctx, []string{"echo", "success"})

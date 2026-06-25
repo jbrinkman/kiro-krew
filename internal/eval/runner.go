@@ -501,7 +501,7 @@ func invokeAgentInContainer(agent, prompt string, cConfig *ContainerConfig) (str
 	setupStart := time.Now()
 
 	// Install kiro-cli binary
-	if err := c.InstallKiroCLI(ctx); err != nil {
+	if err := c.InstallKiroCLI(ctx, cConfig.Platform); err != nil {
 		return "", CostInfo{}, nil, fmt.Errorf("installing kiro-cli: %w", err)
 	}
 

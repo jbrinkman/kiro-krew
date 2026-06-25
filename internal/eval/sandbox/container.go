@@ -112,6 +112,9 @@ func (c *Container) CreateWithPlatform(ctx context.Context, config *container.Co
 
 	// Parse platform string for ContainerCreate
 	parts := strings.Split(platform, "/")
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid platform format %q: expected OS/arch", platform)
+	}
 	platformSpec := &specs.Platform{
 		OS:           parts[0],
 		Architecture: parts[1],
@@ -233,7 +236,6 @@ func (c *Container) GenerateDockerfile(projectPath string) (string, error) {
 	dockerfile.WriteString("    curl \\\n")
 	dockerfile.WriteString("    bash \\\n")
 	dockerfile.WriteString("    unzip \\\n")
-	dockerfile.WriteString("    sudo \\\n")
 	dockerfile.WriteString("    ca-certificates\n\n")
 
 	// Add toolchain installations
@@ -248,7 +250,6 @@ func (c *Container) GenerateDockerfile(projectPath string) (string, error) {
 
 	// Add user and workspace setup
 	dockerfile.WriteString("RUN adduser -D -s /bin/bash sandbox\n")
-	dockerfile.WriteString("RUN echo 'sandbox ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers\n")
 	dockerfile.WriteString("WORKDIR /workspace\n")
 	dockerfile.WriteString("USER sandbox\n")
 	dockerfile.WriteString("CMD [\"/bin/bash\"]\n")
@@ -278,38 +279,21 @@ func getKiroCLIDownloadURL(platform string) (string, error) {
 	}
 }
 
-// InstallKiroCLI installs kiro-cli binary via direct download for the detected architecture
-func (c *Container) InstallKiroCLI(ctx context.Context) error {
-	// Detect container architecture
-	arch, err := c.ExecWithOutput(ctx, []string{"uname", "-m"})
-	if err != nil {
-		return fmt.Errorf("detecting architecture: %w", err)
-	}
-
-	// Map architecture to platform string
-	var platform string
-	switch arch {
-	case "x86_64":
-		platform = "linux/amd64"
-	case "aarch64":
-		platform = "linux/arm64"
-	default:
-		return fmt.Errorf("unsupported architecture: %s", arch)
-	}
-
+// InstallKiroCLI installs kiro-cli binary via direct download for the specified platform
+func (c *Container) InstallKiroCLI(ctx context.Context, platform string) error {
 	// Get download URL
 	downloadURL, err := getKiroCLIDownloadURL(platform)
 	if err != nil {
 		return err
 	}
 
-	// Download, extract, and install kiro-cli
+	// Download, extract, and install kiro-cli (runs as root in container setup phase)
 	installCmd := fmt.Sprintf(`
 		cd /tmp && \
 		curl -fsSL %s -o kirocli.zip && \
 		unzip -q kirocli.zip && \
 		chmod 755 kiro-cli && \
-		sudo mv kiro-cli /usr/local/bin/kiro-cli
+		mv kiro-cli /usr/local/bin/kiro-cli
 	`, downloadURL)
 
 	if err := c.Exec(ctx, []string{"sh", "-c", installCmd}); err != nil {
