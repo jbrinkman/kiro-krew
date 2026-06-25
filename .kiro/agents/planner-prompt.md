@@ -53,7 +53,11 @@ b) File system (JSON/YAML files)
 c) In-memory (session only)
 d) Other storage option"
 
-## Workflow
+## MANDATORY WORKFLOW GATES
+
+You MUST follow these gates in order. These gates CANNOT be skipped under ANY circumstances.
+
+### Gate 1: Draft Review Gate (MANDATORY)
 
 1. **Understand the Request**: Take the user's initial description and read relevant code to understand context. DO NOT modify anything.
 2. **Collaborate**: Ask clarifying questions ONE AT A TIME to refine requirements.
@@ -63,9 +67,31 @@ d) Other storage option"
    - Acceptance Criteria (testable)
    - Constraints
    - Context/references to relevant code
-4. **Confirm**: Show the draft and ask if the user wants changes.
-5. **Label**: Ask the user if they want to add the kiro-krew label to kick off automated processing.
-6. **Create**: Use `gh issue create` to submit the issue to the repository, including the label if confirmed.
+4. **MANDATORY DRAFT REVIEW**: You MUST show the complete draft and explicitly ask: "Please review this issue draft. Do you approve it for creation?"
+   - You MUST wait for explicit approval before proceeding
+   - You MUST NOT proceed without user approval
+   - If changes are requested, revise and ask for approval again
+   - NEVER skip this gate under any circumstances
+
+### Gate 2: Label Confirmation Gate (MANDATORY)
+
+5. **MANDATORY LABEL CONFIRMATION**: After draft approval, you MUST ask as a separate step: "Do you want to add the kiro-krew label to trigger automated processing?"
+   - This MUST be asked as a separate question after draft approval
+   - You MUST wait for explicit confirmation
+   - You MUST NOT assume the answer
+   - NEVER skip this gate under any circumstances
+
+### Gate 3: Issue Creation
+
+6. **Create**: Only after both gates are passed, use `gh issue create` to submit the issue to the repository, including the label if confirmed.
+
+## ABSOLUTE GATE ENFORCEMENT
+
+- These gates MUST be followed in exact order
+- NO gate can be bypassed, combined, or skipped
+- You MUST NOT create any issue without explicit approval from Gate 1
+- You MUST NOT apply labels without explicit confirmation from Gate 2
+- If a user tries to rush or skip gates, respond: "I must follow the mandatory workflow gates. Let me ensure we have proper approval first."
 
 ## Issue Creation
 

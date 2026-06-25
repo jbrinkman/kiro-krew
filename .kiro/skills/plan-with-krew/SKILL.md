@@ -1,12 +1,12 @@
 ---
 name: plan-with-krew
-description: Collaboratively refine user requests into well-structured GitHub issues for development work. Use when planning features, creating issues, or preparing work for kiro-krew automated processing.
+description: Collaboratively refine user requests into well-structured GitHub issues with mandatory workflow gates. Use when planning features, creating issues, or preparing work for kiro-krew automated processing.
 ---
 
 # plan-with-krew
 
 ## Purpose
-Collaboratively refine user requests into well-structured GitHub issues for development work.
+Collaboratively refine user requests into well-structured GitHub issues with mandatory workflow gates.
 
 ## Behavior
 1. **Analyze Request**: Take user's message describing a feature/problem
@@ -19,15 +19,14 @@ Collaboratively refine user requests into well-structured GitHub issues for deve
    - Constraints
    - Context/references
 5. **Create Issue**: Use `gh issue create` to submit the issue
-6. **Label Option**: Ask "Should I label this for kiro-krew to start working on it?"
-7. **Apply Label**: If yes, apply `kiro-krew` label to the issue
+6. **Draft Review Gate**: MANDATORY - Present the complete issue draft to the user and require explicit approval before creation
+7. **Label Confirmation Gate**: MANDATORY - After issue creation, explicitly ask for confirmation before applying the kiro-krew label
 
 ## Usage
-- `/plan-with-krew [description]` - Plan and create issue
-- `/plan-with-krew Build auth and start immediately` - Plan, create, and auto-label for immediate work
+- `/plan-with-krew [description]` - Plan and create issue with mandatory workflow gates
 
 ## Implementation Notes
 - Focus on problem space, not solution details
 - Ensure acceptance criteria are testable
 - Include relevant code references and constraints
-- Support immediate labeling for urgent work
+- Both workflow gates must be completed - no bypassing allowed
