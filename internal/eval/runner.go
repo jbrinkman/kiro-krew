@@ -410,10 +410,18 @@ func invokeAgent(agent, prompt string, cConfig *ContainerConfig) (string, CostIn
 
 // createContainerConfig builds container configuration from CLI options
 func createContainerConfig(resourceLimits map[string]string) *ContainerConfig {
+	// Detect host architecture for platform-aware container creation
+	platform, err := sandbox.DetectHostArchitecture()
+	if err != nil {
+		// Fallback to amd64 if detection fails
+		platform = "linux/amd64"
+	}
+
 	config := &ContainerConfig{
 		Image:        "alpine:3.19",
 		WorkspaceDir: "/workspace",
 		MockGitHub:   true,
+		Platform:     platform,
 		Environment: map[string]string{
 			"KIRO_CLI_DISABLE_TELEMETRY": "1",
 		},
@@ -476,7 +484,8 @@ func invokeAgentInContainer(agent, prompt string, cConfig *ContainerConfig) (str
 		WorkingDir: cConfig.WorkspaceDir,
 	}
 
-	if err := c.Create(ctx, containerCfg, hostConfig); err != nil {
+	// Use platform-aware container creation
+	if err := c.CreateWithPlatform(ctx, containerCfg, hostConfig, cConfig.Platform); err != nil {
 		return "", CostInfo{}, nil, fmt.Errorf("creating container: %w", err)
 	}
 	defer c.Cleanup(ctx)
@@ -492,7 +501,7 @@ func invokeAgentInContainer(agent, prompt string, cConfig *ContainerConfig) (str
 	setupStart := time.Now()
 
 	// Install kiro-cli binary
-	if err := c.InstallKiroCLI(ctx); err != nil {
+	if err := c.InstallKiroCLI(ctx, cConfig.Platform); err != nil {
 		return "", CostInfo{}, nil, fmt.Errorf("installing kiro-cli: %w", err)
 	}
 

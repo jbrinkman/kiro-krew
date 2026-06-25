@@ -8,12 +8,14 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
+	specs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 // Container manages Docker container lifecycle
@@ -21,6 +23,18 @@ type Container struct {
 	client      *client.Client
 	containerID string
 	imageName   string
+}
+
+// DetectHostArchitecture returns the Docker platform string for the host architecture
+func DetectHostArchitecture() (string, error) {
+	switch runtime.GOARCH {
+	case "amd64":
+		return "linux/amd64", nil
+	case "arm64":
+		return "linux/arm64", nil
+	default:
+		return "", fmt.Errorf("unsupported architecture: %s", runtime.GOARCH)
+	}
 }
 
 // LogStartup displays container creation details with resource limits
@@ -70,10 +84,25 @@ func NewContainer(imageName string) (*Container, error) {
 
 // Create creates a Docker container
 func (c *Container) Create(ctx context.Context, config *container.Config, hostConfig *container.HostConfig) error {
+	// Detect host architecture for platform specification
+	platformStr, err := DetectHostArchitecture()
+	if err != nil {
+		return fmt.Errorf("detecting host architecture: %w", err)
+	}
+
+	return c.CreateWithPlatform(ctx, config, hostConfig, platformStr)
+}
+
+// CreateWithPlatform creates a Docker container with specified platform
+func (c *Container) CreateWithPlatform(ctx context.Context, config *container.Config, hostConfig *container.HostConfig, platform string) error {
+
 	// Pull image if not exists
 	_, _, err := c.client.ImageInspectWithRaw(ctx, c.imageName)
 	if err != nil {
-		reader, err := c.client.ImagePull(ctx, c.imageName, image.PullOptions{})
+		pullOptions := image.PullOptions{
+			Platform: platform,
+		}
+		reader, err := c.client.ImagePull(ctx, c.imageName, pullOptions)
 		if err != nil {
 			return err
 		}
@@ -81,7 +110,17 @@ func (c *Container) Create(ctx context.Context, config *container.Config, hostCo
 		io.Copy(io.Discard, reader)
 	}
 
-	resp, err := c.client.ContainerCreate(ctx, config, hostConfig, nil, nil, "")
+	// Parse platform string for ContainerCreate
+	parts := strings.Split(platform, "/")
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid platform format %q: expected OS/arch", platform)
+	}
+	platformSpec := &specs.Platform{
+		OS:           parts[0],
+		Architecture: parts[1],
+	}
+
+	resp, err := c.client.ContainerCreate(ctx, config, hostConfig, nil, platformSpec, "")
 	if err != nil {
 		return err
 	}
@@ -196,6 +235,7 @@ func (c *Container) GenerateDockerfile(projectPath string) (string, error) {
 	dockerfile.WriteString("    git \\\n")
 	dockerfile.WriteString("    curl \\\n")
 	dockerfile.WriteString("    bash \\\n")
+	dockerfile.WriteString("    unzip \\\n")
 	dockerfile.WriteString("    ca-certificates\n\n")
 
 	// Add toolchain installations
@@ -226,29 +266,68 @@ func (c *Container) loadTemplate(projectType ProjectType) (string, error) {
 	return string(content), nil
 }
 
-// InstallKiroCLI installs kiro-cli binary in the container for the detected architecture
-func (c *Container) InstallKiroCLI(ctx context.Context) error {
-	// Detect container architecture
-	arch, err := c.ExecWithOutput(ctx, []string{"uname", "-m"})
-	if err != nil {
-		return fmt.Errorf("detecting architecture: %w", err)
-	}
-
-	// Map architecture names to kiro-cli variants
-	var variant string
-	switch arch {
-	case "x86_64":
-		variant = "linux-musl-amd64"
-	case "aarch64":
-		variant = "linux-musl-arm64"
+// getKiroCLIDownloadURL returns the direct download URL for kiro-cli binary
+func getKiroCLIDownloadURL(platform string) (string, error) {
+	baseURL := "https://desktop-release.q.us-east-1.amazonaws.com/latest/"
+	switch platform {
+	case "linux/amd64":
+		return baseURL + "kirocli-x86_64-linux-musl.zip", nil
+	case "linux/arm64":
+		return baseURL + "kirocli-aarch64-linux-musl.zip", nil
 	default:
-		return fmt.Errorf("unsupported architecture: %s", arch)
+		return "", fmt.Errorf("unsupported platform: %s", platform)
+	}
+}
+
+// InstallKiroCLI installs kiro-cli binary via direct download for the specified platform
+func (c *Container) InstallKiroCLI(ctx context.Context, platform string) error {
+	// Get download URL
+	downloadURL, err := getKiroCLIDownloadURL(platform)
+	if err != nil {
+		return err
 	}
 
-	// Install kiro-cli using the installer script
-	installCmd := fmt.Sprintf("curl -fsSL https://install.kiro.dev | KIRO_CLI_VARIANT=%s sh", variant)
+	// Download, extract, and install kiro-cli (runs as root in container setup phase)
+	installCmd := fmt.Sprintf(`
+		cd /tmp && \
+		curl -fsSL %s -o kirocli.zip && \
+		unzip -q kirocli.zip && \
+		chmod 755 kiro-cli && \
+		mv kiro-cli /usr/local/bin/kiro-cli
+	`, downloadURL)
 
-	return c.Exec(ctx, []string{"sh", "-c", installCmd})
+	if err := c.Exec(ctx, []string{"sh", "-c", installCmd}); err != nil {
+		return fmt.Errorf("installing kiro-cli binary: %w", err)
+	}
+
+	// Verify installation
+	if err := c.verifyKiroCLIInstallation(ctx); err != nil {
+		return fmt.Errorf("installation verification failed: %w", err)
+	}
+
+	return nil
+}
+
+// verifyKiroCLIInstallation checks if kiro-cli is properly installed and functional
+func (c *Container) verifyKiroCLIInstallation(ctx context.Context) error {
+	// Check if binary exists and is executable
+	_, err := c.ExecWithOutput(ctx, []string{"test", "-x", "/usr/local/bin/kiro-cli"})
+	if err != nil {
+		return fmt.Errorf("kiro-cli binary not found or not executable at /usr/local/bin/kiro-cli")
+	}
+
+	// Run version command to verify functionality
+	version, err := c.ExecWithOutput(ctx, []string{"kiro-cli", "--version"})
+	if err != nil {
+		return fmt.Errorf("kiro-cli --version command failed: %w", err)
+	}
+
+	if version == "" {
+		return fmt.Errorf("kiro-cli --version returned empty output")
+	}
+
+	fmt.Printf("✅ kiro-cli installation verified: %s\n", version)
+	return nil
 }
 
 // Close closes the Docker client
