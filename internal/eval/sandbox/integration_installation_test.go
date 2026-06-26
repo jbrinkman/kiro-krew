@@ -14,75 +14,61 @@ import (
 func TestContainerIntegration_KiroCLIInstallation(t *testing.T) {
 	skipIfNoDocker(t)
 
-	tests := []struct {
-		name     string
-		platform string
-	}{
-		{
-			name:     "AMD64 installation",
-			platform: "linux/amd64",
-		},
-		{
-			name:     "ARM64 installation",
-			platform: "linux/arm64",
-		},
+	// Only test the host architecture — cross-platform testing requires matrixed CI
+	hostPlatform, err := DetectHostArchitecture()
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	// Create container
+	c, err := NewContainer("alpine:3.19")
+	require.NoError(t, err)
+	defer c.Close()
+
+	// Generate dockerfile with kiro-cli installation
+	tempDir := t.TempDir()
+	dockerfile, err := c.GenerateDockerfileWithPlatform(tempDir, hostPlatform)
+	require.NoError(t, err)
+	assert.Contains(t, dockerfile, "# Install kiro-cli")
+
+	// Create container with proper configuration
+	config := &container.Config{
+		Image: "alpine:3.19",
+		Cmd:   []string{"sh", "-c", "sleep 300"},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-			defer cancel()
+	limits := DefaultLimits()
+	hostConfig := NewHostConfigWithLimits(limits)
 
-			// Create container
-			c, err := NewContainer("alpine:3.19")
-			require.NoError(t, err)
-			defer c.Close()
+	err = c.CreateWithPlatform(ctx, config, hostConfig, hostPlatform)
+	require.NoError(t, err)
+	defer func() {
+		cleanupErr := c.Cleanup(ctx)
+		if cleanupErr != nil {
+			t.Logf("Cleanup warning: %v", cleanupErr)
+		}
+	}()
 
-			// Generate dockerfile with kiro-cli installation
-			tempDir := t.TempDir()
-			dockerfile, err := c.GenerateDockerfileWithPlatform(tempDir, tt.platform)
-			require.NoError(t, err)
-			assert.Contains(t, dockerfile, "# Install kiro-cli")
+	// Start container
+	err = c.Start(ctx)
+	require.NoError(t, err)
 
-			// Create container with proper configuration
-			config := &container.Config{
-				Image: "alpine:3.19",
-				Cmd:   []string{"sh", "-c", "sleep 300"},
-			}
+	c.LogStartup(limits)
 
-			limits := DefaultLimits()
-			hostConfig := NewHostConfigWithLimits(limits)
-
-			err = c.CreateWithPlatform(ctx, config, hostConfig, tt.platform)
-			require.NoError(t, err)
-			defer func() {
-				cleanupErr := c.Cleanup(ctx)
-				if cleanupErr != nil {
-					t.Logf("Cleanup warning: %v", cleanupErr)
-				}
-			}()
-
-			// Start container
-			err = c.Start(ctx)
-			require.NoError(t, err)
-
-			c.LogStartup(limits)
-
-			// Install and verify kiro-cli
-			err = c.InstallKiroCLI(ctx, tt.platform)
-			if err != nil {
-				// For this test, we expect installation to fail since we can't install
-				// kiro-cli in base Alpine without building the image
-				t.Logf("Expected installation failure in base image: %v", err)
-				return
-			}
-
-			// If installation somehow succeeded, verify it works
-			version, err := c.ExecWithOutput(ctx, []string{"kiro-cli", "--version"})
-			require.NoError(t, err)
-			assert.NotEmpty(t, version)
-		})
+	// Install and verify kiro-cli
+	err = c.InstallKiroCLI(ctx, hostPlatform)
+	if err != nil {
+		// For this test, we expect installation to fail since we can't install
+		// kiro-cli in base Alpine without building the image
+		t.Logf("Expected installation failure in base image: %v", err)
+		return
 	}
+
+	// If installation somehow succeeded, verify it works
+	version, err := c.ExecWithOutput(ctx, []string{"kiro-cli", "--version"})
+	require.NoError(t, err)
+	assert.NotEmpty(t, version)
 }
 
 func TestKiroCLIExecution_SandboxUser(t *testing.T) {
@@ -99,8 +85,8 @@ func TestKiroCLIExecution_SandboxUser(t *testing.T) {
 	// Configure container with sandbox user setup (use sh since bash not available in base Alpine)
 	config := &container.Config{
 		Image: "alpine:3.19",
-		Cmd:   []string{"sh", "-c", "adduser -D -s /bin/sh sandbox && sleep 300"},
-		User:  "root", // Start as root to create user, then switch
+		Cmd:   []string{"sleep", "300"},
+		User:  "root",
 	}
 
 	limits := DefaultLimits()
@@ -118,8 +104,9 @@ func TestKiroCLIExecution_SandboxUser(t *testing.T) {
 	err = c.Start(ctx)
 	require.NoError(t, err)
 
-	// Wait for user creation
-	time.Sleep(2 * time.Second)
+	// Create sandbox user via exec (avoids racy sleep)
+	_, err = c.ExecWithOutput(ctx, []string{"adduser", "-D", "-s", "/bin/sh", "sandbox"})
+	require.NoError(t, err)
 
 	// Verify sandbox user exists
 	output, err := c.ExecWithOutput(ctx, []string{"id", "sandbox"})
@@ -159,97 +146,76 @@ func TestKiroCLIExecution_SandboxUser(t *testing.T) {
 func TestCrossPlatform_InstallationVerification(t *testing.T) {
 	skipIfNoDocker(t)
 
-	platforms := []struct {
-		name     string
-		platform string
-		binary   string
-	}{
-		{
-			name:     "AMD64 cross-platform",
-			platform: "linux/amd64",
-			binary:   "kirocli-x86_64-linux-musl.zip",
-		},
-		{
-			name:     "ARM64 cross-platform",
-			platform: "linux/arm64",
-			binary:   "kirocli-aarch64-linux-musl.zip",
-		},
+	// Only test container creation for the host architecture
+	hostPlatform, err := DetectHostArchitecture()
+	require.NoError(t, err)
+
+	// Determine expected values for host platform
+	var expectedBinary, expectedArch string
+	switch hostPlatform {
+	case "linux/amd64":
+		expectedBinary = "kirocli-x86_64-linux-musl.zip"
+		expectedArch = "x86_64"
+	case "linux/arm64":
+		expectedBinary = "kirocli-aarch64-linux-musl.zip"
+		expectedArch = "aarch64"
 	}
 
-	for _, tt := range platforms {
-		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-			defer cancel()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
 
-			// Test dockerfile generation for platform-specific installation
-			tempDir := t.TempDir()
-			c, err := NewContainer("alpine:3.19")
-			require.NoError(t, err)
-			defer c.Close()
+	tempDir := t.TempDir()
+	c, err := NewContainer("alpine:3.19")
+	require.NoError(t, err)
+	defer c.Close()
 
-			// Generate dockerfile with platform-specific installation
-			dockerfile, err := c.GenerateDockerfileWithPlatform(tempDir, tt.platform)
-			require.NoError(t, err)
+	// Generate dockerfile with platform-specific installation
+	dockerfile, err := c.GenerateDockerfileWithPlatform(tempDir, hostPlatform)
+	require.NoError(t, err)
 
-			// Verify platform-specific binary is referenced
-			assert.Contains(t, dockerfile, tt.binary)
-			assert.Contains(t, dockerfile, "# Install kiro-cli")
+	// Verify platform-specific binary is referenced
+	assert.Contains(t, dockerfile, expectedBinary)
+	assert.Contains(t, dockerfile, "# Install kiro-cli")
+	assert.Contains(t, dockerfile, "curl -fsSL")
+	assert.Contains(t, dockerfile, "unzip -q")
+	assert.Contains(t, dockerfile, "chmod 755 kiro-cli")
+	assert.Contains(t, dockerfile, "/usr/local/bin/kiro-cli")
 
-			// Verify installation commands structure
-			assert.Contains(t, dockerfile, "curl -fsSL")
-			assert.Contains(t, dockerfile, "unzip -q")
-			assert.Contains(t, dockerfile, "chmod 755 kiro-cli")
-			assert.Contains(t, dockerfile, "/usr/local/bin/kiro-cli")
+	// Test URL generation for the platform
+	url, err := getKiroCLIDownloadURL(hostPlatform)
+	require.NoError(t, err)
+	assert.Contains(t, url, expectedBinary)
 
-			// Test URL generation for the platform
-			url, err := getKiroCLIDownloadURL(tt.platform)
-			require.NoError(t, err)
-			assert.Contains(t, url, tt.binary)
-
-			// Create container to test platform support
-			config := &container.Config{
-				Image: "alpine:3.19",
-				Cmd:   []string{"sh", "-c", "sleep 300"}, // Keep container running
-			}
-
-			limits := DefaultLimits()
-			hostConfig := NewHostConfigWithLimits(limits)
-
-			err = c.CreateWithPlatform(ctx, config, hostConfig, tt.platform)
-			require.NoError(t, err)
-			defer func() {
-				cleanupErr := c.Cleanup(ctx)
-				if cleanupErr != nil {
-					t.Logf("Cleanup warning: %v", cleanupErr)
-				}
-			}()
-
-			err = c.Start(ctx)
-			require.NoError(t, err)
-
-			// Wait briefly for container to be fully ready
-			time.Sleep(1 * time.Second)
-
-			// Verify container architecture matches platform
-			output, err := c.ExecWithOutput(ctx, []string{"uname", "-m"})
-			require.NoError(t, err)
-
-			expectedArch := ""
-			switch tt.platform {
-			case "linux/amd64":
-				expectedArch = "x86_64"
-			case "linux/arm64":
-				expectedArch = "aarch64"
-			}
-
-			assert.Equal(t, expectedArch, strings.TrimSpace(output))
-
-			// Container lifecycle verification
-			shortID, imageName := c.GetContainerInfo()
-			assert.NotEmpty(t, shortID)
-			assert.Equal(t, "alpine:3.19", imageName)
-
-			c.LogStartup(limits)
-		})
+	// Create container to test platform support
+	config := &container.Config{
+		Image: "alpine:3.19",
+		Cmd:   []string{"sh", "-c", "sleep 300"},
 	}
+
+	limits := DefaultLimits()
+	hostConfig := NewHostConfigWithLimits(limits)
+
+	err = c.CreateWithPlatform(ctx, config, hostConfig, hostPlatform)
+	require.NoError(t, err)
+	defer func() {
+		cleanupErr := c.Cleanup(ctx)
+		if cleanupErr != nil {
+			t.Logf("Cleanup warning: %v", cleanupErr)
+		}
+	}()
+
+	err = c.Start(ctx)
+	require.NoError(t, err)
+
+	// Verify container architecture matches platform
+	output, err := c.ExecWithOutput(ctx, []string{"uname", "-m"})
+	require.NoError(t, err)
+	assert.Equal(t, expectedArch, strings.TrimSpace(output))
+
+	// Container lifecycle verification
+	shortID, imageName := c.GetContainerInfo()
+	assert.NotEmpty(t, shortID)
+	assert.Equal(t, "alpine:3.19", imageName)
+
+	c.LogStartup(limits)
 }

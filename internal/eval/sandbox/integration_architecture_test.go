@@ -202,7 +202,8 @@ func TestArchitectureIntegration_MultiPlatformDockerfile(t *testing.T) {
 	defer c.Close()
 
 	// Test Dockerfile generation
-	dockerfile, err := c.GenerateDockerfile(tmpDir)
+	platform, _ := DetectHostArchitecture()
+	dockerfile, err := c.GenerateDockerfileWithPlatform(tmpDir, platform)
 	if err != nil {
 		// Template loading might fail if not in the right directory
 		t.Logf("Dockerfile generation failed (expected in test environment): %v", err)

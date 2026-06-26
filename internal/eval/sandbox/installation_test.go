@@ -254,7 +254,9 @@ func TestBuildTimeVsRuntime_Installation(t *testing.T) {
 
 	t.Run("BuildTimeInstallation", func(t *testing.T) {
 		// Test that Dockerfile generation includes build-time installation
-		dockerfile, err := c.GenerateDockerfile(tempDir)
+		platform, err := DetectHostArchitecture()
+		require.NoError(t, err)
+		dockerfile, err := c.GenerateDockerfileWithPlatform(tempDir, platform)
 		require.NoError(t, err)
 
 		// Verify build-time installation commands are present

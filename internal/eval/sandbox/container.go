@@ -238,11 +238,6 @@ func (c *Container) Cleanup(ctx context.Context) error {
 	return c.client.ContainerRemove(ctx, c.containerID, container.RemoveOptions{Force: true})
 }
 
-// GenerateDockerfile creates a custom Dockerfile based on project detection
-func (c *Container) GenerateDockerfile(projectPath string) (string, error) {
-	return c.GenerateDockerfileWithPlatform(projectPath, "linux/amd64")
-}
-
 // GenerateDockerfileWithPlatform creates a custom Dockerfile with platform-specific kiro-cli installation
 func (c *Container) GenerateDockerfileWithPlatform(projectPath, platform string) (string, error) {
 	projects := DetectProject(projectPath)
