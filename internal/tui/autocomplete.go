@@ -124,22 +124,14 @@ func (a *AutocompleteInput) handleKeyMsg(msg tea.KeyMsg) (*AutocompleteInput, te
 		}
 		if a.state.showDropdown && len(a.state.suggestions) > 0 {
 			selected := a.state.suggestions[a.state.selectedIndex]
-
-			// Check if selected command is a template
+			value := selected
 			if isTemplateCommand(selected) {
-				// Set input to prefix and position cursor for templates
-				prefix := extractTemplatePrefix(selected)
-				a.textinput.SetValue(prefix)
-				a.textinput.CursorEnd()
-				a.updateAutocomplete()
-				return a, nil
-			} else {
-				// Regular command - set full value
-				a.textinput.SetValue(selected)
-				a.textinput.CursorEnd()
-				a.updateAutocomplete()
-				return a, nil
+				value = extractTemplatePrefix(selected)
 			}
+			a.textinput.SetValue(value)
+			a.textinput.CursorEnd()
+			a.updateAutocomplete()
+			return a, nil
 		}
 
 	case "esc":
@@ -152,23 +144,21 @@ func (a *AutocompleteInput) handleKeyMsg(msg tea.KeyMsg) (*AutocompleteInput, te
 		if a.state.showDropdown && len(a.state.suggestions) > 0 {
 			selected := a.state.suggestions[a.state.selectedIndex]
 
-			// Check if selected command is a template
+			// Template commands position cursor without executing
 			if isTemplateCommand(selected) {
-				// Set input to prefix and position cursor, don't execute
-				prefix := extractTemplatePrefix(selected)
-				a.textinput.SetValue(prefix)
+				a.textinput.SetValue(extractTemplatePrefix(selected))
 				a.textinput.CursorEnd()
 				a.state.showDropdown = false
 				a.state.ghostText = ""
 				a.updateAutocomplete()
 				return a, nil
-			} else {
-				// Regular command - set value and execute
-				a.textinput.SetValue(selected)
-				a.textinput.CursorEnd()
-				a.state.showDropdown = false
-				a.state.ghostText = ""
 			}
+
+			// Regular command - set value and fall through to execute
+			a.textinput.SetValue(selected)
+			a.textinput.CursorEnd()
+			a.state.showDropdown = false
+			a.state.ghostText = ""
 		} else if a.state.ghostText != "" {
 			a.textinput.SetValue(a.state.ghostText)
 			a.textinput.CursorEnd()
