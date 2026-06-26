@@ -235,11 +235,15 @@ func TestResourceLimitsEnforcement(t *testing.T) {
 func TestGenerateDockerfile(t *testing.T) {
 	c := &Container{}
 
+	// Detect host platform for test
+	platform, err := DetectHostArchitecture()
+	require.NoError(t, err)
+
 	// Create test project directory
 	tmpDir := t.TempDir()
 
 	// Create Go project files
-	err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte("module test"), 0644)
+	err = os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte("module test"), 0644)
 	require.NoError(t, err)
 
 	// Mock template loading by creating a simple template
@@ -260,7 +264,7 @@ ENV PATH=$PATH:/usr/local/go/bin:$GOPATH/bin
 	defer os.Chdir(originalDir)
 	os.Chdir(tmpDir)
 
-	dockerfile, err := c.GenerateDockerfile(tmpDir)
+	dockerfile, err := c.GenerateDockerfileWithPlatform(tmpDir, platform)
 	assert.NoError(t, err)
 	assert.Contains(t, dockerfile, "FROM alpine:3.19")
 	assert.Contains(t, dockerfile, "Install Go")

@@ -18,4 +18,5 @@ cmd/kiro-krew/kiro-krew
 .kiro-krew/artifacts/
 coverage.out
 coverage.html
+*_coverage.out
 dist/
