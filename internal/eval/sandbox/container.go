@@ -15,6 +15,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/stdcopy"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
@@ -197,7 +198,11 @@ func (c *Container) ExecWithOutput(ctx context.Context, cmd []string) (string, e
 	}
 	defer hijacked.Close()
 
-	output, err := io.ReadAll(hijacked.Reader)
+	// Use stdcopy to properly demultiplex Docker streams
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	_, err = stdcopy.StdCopy(stdout, stderr, hijacked.Reader)
 	if err != nil {
 		return "", err
 	}
@@ -208,11 +213,13 @@ func (c *Container) ExecWithOutput(ctx context.Context, cmd []string) (string, e
 		return "", err
 	}
 
+	output := strings.TrimSpace(stdout.String())
 	if inspect.ExitCode != 0 {
-		return strings.TrimSpace(string(output)), fmt.Errorf("command failed with exit code %d: %s", inspect.ExitCode, strings.TrimSpace(string(output)))
+		errOutput := strings.TrimSpace(stderr.String())
+		return output, fmt.Errorf("command failed with exit code %d: %s", inspect.ExitCode, errOutput)
 	}
 
-	return strings.TrimSpace(string(output)), nil
+	return output, nil
 }
 
 // Cleanup stops and removes the container
@@ -233,6 +240,11 @@ func (c *Container) Cleanup(ctx context.Context) error {
 
 // GenerateDockerfile creates a custom Dockerfile based on project detection
 func (c *Container) GenerateDockerfile(projectPath string) (string, error) {
+	return c.GenerateDockerfileWithPlatform(projectPath, "linux/amd64")
+}
+
+// GenerateDockerfileWithPlatform creates a custom Dockerfile with platform-specific kiro-cli installation
+func (c *Container) GenerateDockerfileWithPlatform(projectPath, platform string) (string, error) {
 	projects := DetectProject(projectPath)
 
 	var dockerfile strings.Builder
@@ -257,6 +269,13 @@ func (c *Container) GenerateDockerfile(projectPath string) (string, error) {
 		dockerfile.WriteString(template)
 		dockerfile.WriteString("\n")
 	}
+
+	// Add platform-specific kiro-cli installation
+	kiroCLIInstall, err := addKiroCLIToDockerfile(platform)
+	if err != nil {
+		return "", fmt.Errorf("generating kiro-cli installation: %w", err)
+	}
+	dockerfile.WriteString(kiroCLIInstall)
 
 	// Add user and workspace setup
 	dockerfile.WriteString("RUN adduser -D -s /bin/bash sandbox\n")
@@ -289,32 +308,31 @@ func getKiroCLIDownloadURL(platform string) (string, error) {
 	}
 }
 
-// InstallKiroCLI installs kiro-cli binary via direct download for the specified platform
-func (c *Container) InstallKiroCLI(ctx context.Context, platform string) error {
-	// Get download URL
+// addKiroCLIToDockerfile generates kiro-cli installation commands for Dockerfile
+func addKiroCLIToDockerfile(platform string) (string, error) {
 	downloadURL, err := getKiroCLIDownloadURL(platform)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	// Download, extract, and install kiro-cli (runs as root in container setup phase)
-	installCmd := fmt.Sprintf(`
-		cd /tmp && \
-		curl -fsSL %s -o kirocli.zip && \
-		unzip -q kirocli.zip && \
-		chmod 755 kiro-cli && \
-		mv kiro-cli /usr/local/bin/kiro-cli
-	`, downloadURL)
+	var dockerfile strings.Builder
+	dockerfile.WriteString("# Install kiro-cli\n")
+	dockerfile.WriteString("RUN cd /tmp && \\\n")
+	dockerfile.WriteString(fmt.Sprintf("    curl -fsSL %s -o kirocli.zip && \\\n", downloadURL))
+	dockerfile.WriteString("    unzip -q kirocli.zip && \\\n")
+	dockerfile.WriteString("    chmod 755 kiro-cli && \\\n")
+	dockerfile.WriteString("    mv kiro-cli /usr/local/bin/kiro-cli && \\\n")
+	dockerfile.WriteString("    rm -f kirocli.zip\n\n")
 
-	if err := c.Exec(ctx, []string{"sh", "-c", installCmd}); err != nil {
-		return fmt.Errorf("installing kiro-cli binary: %w", err)
-	}
+	return dockerfile.String(), nil
+}
 
-	// Verify installation
+// InstallKiroCLI verifies kiro-cli installation at runtime
+func (c *Container) InstallKiroCLI(ctx context.Context, platform string) error {
+	// Runtime verification only - installation happens during build
 	if err := c.verifyKiroCLIInstallation(ctx); err != nil {
-		return fmt.Errorf("installation verification failed: %w", err)
+		return fmt.Errorf("kiro-cli verification failed: %w", err)
 	}
-
 	return nil
 }
 
@@ -323,20 +341,23 @@ func (c *Container) verifyKiroCLIInstallation(ctx context.Context) error {
 	// Check if binary exists and is executable
 	_, err := c.ExecWithOutput(ctx, []string{"test", "-x", "/usr/local/bin/kiro-cli"})
 	if err != nil {
-		return fmt.Errorf("kiro-cli binary not found or not executable at /usr/local/bin/kiro-cli")
+		// Check if file exists but isn't executable
+		if _, statErr := c.ExecWithOutput(ctx, []string{"test", "-f", "/usr/local/bin/kiro-cli"}); statErr == nil {
+			return fmt.Errorf("kiro-cli binary exists but is not executable at /usr/local/bin/kiro-cli")
+		}
+		return fmt.Errorf("kiro-cli binary not found at /usr/local/bin/kiro-cli")
 	}
 
-	// Run version command to verify functionality
+	// Test version command with timeout and detailed errors
 	version, err := c.ExecWithOutput(ctx, []string{"kiro-cli", "--version"})
 	if err != nil {
-		return fmt.Errorf("kiro-cli --version command failed: %w", err)
+		return fmt.Errorf("kiro-cli --version command failed (binary may be corrupted): %w", err)
 	}
 
 	if version == "" {
 		return fmt.Errorf("kiro-cli --version returned empty output")
 	}
 
-	// Only print success message after all verification passes
 	fmt.Printf("✅ kiro-cli installation verified: %s\n", version)
 	return nil
 }
