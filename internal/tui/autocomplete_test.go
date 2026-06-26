@@ -3,11 +3,14 @@ package tui
 import (
 	"testing"
 
+	"github.com/jbrinkman/kiro-krew/internal/agent"
 	"github.com/jbrinkman/kiro-krew/internal/config"
 )
 
 func TestAutocompleteInput(t *testing.T) {
-	registry := NewCommandRegistry()
+	cfg := &config.Config{}
+	manager := agent.NewManager(cfg)
+	registry := NewCommandRegistry(manager)
 	theme := &config.Theme{} // Use default theme
 	styles := NewStyles(theme)
 
