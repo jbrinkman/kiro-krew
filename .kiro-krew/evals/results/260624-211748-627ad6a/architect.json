@@ -1,0 +1,314 @@
+{
+  "agent": "architect",
+  "git_hash": "627ad6a",
+  "cases": [
+    {
+      "case_name": "basic-spec-generation",
+      "actual_output": "\u0001\u0000\u0000\u0000\u0000\u0000\u0000OCI runtime exec failed: exec failed: unable to start container process: exec: \"kiro-cli\": executable file not found in $PATH",
+      "scores": [
+        {
+          "name": "task_decomposition",
+          "score": 1,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The actual output is an OCI runtime error message, not a specification at all. It contains no task decomposition, no discrete tasks, no implementation steps, and no reference to any Go files or project patterns. The output is completely unrelated to the expected specification document."
+        },
+        {
+          "name": "acceptance_criteria_testability",
+          "score": 1,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The actual output is an OCI runtime error message, not a specification at all. It contains no tasks, no acceptance criteria, and nothing verifiable with a command or assertion. This is a complete failure to produce any meaningful output related to the criterion."
+        },
+        {
+          "name": "file_reference_accuracy",
+          "score": 1,
+          "max_score": 5,
+          "deterministic": true,
+          "reasoning": "no file references found"
+        },
+        {
+          "name": "completeness",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": true,
+          "reasoning": "found 0/2 expected structural elements"
+        }
+      ],
+      "agent_cost": {
+        "tokens_in": 244,
+        "tokens_out": 33,
+        "estimated_usd": 0.001227
+      },
+      "judge_cost": {
+        "tokens_in": 701,
+        "tokens_out": 190,
+        "estimated_usd": 0.004953
+      }
+    },
+    {
+      "case_name": "complex-feature-design",
+      "actual_output": "\u0001\u0000\u0000\u0000\u0000\u0000\u0000OCI runtime exec failed: exec failed: unable to start container process: exec: \"kiro-cli\": executable file not found in $PATH",
+      "scores": [
+        {
+          "name": "task_decomposition",
+          "score": 1,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The actual output is an OCI runtime error message, not a specification or architecture document at all. It contains zero task decomposition, no discrete implementable tasks, no database schema design, no package structure, no middleware plan, no API endpoints, no security considerations, and no integration points. It completely fails to address the criterion in any way."
+        },
+        {
+          "name": "acceptance_criteria_testability",
+          "score": 1,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The actual output is an OCI runtime error message, not an architecture design or task breakdown. It contains no acceptance criteria, no tasks, no verifiable commands or assertions. It completely fails to meet the criterion of having testable acceptance criteria for each task."
+        },
+        {
+          "name": "file_reference_accuracy",
+          "score": 1,
+          "max_score": 5,
+          "deterministic": true,
+          "reasoning": "no file references found"
+        },
+        {
+          "name": "completeness",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": true,
+          "reasoning": "found 0/2 expected structural elements"
+        }
+      ],
+      "agent_cost": {
+        "tokens_in": 565,
+        "tokens_out": 33,
+        "estimated_usd": 0.00219
+      },
+      "judge_cost": {
+        "tokens_in": 711,
+        "tokens_out": 216,
+        "estimated_usd": 0.005373
+      }
+    },
+    {
+      "case_name": "configuration-enhancement",
+      "actual_output": "\u0001\u0000\u0000\u0000\u0000\u0000\u0000OCI runtime exec failed: exec failed: unable to start container process: exec: \"kiro-cli\": executable file not found in $PATH",
+      "scores": [
+        {
+          "name": "task_decomposition",
+          "score": 1,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The actual output is an OCI runtime error message, not a specification or design document. It contains no task decomposition whatsoever — no discrete tasks, no implementation plan, no design elements. It completely fails to address the input request for an enhanced configuration system design."
+        },
+        {
+          "name": "acceptance_criteria_testability",
+          "score": 1,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The actual output is an OCI runtime error message, not a configuration system design. It contains no tasks, no acceptance criteria, and nothing verifiable with commands or assertions. It completely fails to address the input request and has zero relevance to the criterion."
+        },
+        {
+          "name": "file_reference_accuracy",
+          "score": 1,
+          "max_score": 5,
+          "deterministic": true,
+          "reasoning": "no file references found"
+        },
+        {
+          "name": "completeness",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": true,
+          "reasoning": "found 0/2 expected structural elements"
+        }
+      ],
+      "agent_cost": {
+        "tokens_in": 84,
+        "tokens_out": 33,
+        "estimated_usd": 0.000747
+      },
+      "judge_cost": {
+        "tokens_in": 711,
+        "tokens_out": 196,
+        "estimated_usd": 0.005073
+      }
+    },
+    {
+      "case_name": "custom-threshold-test",
+      "actual_output": "\u0001\u0000\u0000\u0000\u0000\u0000\u0000OCI runtime exec failed: exec failed: unable to start container process: exec: \"kiro-cli\": executable file not found in $PATH",
+      "scores": [
+        {
+          "name": "task_decomposition",
+          "score": 1,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The actual output is an OCI runtime error message, not a specification at all. There is no task decomposition, no discrete tasks, no implementation plan, no validation logic, no reference to Go files or patterns. The output completely fails to produce any specification content — it's simply a container execution error indicating that 'kiro-cli' was not found in the PATH. This does not meet the criterion in any way."
+        },
+        {
+          "name": "acceptance_criteria_testability",
+          "score": 1,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The actual output is an OCI runtime error message indicating that 'kiro-cli' was not found in the container's PATH. No specification was produced at all — there are no tasks, no acceptance criteria, no validation logic, no implementation details, and nothing verifiable with a command or assertion. The output completely fails to meet the criterion."
+        },
+        {
+          "name": "file_reference_accuracy",
+          "score": 1,
+          "max_score": 5,
+          "deterministic": true,
+          "reasoning": "no file references found"
+        },
+        {
+          "name": "completeness",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": true,
+          "reasoning": "found 0/2 expected structural elements"
+        }
+      ],
+      "agent_cost": {
+        "tokens_in": 70,
+        "tokens_out": 33,
+        "estimated_usd": 0.000705
+      },
+      "judge_cost": {
+        "tokens_in": 671,
+        "tokens_out": 247,
+        "estimated_usd": 0.005718
+      }
+    },
+    {
+      "case_name": "default-threshold-test",
+      "actual_output": "\u0001\u0000\u0000\u0000\u0000\u0000\u0000OCI runtime exec failed: exec failed: unable to start container process: exec: \"kiro-cli\": executable file not found in $PATH",
+      "scores": [
+        {
+          "name": "task_decomposition",
+          "score": 1,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The actual output is an OCI runtime error message, not a specification at all. There is no task decomposition, no discrete tasks, no implementation plan — just a container execution failure. The output completely fails to meet the criterion."
+        },
+        {
+          "name": "acceptance_criteria_testability",
+          "score": 1,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The actual output is an OCI runtime error message, not a specification at all. There are no tasks, no acceptance criteria, no problem statement — nothing related to the expected output. The criterion requires each task to have acceptance criteria verifiable with a command or assertion, but there are no tasks whatsoever. The output is a complete failure to produce any meaningful result."
+        },
+        {
+          "name": "file_reference_accuracy",
+          "score": 1,
+          "max_score": 5,
+          "deterministic": true,
+          "reasoning": "no file references found"
+        },
+        {
+          "name": "completeness",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": true,
+          "reasoning": "found 0/2 expected structural elements"
+        }
+      ],
+      "agent_cost": {
+        "tokens_in": 54,
+        "tokens_out": 33,
+        "estimated_usd": 0.000657
+      },
+      "judge_cost": {
+        "tokens_in": 587,
+        "tokens_out": 212,
+        "estimated_usd": 0.004941
+      }
+    },
+    {
+      "case_name": "performance-optimization",
+      "actual_output": "\u0001\u0000\u0000\u0000\u0000\u0000\u0000OCI runtime exec failed: exec failed: unable to start container process: exec: \"kiro-cli\": executable file not found in $PATH",
+      "scores": [
+        {
+          "name": "task_decomposition",
+          "score": 1,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The actual output is an OCI runtime error message, not a spec or design document at all. It contains zero task decomposition — no discrete tasks, no implementation plan, no coverage of async polling, caching, rate limiting, background processing, or UI feedback. It completely fails to address the criterion."
+        },
+        {
+          "name": "acceptance_criteria_testability",
+          "score": 1,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The actual output is an OCI runtime error message, not an optimization plan. It contains no tasks, no acceptance criteria, and nothing verifiable. It completely fails to address the input prompt about polling optimization and has zero overlap with the expected output covering async polling, caching, rate limiting, background processing, or UI feedback."
+        },
+        {
+          "name": "file_reference_accuracy",
+          "score": 1,
+          "max_score": 5,
+          "deterministic": true,
+          "reasoning": "no file references found"
+        },
+        {
+          "name": "completeness",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": true,
+          "reasoning": "found 0/2 expected structural elements"
+        }
+      ],
+      "agent_cost": {
+        "tokens_in": 102,
+        "tokens_out": 33,
+        "estimated_usd": 0.0008010000000000001
+      },
+      "judge_cost": {
+        "tokens_in": 677,
+        "tokens_out": 219,
+        "estimated_usd": 0.0053159999999999995
+      }
+    },
+    {
+      "case_name": "refactoring-analysis",
+      "actual_output": "\u0001\u0000\u0000\u0000\u0000\u0000\u0000OCI runtime exec failed: exec failed: unable to start container process: exec: \"kiro-cli\": executable file not found in $PATH",
+      "scores": [
+        {
+          "name": "task_decomposition",
+          "score": 1,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The actual output is an error message from a container runtime ('OCI runtime exec failed: exec failed: unable to start container process: exec: \"kiro-cli\": executable file not found in $PATH'). It does not contain any task decomposition, refactoring plan, architecture analysis, or any meaningful content related to the criterion. There are no discrete tasks, no separation of concerns proposal, no migration strategy, no testing approach, and no risk assessment. The output is entirely a system/infrastructure error and provides zero value toward the expected deliverable."
+        },
+        {
+          "name": "acceptance_criteria_testability",
+          "score": 1,
+          "max_score": 5,
+          "deterministic": false,
+          "reasoning": "The actual output is an OCI runtime error message, not a refactoring plan. It contains no tasks, no acceptance criteria, and nothing verifiable with commands or assertions. It completely fails to address the criterion."
+        },
+        {
+          "name": "file_reference_accuracy",
+          "score": 1,
+          "max_score": 5,
+          "deterministic": true,
+          "reasoning": "no file references found"
+        },
+        {
+          "name": "completeness",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": true,
+          "reasoning": "found 0/2 expected structural elements"
+        }
+      ],
+      "agent_cost": {
+        "tokens_in": 92,
+        "tokens_out": 33,
+        "estimated_usd": 0.000771
+      },
+      "judge_cost": {
+        "tokens_in": 717,
+        "tokens_out": 252,
+        "estimated_usd": 0.005931
+      }
+    }
+  ]
+}
