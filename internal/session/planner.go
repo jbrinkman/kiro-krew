@@ -332,6 +332,6 @@ func (ps *PlanningSession) captureHistory() {
 	for output := range ps.Process.GetOutput() {
 		ps.State.AddMessage("assistant", output)
 		// Periodically save state
-		_ = ps.Manager.Save(ps.ID, ps.State)
+		_ = ps.Manager.SaveQuiet(ps.ID, ps.State)
 	}
 }

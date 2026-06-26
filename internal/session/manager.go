@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,7 +14,6 @@ import (
 // SessionManager handles CRUD operations and persistence for sessions
 type SessionManager struct {
 	sessionsDir string
-	logger      *log.Logger
 }
 
 // ValidationError represents a session validation failure
@@ -31,10 +29,8 @@ func (e *ValidationError) Error() string {
 
 // NewSessionManager creates a new session manager
 func NewSessionManager() *SessionManager {
-	logger := log.New(os.Stderr, "[SESSION] ", log.LstdFlags|log.Lshortfile)
 	return &SessionManager{
 		sessionsDir: ".kiro-krew/sessions",
-		logger:      logger,
 	}
 }
 
@@ -58,27 +54,35 @@ func (sm *SessionManager) Create(sessionType SessionType) (string, error) {
 	return id, nil
 }
 
-// Save persists a session to disk
+// Save persists a session to disk with validation
 func (sm *SessionManager) Save(id string, state *SessionState) error {
-	sm.logger.Printf("Saving session %s (type: %s, history: %d messages)", id, state.Type, len(state.History))
-
 	// Validate session before saving
 	if err := sm.ValidateSession(id, state); err != nil {
-		sm.logger.Printf("Session validation failed for %s: %v", id, err)
 		return fmt.Errorf("session validation failed: %w", err)
 	}
 
+	return sm.writeSession(id, state)
+}
+
+// SaveQuiet persists a session to disk without full validation (for high-frequency background saves)
+func (sm *SessionManager) SaveQuiet(id string, state *SessionState) error {
+	if state == nil {
+		return fmt.Errorf("cannot save nil session state")
+	}
+	return sm.writeSession(id, state)
+}
+
+// writeSession handles the atomic file write
+func (sm *SessionManager) writeSession(id string, state *SessionState) error {
 	// Ensure sessions directory exists
 	err := os.MkdirAll(sm.sessionsDir, 0755)
 	if err != nil {
-		sm.logger.Printf("Failed to create sessions directory: %v", err)
 		return fmt.Errorf("failed to create sessions directory: %w", err)
 	}
 
 	// Serialize session
 	data, err := state.ToJSON()
 	if err != nil {
-		sm.logger.Printf("Failed to serialize session %s: %v", id, err)
 		return fmt.Errorf("failed to serialize session: %w", err)
 	}
 
@@ -88,52 +92,42 @@ func (sm *SessionManager) Save(id string, state *SessionState) error {
 
 	err = os.WriteFile(tempFile, data, 0644)
 	if err != nil {
-		sm.logger.Printf("Failed to write temp session file %s: %v", tempFile, err)
 		return fmt.Errorf("failed to write session file: %w", err)
 	}
 
 	err = os.Rename(tempFile, filename)
 	if err != nil {
-		sm.logger.Printf("Failed to rename temp session file %s to %s: %v", tempFile, filename, err)
-		os.Remove(tempFile) // Clean up temp file
+		os.Remove(tempFile)
 		return fmt.Errorf("failed to finalize session file: %w", err)
 	}
 
-	sm.logger.Printf("Successfully saved session %s", id)
 	return nil
 }
 
 // Load reads a session from disk with corruption recovery
 func (sm *SessionManager) Load(id string) (*SessionState, error) {
-	sm.logger.Printf("Loading session %s", id)
 	filename := filepath.Join(sm.sessionsDir, id+".json")
 
 	data, err := os.ReadFile(filename)
 	if err != nil {
-		sm.logger.Printf("Failed to read session file %s: %v", filename, err)
 		return nil, fmt.Errorf("failed to read session file: %w", err)
 	}
 
-	sm.logger.Printf("Read %d bytes from session %s", len(data), id)
-
 	state, err := FromJSON(data)
 	if err != nil {
-		sm.logger.Printf("JSON deserialization failed for session %s: %v", id, err)
 		// Attempt corruption recovery
 		if recovered := sm.recoverCorruptedSession(id, filename, data); recovered != nil {
-			sm.logger.Printf("Successfully recovered corrupted session %s", id)
 			return recovered, nil
 		}
 		return nil, fmt.Errorf("failed to deserialize session (corruption detected): %w", err)
 	}
 
-	// Validate session integrity
+	// Validate and repair session integrity
 	if err := sm.ValidateSession(id, state); err != nil {
-		sm.logger.Printf("Session validation failed for %s: %v", id, err)
 		return nil, fmt.Errorf("session validation failed: %w", err)
 	}
+	sm.RepairSession(id, state)
 
-	sm.logger.Printf("Successfully loaded session %s (type: %s, history: %d messages)", id, state.Type, len(state.History))
 	return state, nil
 }
 
@@ -225,8 +219,6 @@ func (sm *SessionManager) CleanupOnExit() error {
 
 // recoverCorruptedSession attempts to recover a corrupted session
 func (sm *SessionManager) recoverCorruptedSession(id, filename string, data []byte) *SessionState {
-	sm.logger.Printf("Attempting to recover corrupted session %s", id)
-
 	// Try to extract type from partial JSON - look for the first valid type pattern
 	dataStr := string(data)
 
@@ -247,33 +239,25 @@ func (sm *SessionManager) recoverCorruptedSession(id, filename string, data []by
 	}
 
 	if sessionType != "" {
-		sm.logger.Printf("Recovered session type '%s' from corrupted session %s", sessionType, id)
-
 		// Create new session with recovered type
 		recovered := NewSessionState(sessionType)
 
 		// Create backup of corrupted file
 		backupName := filename + ".corrupt." + time.Now().Format("20060102-150405")
-		if err := os.Rename(filename, backupName); err != nil {
-			sm.logger.Printf("Failed to create backup of corrupted session %s: %v", id, err)
-		} else {
-			sm.logger.Printf("Created backup of corrupted session at %s", backupName)
-		}
+		_ = os.Rename(filename, backupName)
 
 		// Save recovered session
-		if err := sm.Save(id, recovered); err != nil {
-			sm.logger.Printf("Failed to save recovered session %s: %v", id, err)
+		if err := sm.writeSession(id, recovered); err != nil {
 			return nil
 		}
 
 		return recovered
 	}
 
-	sm.logger.Printf("Could not recover corrupted session %s - insufficient data", id)
 	return nil
 }
 
-// ValidateSession performs comprehensive session integrity checks
+// ValidateSession performs read-only session integrity checks
 func (sm *SessionManager) ValidateSession(id string, state *SessionState) error {
 	if state == nil {
 		return &ValidationError{SessionID: id, Field: "state", Message: "session state is nil"}
@@ -283,31 +267,37 @@ func (sm *SessionManager) ValidateSession(id string, state *SessionState) error 
 		return &ValidationError{SessionID: id, Field: "type", Message: fmt.Sprintf("invalid session type: %s", state.Type)}
 	}
 
+	// Validate message integrity
+	for i, msg := range state.History {
+		if msg.Role != "user" && msg.Role != "assistant" && msg.Role != "system" {
+			return &ValidationError{SessionID: id, Field: "history", Message: fmt.Sprintf("message %d has invalid role: %s", i, msg.Role)}
+		}
+	}
+
+	return nil
+}
+
+// RepairSession fixes recoverable issues in session state (nil history, zero timestamps, excessive history)
+func (sm *SessionManager) RepairSession(id string, state *SessionState) {
+	if state == nil {
+		return
+	}
+
 	if state.History == nil {
-		sm.logger.Printf("Fixing nil history for session %s", id)
 		state.History = make([]Message, 0)
 	}
 
-	// Validate message integrity
-	for i, msg := range state.History {
-		if msg.Role != "user" && msg.Role != "assistant" {
-			return &ValidationError{SessionID: id, Field: "history", Message: fmt.Sprintf("message %d has invalid role: %s", i, msg.Role)}
-		}
-
-		if msg.Timestamp.IsZero() {
-			sm.logger.Printf("Fixing zero timestamp for message %d in session %s", i, id)
+	// Fix zero timestamps
+	for i := range state.History {
+		if state.History[i].Timestamp.IsZero() {
 			state.History[i].Timestamp = time.Now()
 		}
 	}
 
-	// Check for excessive history (memory protection)
+	// Trim excessive history (memory protection)
 	if len(state.History) > 10000 {
-		sm.logger.Printf("Trimming excessive history for session %s (%d messages)", id, len(state.History))
-		// Keep last 5000 messages
 		state.History = state.History[len(state.History)-5000:]
 	}
-
-	return nil
 }
 
 // generateSessionID creates a random session identifier
@@ -320,40 +310,21 @@ func generateSessionID() (string, error) {
 	return hex.EncodeToString(bytes), nil
 }
 
-// LogModeSwitch logs session data flow during mode transitions
+// LogModeSwitch is a no-op hook for future diagnostics during mode transitions
 func (sm *SessionManager) LogModeSwitch(sessionID string, fromMode, toMode SessionType, preservedData interface{}) {
-	sm.logger.Printf("Mode switch: session %s changing from %s to %s", sessionID, fromMode, toMode)
-
-	if preservedData != nil {
-		switch data := preservedData.(type) {
-		case map[string]interface{}:
-			if inputVal, ok := data["inputValue"].(string); ok && inputVal != "" {
-				sm.logger.Printf("Preserving input value: %q", inputVal)
-			}
-			if activityLines, ok := data["activityLines"].([]string); ok {
-				sm.logger.Printf("Preserving %d activity lines", len(activityLines))
-			}
-		case string:
-			sm.logger.Printf("Preserving data: %s", data)
-		}
-	}
+	// Reserved for future diagnostic use
 }
 
 // ValidateSessionFlow ensures data integrity during rapid mode switching
 func (sm *SessionManager) ValidateSessionFlow(sessionID string) error {
-	sm.logger.Printf("Validating session flow for %s", sessionID)
-
-	// Check if session exists and is loadable
 	state, err := sm.Load(sessionID)
 	if err != nil {
 		return fmt.Errorf("session flow validation failed: %w", err)
 	}
 
-	// Verify data consistency
 	if err := sm.ValidateSession(sessionID, state); err != nil {
 		return fmt.Errorf("session flow validation failed: %w", err)
 	}
 
-	sm.logger.Printf("Session flow validation passed for %s", sessionID)
 	return nil
 }
