@@ -462,20 +462,20 @@ func createContainerConfig(sandboxCfg *config.SandboxConfig, resourceLimits map[
 		},
 	}
 
-	// Apply resource limit overrides
+	// Apply resource limit overrides (only positive values accepted)
 	if resourceLimits != nil {
 		if cpu := resourceLimits["cpu"]; cpu != "" {
-			if cpuFloat, err := strconv.ParseFloat(cpu, 64); err == nil {
+			if cpuFloat, err := strconv.ParseFloat(cpu, 64); err == nil && cpuFloat > 0 {
 				config.ResourceLimits.CPUQuota = int64(cpuFloat * 1000000)
 			}
 		}
 		if memory := resourceLimits["memory"]; memory != "" {
-			if memInt, err := strconv.ParseInt(memory, 10, 64); err == nil {
+			if memInt, err := strconv.ParseInt(memory, 10, 64); err == nil && memInt >= 256*1024*1024 {
 				config.ResourceLimits.Memory = memInt
 			}
 		}
 		if timeout := resourceLimits["timeout"]; timeout != "" {
-			if timeoutDur, err := time.ParseDuration(timeout); err == nil {
+			if timeoutDur, err := time.ParseDuration(timeout); err == nil && timeoutDur > 0 {
 				config.ResourceLimits.Timeout = timeoutDur
 			}
 		}

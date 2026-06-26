@@ -56,6 +56,9 @@ func (sm *SessionManager) Create(sessionType SessionType) (string, error) {
 
 // Save persists a session to disk with validation
 func (sm *SessionManager) Save(id string, state *SessionState) error {
+	// Repair before validation to enforce limits
+	sm.RepairSession(id, state)
+
 	// Validate session before saving
 	if err := sm.ValidateSession(id, state); err != nil {
 		return fmt.Errorf("session validation failed: %w", err)

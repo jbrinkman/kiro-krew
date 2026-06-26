@@ -41,6 +41,16 @@ func TestEnhancedSessionValidation(t *testing.T) {
 			expectError: false,
 		},
 		{
+			name: "valid system message",
+			state: &SessionState{
+				Type: Planning,
+				History: []Message{
+					{Role: "system", Content: "Session terminated", Timestamp: time.Now()},
+				},
+			},
+			expectError: false,
+		},
+		{
 			name: "invalid session type",
 			state: &SessionState{
 				Type:    "invalid",
