@@ -6,6 +6,14 @@ import (
 	"github.com/jbrinkman/kiro-krew/internal/config"
 )
 
+// getColorOrFallback returns the primary color if not empty, otherwise returns fallback
+func getColorOrFallback(primary, fallback string) string {
+	if primary != "" {
+		return primary
+	}
+	return fallback
+}
+
 type Styles struct {
 	Prompt    lipgloss.Style
 	Activity  lipgloss.Style
@@ -13,6 +21,10 @@ type Styles struct {
 	Success   lipgloss.Style
 	Warning   lipgloss.Style
 	Error     lipgloss.Style
+
+	// Agent status styles
+	AgentSuccess lipgloss.Style
+	AgentFail    lipgloss.Style
 
 	// Tab header styles
 	TabActive        lipgloss.Style
@@ -42,6 +54,10 @@ func NewStyles(theme *config.Theme) *Styles {
 		Success:   lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Colors.Success)),
 		Warning:   lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Colors.Warning)),
 		Error:     lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Colors.Error)),
+
+		// Agent status styles with fallbacks for backwards compatibility
+		AgentSuccess: lipgloss.NewStyle().Foreground(lipgloss.Color(getColorOrFallback(theme.Colors.AgentSuccess, theme.Colors.Success))),
+		AgentFail:    lipgloss.NewStyle().Foreground(lipgloss.Color(getColorOrFallback(theme.Colors.AgentFail, theme.Colors.Error))),
 
 		// Tab header styles
 		TabActive: lipgloss.NewStyle().

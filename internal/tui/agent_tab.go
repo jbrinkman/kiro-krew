@@ -62,3 +62,11 @@ func (at *AgentTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 func (at *AgentTab) Resize(width, height int) {
 	at.outputView.Resize(width, height)
 }
+
+// GetStatus returns the current status of the associated agent
+func (at *AgentTab) GetStatus() agent.Status {
+	if ag := at.outputView.manager.GetAgent(at.agentID); ag != nil {
+		return ag.Status
+	}
+	return agent.StatusRunning // Default to running if agent not found
+}

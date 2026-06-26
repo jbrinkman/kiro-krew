@@ -247,7 +247,23 @@ func (tm *TabManager) RenderTabHeaders(width int, styles *Styles) string {
 		} else if i == tm.hoveredTab {
 			styledTab = styles.TabInactiveHover.Render(title)
 		} else {
-			styledTab = styles.TabInactive.Render(title)
+			// For agent tabs, use status-based coloring
+			if tab.Type() == TabTypeAgent {
+				if agentTab, ok := tab.(*AgentTab); ok {
+					switch agentTab.GetStatus() {
+					case agent.StatusCompleted:
+						styledTab = styles.AgentSuccess.Render(title)
+					case agent.StatusFailed:
+						styledTab = styles.AgentFail.Render(title)
+					default:
+						styledTab = styles.TabInactive.Render(title)
+					}
+				} else {
+					styledTab = styles.TabInactive.Render(title)
+				}
+			} else {
+				styledTab = styles.TabInactive.Render(title)
+			}
 		}
 
 		if tab.IsClosable() {
