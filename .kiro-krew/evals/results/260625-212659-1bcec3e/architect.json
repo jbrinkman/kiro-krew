@@ -1,0 +1,342 @@
+{
+  "agent": "architect",
+  "git_hash": "1bcec3e",
+  "cases": [
+    {
+      "case_name": "basic-spec-generation",
+      "actual_output": "",
+      "scores": [
+        {
+          "name": "task_decomposition",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "no output available for LLM judging"
+        },
+        {
+          "name": "acceptance_criteria_testability",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "no output available for LLM judging"
+        },
+        {
+          "name": "file_reference_accuracy",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": true,
+          "skipped": true,
+          "reasoning": "no output to evaluate"
+        },
+        {
+          "name": "completeness",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": true,
+          "skipped": true,
+          "reasoning": "no output to evaluate"
+        }
+      ],
+      "agent_cost": {
+        "tokens_in": 0,
+        "tokens_out": 0,
+        "estimated_usd": 0
+      },
+      "judge_cost": {
+        "tokens_in": 0,
+        "tokens_out": 0,
+        "estimated_usd": 0
+      }
+    },
+    {
+      "case_name": "complex-feature-design",
+      "actual_output": "",
+      "scores": [
+        {
+          "name": "task_decomposition",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "no output available for LLM judging"
+        },
+        {
+          "name": "acceptance_criteria_testability",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "no output available for LLM judging"
+        },
+        {
+          "name": "file_reference_accuracy",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": true,
+          "skipped": true,
+          "reasoning": "no output to evaluate"
+        },
+        {
+          "name": "completeness",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": true,
+          "skipped": true,
+          "reasoning": "no output to evaluate"
+        }
+      ],
+      "agent_cost": {
+        "tokens_in": 0,
+        "tokens_out": 0,
+        "estimated_usd": 0
+      },
+      "judge_cost": {
+        "tokens_in": 0,
+        "tokens_out": 0,
+        "estimated_usd": 0
+      }
+    },
+    {
+      "case_name": "configuration-enhancement",
+      "actual_output": "",
+      "scores": [
+        {
+          "name": "task_decomposition",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "no output available for LLM judging"
+        },
+        {
+          "name": "acceptance_criteria_testability",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "no output available for LLM judging"
+        },
+        {
+          "name": "file_reference_accuracy",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": true,
+          "skipped": true,
+          "reasoning": "no output to evaluate"
+        },
+        {
+          "name": "completeness",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": true,
+          "skipped": true,
+          "reasoning": "no output to evaluate"
+        }
+      ],
+      "agent_cost": {
+        "tokens_in": 0,
+        "tokens_out": 0,
+        "estimated_usd": 0
+      },
+      "judge_cost": {
+        "tokens_in": 0,
+        "tokens_out": 0,
+        "estimated_usd": 0
+      }
+    },
+    {
+      "case_name": "custom-threshold-test",
+      "actual_output": "",
+      "scores": [
+        {
+          "name": "task_decomposition",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "no output available for LLM judging"
+        },
+        {
+          "name": "acceptance_criteria_testability",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "no output available for LLM judging"
+        },
+        {
+          "name": "file_reference_accuracy",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": true,
+          "skipped": true,
+          "reasoning": "no output to evaluate"
+        },
+        {
+          "name": "completeness",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": true,
+          "skipped": true,
+          "reasoning": "no output to evaluate"
+        }
+      ],
+      "agent_cost": {
+        "tokens_in": 0,
+        "tokens_out": 0,
+        "estimated_usd": 0
+      },
+      "judge_cost": {
+        "tokens_in": 0,
+        "tokens_out": 0,
+        "estimated_usd": 0
+      }
+    },
+    {
+      "case_name": "default-threshold-test",
+      "actual_output": "",
+      "scores": [
+        {
+          "name": "task_decomposition",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "no output available for LLM judging"
+        },
+        {
+          "name": "acceptance_criteria_testability",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "no output available for LLM judging"
+        },
+        {
+          "name": "file_reference_accuracy",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": true,
+          "skipped": true,
+          "reasoning": "no output to evaluate"
+        },
+        {
+          "name": "completeness",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": true,
+          "skipped": true,
+          "reasoning": "no output to evaluate"
+        }
+      ],
+      "agent_cost": {
+        "tokens_in": 0,
+        "tokens_out": 0,
+        "estimated_usd": 0
+      },
+      "judge_cost": {
+        "tokens_in": 0,
+        "tokens_out": 0,
+        "estimated_usd": 0
+      }
+    },
+    {
+      "case_name": "performance-optimization",
+      "actual_output": "",
+      "scores": [
+        {
+          "name": "task_decomposition",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "no output available for LLM judging"
+        },
+        {
+          "name": "acceptance_criteria_testability",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "no output available for LLM judging"
+        },
+        {
+          "name": "file_reference_accuracy",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": true,
+          "skipped": true,
+          "reasoning": "no output to evaluate"
+        },
+        {
+          "name": "completeness",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": true,
+          "skipped": true,
+          "reasoning": "no output to evaluate"
+        }
+      ],
+      "agent_cost": {
+        "tokens_in": 0,
+        "tokens_out": 0,
+        "estimated_usd": 0
+      },
+      "judge_cost": {
+        "tokens_in": 0,
+        "tokens_out": 0,
+        "estimated_usd": 0
+      }
+    },
+    {
+      "case_name": "refactoring-analysis",
+      "actual_output": "",
+      "scores": [
+        {
+          "name": "task_decomposition",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "no output available for LLM judging"
+        },
+        {
+          "name": "acceptance_criteria_testability",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": false,
+          "skipped": true,
+          "reasoning": "no output available for LLM judging"
+        },
+        {
+          "name": "file_reference_accuracy",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": true,
+          "skipped": true,
+          "reasoning": "no output to evaluate"
+        },
+        {
+          "name": "completeness",
+          "score": 0,
+          "max_score": 5,
+          "deterministic": true,
+          "skipped": true,
+          "reasoning": "no output to evaluate"
+        }
+      ],
+      "agent_cost": {
+        "tokens_in": 0,
+        "tokens_out": 0,
+        "estimated_usd": 0
+      },
+      "judge_cost": {
+        "tokens_in": 0,
+        "tokens_out": 0,
+        "estimated_usd": 0
+      }
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "profile": {
+    "startup_overhead": 9505792,
+    "test_case_timings": {
+      "basic-spec-generation": 12864302083,
+      "complex-feature-design": 10229494958,
+      "configuration-enhancement": 10226311791,
+      "custom-threshold-test": 10234790334,
+      "default-threshold-test": 10219538541,
+      "performance-optimization": 10202151875,
+      "refactoring-analysis": 10197179917
+    },
+    "agent_invocations": 7,
+    "total_eval_time": 74311463917,
+    "memory_usage": {
+      "max_heap_mb": 4.34375,
+      "max_stack_mb": 0.3125,
+      "goroutines_peak": 1
+    },
+    "parallel_potential": {
+      "independent_tests": [
+        "default-threshold-test",
+        "performance-optimization",
+        "refactoring-analysis",
+        "basic-spec-generation",
+        "complex-feature-design",
+        "configuration-enhancement",
+        "custom-threshold-test"
+      ],
+      "estimated_speedup": 0.7,
+      "safe_parallelization": true,
+      "recommended_workers": 7
+    },
+    "bottlenecks": null
+  },
+  "timestamp": "2026-06-25T12:24:01.305122-04:00"
+}
