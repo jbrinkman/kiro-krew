@@ -147,38 +147,36 @@ func TestTerminalResizeHandling(t *testing.T) {
 	}
 }
 
-func TestOutputSuspendResume(t *testing.T) {
+func TestOutputAlwaysAccumulates(t *testing.T) {
 	capture := agent.NewOutputCapture(100)
 
 	// Add some initial output
-	capture.AddLine("Before suspend")
+	capture.AddLine("Initial line")
 
-	// Suspend and try to add more
-	capture.Suspend()
-	capture.AddLine("During suspend - should not appear")
+	// Add more output - data is always accumulated
+	capture.AddLine("Second line - always captured")
 
-	// Resume and add more
-	capture.Resume()
-	capture.AddLine("After resume")
+	// Add even more output
+	capture.AddLine("Third line")
 
 	lines := capture.GetLines()
 
-	// Should have first and last line, but not the middle one
+	// Should have all lines since data is always accumulated
 	found := make(map[string]bool)
 	for _, line := range lines {
 		found[line] = true
 	}
 
-	if !found["Before suspend"] {
-		t.Error("Expected 'Before suspend' line not found")
+	if !found["Initial line"] {
+		t.Error("Expected 'Initial line' not found")
 	}
 
-	if found["During suspend - should not appear"] {
-		t.Error("Line added during suspend was captured")
+	if !found["Second line - always captured"] {
+		t.Error("Second line was not captured (should always be captured)")
 	}
 
-	if !found["After resume"] {
-		t.Error("Expected 'After resume' line not found")
+	if !found["Third line"] {
+		t.Error("Expected 'Third line' not found")
 	}
 }
 

@@ -23,15 +23,18 @@ func TestSessionCorruptionRecovery(t *testing.T) {
 	sessionFile := filepath.Join(sessionDir, "corrupted.json")
 	os.WriteFile(sessionFile, []byte(corruptedData), 0644)
 
-	// Attempt to load corrupted session
-	_, err := manager.Load("corrupted")
-	if err == nil {
-		t.Error("Expected error when loading corrupted session")
+	// Attempt to load corrupted session - should succeed due to recovery
+	state, err := manager.Load("corrupted")
+	if err != nil {
+		t.Errorf("Expected successful recovery, but got error: %v", err)
 	}
 
-	// Check that error mentions corruption
-	if err != nil && !contains(err.Error(), "corruption") {
-		t.Errorf("Expected corruption error, got: %v", err)
+	if state == nil {
+		t.Error("Expected recovered session state, got nil")
+	}
+
+	if state != nil && state.Type != Planning {
+		t.Errorf("Expected recovered session type to be 'planning', got %s", state.Type)
 	}
 
 	// Verify backup was created by checking if original file was moved
@@ -74,20 +77,20 @@ func TestSessionValidation(t *testing.T) {
 		History: []Message{},
 	}
 
-	err := manager.validateSession(state)
+	err := manager.ValidateSession("test-session", state)
 	if err == nil {
 		t.Error("Expected error for invalid session type")
 	}
 
 	// Test nil session
-	err = manager.validateSession(nil)
+	err = manager.ValidateSession("test-session", nil)
 	if err == nil {
 		t.Error("Expected error for nil session")
 	}
 
 	// Test valid session
 	validState := NewSessionState(Planning)
-	err = manager.validateSession(validState)
+	err = manager.ValidateSession("test-session", validState)
 	if err != nil {
 		t.Errorf("Expected no error for valid session, got: %v", err)
 	}

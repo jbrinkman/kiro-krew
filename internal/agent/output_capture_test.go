@@ -6,43 +6,37 @@ import (
 	"testing"
 )
 
-func TestOutputCaptureSuspendResume(t *testing.T) {
+func TestOutputCaptureAlwaysAccumulates(t *testing.T) {
 	capture := NewOutputCapture(10)
 
-	// Add some lines before suspension
+	// Add some lines
 	capture.AddLine("line1")
 	capture.AddLine("line2")
 
 	lines := capture.GetLines()
 	if len(lines) != 2 {
-		t.Errorf("Expected 2 lines before suspension, got %d", len(lines))
+		t.Errorf("Expected 2 lines, got %d", len(lines))
 	}
 
-	// Suspend capture
-	capture.Suspend()
-
-	// Add lines while suspended (should be ignored)
-	capture.AddLine("suspended1")
-	capture.AddLine("suspended2")
-
-	lines = capture.GetLines()
-	if len(lines) != 2 {
-		t.Errorf("Expected 2 lines after suspension, got %d", len(lines))
-	}
-
-	// Resume capture
-	capture.Resume()
-
-	// Add lines after resumption
+	// Add more lines - data is always accumulated regardless of display state
 	capture.AddLine("line3")
 	capture.AddLine("line4")
 
 	lines = capture.GetLines()
 	if len(lines) != 4 {
-		t.Errorf("Expected 4 lines after resumption, got %d", len(lines))
+		t.Errorf("Expected 4 lines (data always accumulates), got %d", len(lines))
 	}
 
-	expected := []string{"line1", "line2", "line3", "line4"}
+	// Continue adding lines
+	capture.AddLine("line5")
+	capture.AddLine("line6")
+
+	lines = capture.GetLines()
+	if len(lines) != 6 {
+		t.Errorf("Expected 6 lines, got %d", len(lines))
+	}
+
+	expected := []string{"line1", "line2", "line3", "line4", "line5", "line6"}
 	for i, line := range lines {
 		if line != expected[i] {
 			t.Errorf("Expected line %d to be %s, got %s", i, expected[i], line)
@@ -98,19 +92,17 @@ func TestOutputCaptureGeneration(t *testing.T) {
 		t.Fatalf("Expected generation 1 after AddLine, got %d", gen1)
 	}
 
-	// Suspended lines don't increment generation
-	capture.Suspend()
-	capture.AddLine("ignored")
+	// Data is always accumulated - generation always increments
+	capture.AddLine("always_captured")
 	gen2 := capture.Generation()
-	if gen2 != 1 {
-		t.Fatalf("Expected generation still 1 after suspended AddLine, got %d", gen2)
+	if gen2 != 2 {
+		t.Fatalf("Expected generation 2 after AddLine (data always accumulates), got %d", gen2)
 	}
 
-	capture.Resume()
 	capture.AddLine("y")
 	gen3 := capture.Generation()
-	if gen3 != 2 {
-		t.Fatalf("Expected generation 2, got %d", gen3)
+	if gen3 != 3 {
+		t.Fatalf("Expected generation 3, got %d", gen3)
 	}
 }
 

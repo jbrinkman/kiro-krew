@@ -10,6 +10,9 @@ import (
 
 // OutputCapture captures and stores agent output with ANSI stripping.
 // Uses an index-based ring buffer to avoid O(n) slice shifting on every line.
+//
+// OutputCapture ALWAYS accumulates data regardless of display state.
+// Data accumulation is never suspended - only display can be controlled separately.
 type OutputCapture struct {
 	mu        sync.RWMutex
 	buffer    []string
@@ -18,7 +21,6 @@ type OutputCapture struct {
 	count     int // number of valid entries (≤ maxSize)
 	gen       atomic.Uint64
 	ansiRegex *regexp.Regexp
-	suspended bool
 }
 
 // NewOutputCapture creates a new output capture with specified buffer size
@@ -38,10 +40,6 @@ func (oc *OutputCapture) AddLine(line string) {
 	oc.mu.Lock()
 	defer oc.mu.Unlock()
 
-	if oc.suspended {
-		return
-	}
-
 	stripped := oc.ansiRegex.ReplaceAllString(line, "")
 	oc.buffer[oc.head] = stripped
 	oc.head = (oc.head + 1) % oc.maxSize
@@ -49,20 +47,6 @@ func (oc *OutputCapture) AddLine(line string) {
 		oc.count++
 	}
 	oc.gen.Add(1)
-}
-
-// Suspend suspends output capture
-func (oc *OutputCapture) Suspend() {
-	oc.mu.Lock()
-	defer oc.mu.Unlock()
-	oc.suspended = true
-}
-
-// Resume resumes output capture
-func (oc *OutputCapture) Resume() {
-	oc.mu.Lock()
-	defer oc.mu.Unlock()
-	oc.suspended = false
 }
 
 // Generation returns the current generation counter (lock-free).
