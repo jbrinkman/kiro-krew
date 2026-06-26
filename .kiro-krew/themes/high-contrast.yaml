@@ -14,3 +14,5 @@ colors:
   activity: "#FFFFFF"
   background: "#000000"
   surface: "#222222"
+  agent_success: "#00FF00"
+  agent_fail: "#FF0044"

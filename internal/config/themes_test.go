@@ -59,6 +59,8 @@ func TestValidateTheme(t *testing.T) {
 			Activity      string `yaml:"activity"`
 			Background    string `yaml:"background"`
 			Surface       string `yaml:"surface"`
+			AgentSuccess  string `yaml:"agent_success"`
+			AgentFail     string `yaml:"agent_fail"`
 		}{
 			Primary:       "#FF0000",
 			Secondary:     "#00FF00",
@@ -73,6 +75,8 @@ func TestValidateTheme(t *testing.T) {
 			Activity:      "#FFFFFF",
 			Background:    "#000000",
 			Surface:       "#111111",
+			AgentSuccess:  "#00AA00",
+			AgentFail:     "#FF0000",
 		},
 	}
 

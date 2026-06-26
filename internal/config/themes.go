@@ -27,6 +27,8 @@ type Theme struct {
 		Activity      string `yaml:"activity"`
 		Background    string `yaml:"background"`
 		Surface       string `yaml:"surface"`
+		AgentSuccess  string `yaml:"agent_success"`
+		AgentFail     string `yaml:"agent_fail"`
 	} `yaml:"colors"`
 }
 
@@ -97,9 +99,15 @@ func validateTheme(theme *Theme) error {
 		"activity":       theme.Colors.Activity,
 		"background":     theme.Colors.Background,
 		"surface":        theme.Colors.Surface,
+		"agent_success":  theme.Colors.AgentSuccess,
+		"agent_fail":     theme.Colors.AgentFail,
 	}
 
 	for field, value := range colorFields {
+		// Agent colors are optional for backwards compatibility
+		if (field == "agent_success" || field == "agent_fail") && value == "" {
+			continue
+		}
 		if err := validateColor(value, field); err != nil {
 			return err
 		}
@@ -126,6 +134,8 @@ func getDefaultTheme() *Theme {
 			Activity      string `yaml:"activity"`
 			Background    string `yaml:"background"`
 			Surface       string `yaml:"surface"`
+			AgentSuccess  string `yaml:"agent_success"`
+			AgentFail     string `yaml:"agent_fail"`
 		}{
 			Primary:       "#00AAFF",
 			Secondary:     "#888888",
@@ -140,6 +150,8 @@ func getDefaultTheme() *Theme {
 			Activity:      "#FFFFFF",
 			Background:    "#000000",
 			Surface:       "#111111",
+			AgentSuccess:  "#00AA00",
+			AgentFail:     "#FF0000",
 		},
 	}
 }
