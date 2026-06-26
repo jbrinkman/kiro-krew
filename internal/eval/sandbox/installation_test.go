@@ -144,19 +144,13 @@ func TestInstallationCommands_CrossPlatform(t *testing.T) {
 }
 
 func TestInstallationVerification_PermissionChecks(t *testing.T) {
-	skipIfNoDocker(t)
-
-	c, err := NewContainer("alpine:3.19")
-	require.NoError(t, err)
-	defer c.Close()
-
 	// Create a test container with a mock kiro-cli binary
 	tempDir := t.TempDir()
 	mockBinary := filepath.Join(tempDir, "kiro-cli")
 
 	// Create mock binary with proper content
 	mockContent := "#!/bin/sh\necho 'kiro-cli version 1.0.0'"
-	err = os.WriteFile(mockBinary, []byte(mockContent), 0755)
+	err := os.WriteFile(mockBinary, []byte(mockContent), 0755)
 	require.NoError(t, err)
 
 	// Test permission verification
@@ -245,15 +239,11 @@ func TestDockerfileGeneration_ProjectDetection(t *testing.T) {
 }
 
 func TestBuildTimeVsRuntime_Installation(t *testing.T) {
-	skipIfNoDocker(t)
-
-	tempDir := t.TempDir()
-	c, err := NewContainer("alpine:3.19")
-	require.NoError(t, err)
-	defer c.Close()
-
 	t.Run("BuildTimeInstallation", func(t *testing.T) {
 		// Test that Dockerfile generation includes build-time installation
+		// No Docker required — only generates a string
+		tempDir := t.TempDir()
+		c := &Container{}
 		platform, err := DetectHostArchitecture()
 		require.NoError(t, err)
 		dockerfile, err := c.GenerateDockerfileWithPlatform(tempDir, platform)
@@ -267,12 +257,18 @@ func TestBuildTimeVsRuntime_Installation(t *testing.T) {
 	})
 
 	t.Run("RuntimeVerification", func(t *testing.T) {
+		skipIfNoDocker(t)
+
+		c, err := NewContainer("alpine:3.19")
+		require.NoError(t, err)
+		defer c.Close()
+
 		// Test that InstallKiroCLI only does verification, not installation
 		ctx := context.Background()
 
 		// This would fail in a real container since kiro-cli isn't installed
 		// But we can test the method exists and has correct signature
-		err := c.InstallKiroCLI(ctx, "linux/amd64")
+		err = c.InstallKiroCLI(ctx, "linux/amd64")
 		// Expect error since we don't have a running container with kiro-cli
 		assert.Error(t, err, "Should fail verification when kiro-cli not installed")
 	})
