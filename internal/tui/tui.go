@@ -101,7 +101,7 @@ func newModel(w *watcher.Watcher, m *agent.Manager, cfg *config.Config, logFile 
 	styles := NewStyles(theme)
 
 	// Create command registry and autocomplete input
-	commandRegistry := NewCommandRegistry()
+	commandRegistry := NewCommandRegistry(m)
 	autocompleteInput := NewAutocompleteInput(commandRegistry, styles)
 
 	consoleViewport := viewport.New(viewport.WithWidth(80), viewport.WithHeight(24))

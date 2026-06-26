@@ -8,6 +8,20 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+// isTemplateCommand checks if a command is a template (contains placeholders like <...>)
+func isTemplateCommand(command string) bool {
+	return strings.Contains(command, "<") && strings.Contains(command, ">")
+}
+
+// extractTemplatePrefix extracts the prefix before the placeholder for cursor positioning
+func extractTemplatePrefix(command string) string {
+	idx := strings.Index(command, "<")
+	if idx == -1 {
+		return command
+	}
+	return strings.TrimSpace(command[:idx])
+}
+
 // AutocompleteState manages the current autocomplete UI state
 type AutocompleteState struct {
 	suggestions   []string
@@ -110,7 +124,11 @@ func (a *AutocompleteInput) handleKeyMsg(msg tea.KeyMsg) (*AutocompleteInput, te
 		}
 		if a.state.showDropdown && len(a.state.suggestions) > 0 {
 			selected := a.state.suggestions[a.state.selectedIndex]
-			a.textinput.SetValue(selected)
+			value := selected
+			if isTemplateCommand(selected) {
+				value = extractTemplatePrefix(selected)
+			}
+			a.textinput.SetValue(value)
 			a.textinput.CursorEnd()
 			a.updateAutocomplete()
 			return a, nil
@@ -122,9 +140,21 @@ func (a *AutocompleteInput) handleKeyMsg(msg tea.KeyMsg) (*AutocompleteInput, te
 		return a, nil
 
 	case "enter":
-		// Apply selected suggestion if dropdown is visible, then execute
+		// Apply selected suggestion if dropdown is visible
 		if a.state.showDropdown && len(a.state.suggestions) > 0 {
 			selected := a.state.suggestions[a.state.selectedIndex]
+
+			// Template commands position cursor without executing
+			if isTemplateCommand(selected) {
+				a.textinput.SetValue(extractTemplatePrefix(selected))
+				a.textinput.CursorEnd()
+				a.state.showDropdown = false
+				a.state.ghostText = ""
+				a.updateAutocomplete()
+				return a, nil
+			}
+
+			// Regular command - set value and fall through to execute
 			a.textinput.SetValue(selected)
 			a.textinput.CursorEnd()
 			a.state.showDropdown = false

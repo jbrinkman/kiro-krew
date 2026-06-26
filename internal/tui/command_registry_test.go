@@ -1,9 +1,16 @@
 package tui
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/jbrinkman/kiro-krew/internal/agent"
+	"github.com/jbrinkman/kiro-krew/internal/config"
+)
 
 func TestCommandRegistry(t *testing.T) {
-	registry := NewCommandRegistry()
+	cfg := &config.Config{}
+	manager := agent.NewManager(cfg)
+	registry := NewCommandRegistry(manager)
 
 	// Test command filtering
 	matches := registry.FilterCommands("w")

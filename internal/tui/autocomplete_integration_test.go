@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jbrinkman/kiro-krew/internal/agent"
 	"github.com/jbrinkman/kiro-krew/internal/config"
 )
 
@@ -12,7 +13,9 @@ import (
 func TestAutocompleteIntegration(t *testing.T) {
 	theme := &config.Theme{} // Use default theme
 	styles := NewStyles(theme)
-	registry := NewCommandRegistry()
+	cfg := &config.Config{}
+	manager := agent.NewManager(cfg)
+	registry := NewCommandRegistry(manager)
 	input := NewAutocompleteInput(registry, styles)
 
 	t.Run("Task 1: Ghost Text Spacing Fix", func(t *testing.T) {
@@ -220,7 +223,9 @@ func TestAutocompleteIntegration(t *testing.T) {
 func TestAutocompleteWorkflow(t *testing.T) {
 	theme := &config.Theme{}
 	styles := NewStyles(theme)
-	registry := NewCommandRegistry()
+	cfg := &config.Config{}
+	manager := agent.NewManager(cfg)
+	registry := NewCommandRegistry(manager)
 	input := NewAutocompleteInput(registry, styles)
 
 	t.Run("Complete Workflow: Type w -> Verify State", func(t *testing.T) {

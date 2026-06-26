@@ -1,7 +1,11 @@
 package tui
 
 import (
+	"sort"
+	"strconv"
 	"strings"
+
+	"github.com/jbrinkman/kiro-krew/internal/agent"
 )
 
 // Command represents a command with its metadata for autocomplete
@@ -17,13 +21,15 @@ type Command struct {
 type CommandRegistry struct {
 	commands          map[string]*Command
 	flattenedCommands []string // Compound commands as single units
+	agentManager      *agent.Manager
 }
 
 // NewCommandRegistry creates a new command registry with all REPL commands
-func NewCommandRegistry() *CommandRegistry {
+func NewCommandRegistry(agentManager *agent.Manager) *CommandRegistry {
 	registry := &CommandRegistry{
 		commands:          make(map[string]*Command),
 		flattenedCommands: []string{},
+		agentManager:      agentManager,
 	}
 
 	// Register all commands
@@ -152,13 +158,66 @@ func (r *CommandRegistry) GetFlattenedMatches(input string) []string {
 	inputLower := strings.ToLower(input)
 	matches := []string{}
 
+	// Handle dynamic stop commands
+	if strings.HasPrefix(inputLower, "stop") {
+		stopMatches := r.generateStopCommands(input)
+		matches = append(matches, stopMatches...)
+	}
+
+	// Add other flattened commands
 	for _, cmd := range r.flattenedCommands {
-		if strings.HasPrefix(strings.ToLower(cmd), inputLower) {
+		cmdLower := strings.ToLower(cmd)
+		if strings.HasPrefix(cmdLower, inputLower) && !strings.HasPrefix(cmdLower, "stop") {
 			matches = append(matches, cmd)
 		}
 	}
 
 	return matches
+}
+
+// generateStopCommands creates contextual stop commands based on running agents
+func (r *CommandRegistry) generateStopCommands(input string) []string {
+	if r.agentManager == nil {
+		return []string{}
+	}
+
+	agents := r.agentManager.List()
+	var runningAgents []*agent.Agent
+	for _, ag := range agents {
+		if ag.Status == agent.StatusRunning {
+			runningAgents = append(runningAgents, ag)
+		}
+	}
+
+	if len(runningAgents) == 0 {
+		return []string{}
+	}
+
+	inputLower := strings.ToLower(input)
+
+	// Sort agents by issue number for consistent ordering
+	sort.Slice(runningAgents, func(i, j int) bool {
+		return runningAgents[i].IssueNumber < runningAgents[j].IssueNumber
+	})
+
+	if len(runningAgents) <= 10 {
+		// Generate specific stop commands
+		var matches []string
+		for _, ag := range runningAgents {
+			stopCmd := "stop " + strconv.Itoa(ag.IssueNumber)
+			if strings.HasPrefix(strings.ToLower(stopCmd), inputLower) {
+				matches = append(matches, stopCmd)
+			}
+		}
+		return matches
+	} else {
+		// Generate template command
+		templateCmd := "stop <issue number>"
+		if strings.HasPrefix(strings.ToLower(templateCmd), inputLower) {
+			return []string{templateCmd}
+		}
+		return []string{}
+	}
 }
 
 // GetSubcommands returns subcommands for a given command and input
