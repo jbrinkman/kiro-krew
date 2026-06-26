@@ -1,0 +1,25 @@
+name: refactoring-analysis
+description: "Test architect's ability to plan refactoring tasks"
+agent: architect
+input: |
+  Analyze the current TUI code structure and propose a refactoring to improve modularity.
+  Focus on separating concerns between UI rendering and business logic.
+setup:
+  - type: text
+    label: "Current Issues"
+    content: "The TUI code has grown complex with business logic mixed into rendering functions"
+  - type: text
+    label: "Goals"
+    content: "Separate UI concerns, improve testability, maintain existing functionality"
+context:
+  - "Should identify current architectural problems"
+  - "Refactoring should preserve existing behavior"
+  - "Should improve code maintainability"
+  - "Testing strategy should be included"
+expected_output: |
+  Refactoring plan including:
+  - Analysis of current architecture issues
+  - Proposed separation of concerns
+  - Migration strategy to avoid breaking changes
+  - Testing approach for refactored components
+  - Risk assessment and mitigation

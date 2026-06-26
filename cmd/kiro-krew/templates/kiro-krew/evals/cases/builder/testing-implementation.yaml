@@ -1,0 +1,27 @@
+name: testing-implementation
+description: "Evaluate builder's ability to write comprehensive tests"
+agent: builder
+input: |
+  Create a comprehensive test suite for the agent manager functionality.
+  Focus on testing agent lifecycle, state transitions, and concurrent operations.
+  
+  Task: Write tests for internal/manager/manager.go covering Start, Stop, List operations
+setup:
+  - type: text
+    label: "Test Requirements"
+    content: "Unit tests with mocks, edge case coverage, concurrent operation testing, error condition handling"
+  - type: text
+    label: "Code Structure"
+    content: "Manager struct with Start(), Stop(), List() methods, uses sync.RWMutex for thread safety"
+context:
+  - "Tests should use table-driven pattern"
+  - "Mock external dependencies (kiro-cli processes)"
+  - "Test concurrent access scenarios"
+  - "Cover error conditions and edge cases"
+expected_output: |
+  Test implementation including:
+  - Table-driven tests for each public method
+  - Mock process execution for kiro-cli calls  
+  - Concurrent access test scenarios
+  - Error condition coverage (process failures, invalid inputs)
+  - Benchmarks for performance-critical operations

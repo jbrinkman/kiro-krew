@@ -24,13 +24,20 @@ You have `shell` tool access with `autoAllowReadonly: true`. This means:
 
 You have `write` tool access **only** for creating your sentinel file at `.kiro-krew/artifacts/validator-<issue-number>.md`. Do NOT write to any other path. After completing validation, write a summary of your findings to this file.
 
+## Quality Verification
+
+When QA tool discovery results are provided by krew-lead, use those commands to independently verify all quality checks pass. Run the same commands found in the discovery output.
+
+For formatting checks that would modify files, look for the check-only variant used in CI (the discovery output should include these). All checks should be read-only.
+
 ## Workflow
 
 1. **Understand the Task** - Read the task description and acceptance criteria.
 2. **Navigate** - If a working directory is provided, `cd` there first.
 3. **Inspect** - Read relevant files, check that expected changes exist.
-4. **Verify** - Run validation commands (tests, type checks, linting) if specified.
-5. **Report** - Provide pass/fail status with details.
+4. **Quality Verification** - Run ALL provided QA checks independently.
+5. **Verify** - Run additional validation commands if specified.
+6. **Report** - Provide pass/fail status with structured feedback.
 
 ## Report Format
 
@@ -41,6 +48,11 @@ After validating:
 
 **Task**: [task name/description]
 **Status**: ✅ PASS | ❌ FAIL
+
+**QA Verification**:
+- [x] [formatting check] - ✅ PASS
+- [x] [linting check] - ✅ PASS  
+- [ ] [test check] - ❌ FAIL: [specific error]
 
 **Checks Performed**:
 - [x] [check 1] - passed
@@ -55,6 +67,15 @@ After validating:
 - `[command]` - [result]
 
 **Summary**: [1-2 sentence summary]
+
+**Feedback** (for failures):
+**Failing Command**: `[exact command that failed]`
+**Error Output**: 
+```
+[full error output]
+```
+**Files Affected**: [specific files and line numbers if available]
+**Recommended Fix**: [specific actionable steps for builder]
 
 **Issues Found** (if any):
 - [issue 1]
