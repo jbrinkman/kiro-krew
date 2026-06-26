@@ -20,12 +20,11 @@ func NewAboutDialog() *AboutDialog {
 // BuildContent generates base content without update status
 func (d *AboutDialog) BuildContent() []string {
 	info := version.Info()
-	displayHash := formatCommitHash(info["commit_hash"])
 
 	d.baseContent = []string{
 		fmt.Sprintf("  Version:    %s", info["version"]),
 		fmt.Sprintf("  Build Date: %s", info["build_date"]),
-		fmt.Sprintf("  Commit:     %s", displayHash),
+		fmt.Sprintf("  Commit:     %s", version.ShortCommitHash()),
 		fmt.Sprintf("  Go Version: %s", info["go_version"]),
 		fmt.Sprintf("  Arch:       %s", info["arch"]),
 		"",
@@ -45,15 +44,4 @@ func (d *AboutDialog) GetFullContent() []string {
 	copy(content, d.baseContent)
 	content = append(content, d.statusLines...)
 	return content
-}
-
-// formatCommitHash returns a short display hash (7 chars) or "unknown"
-func formatCommitHash(hash string) string {
-	if hash == "unknown" || hash == "" {
-		return "unknown"
-	}
-	if len(hash) >= 7 {
-		return hash[:7]
-	}
-	return hash
 }

@@ -3,6 +3,7 @@ package cmd
 import (
 	"embed"
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -20,6 +21,21 @@ var rootCmd = &cobra.Command{
 	Short:   "Multi-agent development tool",
 	Long:    "kiro-krew is a multi-agent development tool that watches GitHub issues and spawns agents to work on them.",
 	Version: version.String(),
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		about, _ := cmd.Flags().GetBool("about")
+		if about {
+			info := version.Info()
+			out := cmd.OutOrStdout()
+
+			fmt.Fprintf(out, "  Version:    %s\n", info["version"])
+			fmt.Fprintf(out, "  Build Date: %s\n", info["build_date"])
+			fmt.Fprintf(out, "  Commit:     %s\n", version.ShortCommitHash())
+			fmt.Fprintf(out, "  Go Version: %s\n", info["go_version"])
+			fmt.Fprintf(out, "  Arch:       %s\n", info["arch"])
+			os.Exit(0)
+		}
+		return nil
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
 		if err != nil {
@@ -40,6 +56,9 @@ func init() {
 	// Cobra automatically adds --version/-v flags when Version is set
 	// Customize the version template to show just the version number
 	rootCmd.SetVersionTemplate("{{.Version}}\n")
+
+	// Add --about/-a flag
+	rootCmd.PersistentFlags().BoolP("about", "a", false, "display comprehensive version information")
 }
 
 func SetTemplates(templates embed.FS) {

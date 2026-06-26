@@ -3,6 +3,8 @@ package tui
 import (
 	"strings"
 	"testing"
+
+	"github.com/jbrinkman/kiro-krew/internal/version"
 )
 
 func TestFormatCommitHash(t *testing.T) {
@@ -19,9 +21,9 @@ func TestFormatCommitHash(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := formatCommitHash(tt.input)
+			got := version.FormatCommitHash(tt.input)
 			if got != tt.want {
-				t.Errorf("formatCommitHash(%q) = %q, want %q", tt.input, got, tt.want)
+				t.Errorf("FormatCommitHash(%q) = %q, want %q", tt.input, got, tt.want)
 			}
 		})
 	}
