@@ -165,21 +165,15 @@ func (m *Manager) CaptureOutputLine(issueNumber int, line string) {
 	m.outputCapture.AddLine(fmt.Sprintf("[agent issue-%d] %s", issueNumber, line))
 }
 
-// SuspendOutputCapture suspends capturing agent output
+// SuspendOutputCapture suspends terminal output display
 func (m *Manager) SuspendOutputCapture() {
-	if m.outputCapture != nil {
-		m.outputCapture.Suspend()
-	}
 	m.mu.Lock()
 	m.terminalOutputPaused = true
 	m.mu.Unlock()
 }
 
-// ResumeOutputCapture resumes capturing agent output
+// ResumeOutputCapture resumes terminal output display
 func (m *Manager) ResumeOutputCapture() {
-	if m.outputCapture != nil {
-		m.outputCapture.Resume()
-	}
 	m.mu.Lock()
 	m.terminalOutputPaused = false
 	m.mu.Unlock()

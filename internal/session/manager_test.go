@@ -9,7 +9,8 @@ import (
 func TestSessionManagerCRUD(t *testing.T) {
 	// Use temp directory for testing
 	tempDir := t.TempDir()
-	sm := &SessionManager{sessionsDir: tempDir}
+	sm := NewSessionManager()
+	sm.sessionsDir = tempDir
 
 	// Test Create
 	id, err := sm.Create(Console)
@@ -72,7 +73,8 @@ func TestSessionManagerCRUD(t *testing.T) {
 
 func TestSessionManagerCleanup(t *testing.T) {
 	tempDir := t.TempDir()
-	sm := &SessionManager{sessionsDir: tempDir}
+	sm := NewSessionManager()
+	sm.sessionsDir = tempDir
 
 	// Create two sessions
 	id1, _ := sm.Create(Console)
