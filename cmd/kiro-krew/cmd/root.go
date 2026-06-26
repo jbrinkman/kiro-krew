@@ -25,12 +25,13 @@ var rootCmd = &cobra.Command{
 		about, _ := cmd.Flags().GetBool("about")
 		if about {
 			info := version.Info()
+			out := cmd.OutOrStdout()
 
-			fmt.Printf("  Version:    %s\n", info["version"])
-			fmt.Printf("  Build Date: %s\n", info["build_date"])
-			fmt.Printf("  Commit:     %s\n", version.ShortCommitHash())
-			fmt.Printf("  Go Version: %s\n", info["go_version"])
-			fmt.Printf("  Arch:       %s\n", info["arch"])
+			fmt.Fprintf(out, "  Version:    %s\n", info["version"])
+			fmt.Fprintf(out, "  Build Date: %s\n", info["build_date"])
+			fmt.Fprintf(out, "  Commit:     %s\n", version.ShortCommitHash())
+			fmt.Fprintf(out, "  Go Version: %s\n", info["go_version"])
+			fmt.Fprintf(out, "  Arch:       %s\n", info["arch"])
 			os.Exit(0)
 		}
 		return nil
