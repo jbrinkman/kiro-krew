@@ -14,3 +14,11 @@ session:
   max_history_messages: 100
   max_age: 24h
   sessions_dir: ".kiro-krew/sessions"
+
+# Sandbox configuration (optional, for containerized agent execution)
+# sandbox:
+#   image: "alpine:3.19"           # Docker image for agent containers
+#   workspace_dir: "/workspace"    # Working directory inside container
+#   cpu_cores: 1.0                 # CPU limit in cores
+#   memory_mb: 1024                # Memory limit in megabytes
+#   timeout: "5m"                  # Maximum execution time
