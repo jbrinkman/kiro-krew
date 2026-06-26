@@ -25,11 +25,10 @@ var rootCmd = &cobra.Command{
 		about, _ := cmd.Flags().GetBool("about")
 		if about {
 			info := version.Info()
-			displayHash := formatCommitHash(info["commit_hash"])
 
 			fmt.Printf("  Version:    %s\n", info["version"])
 			fmt.Printf("  Build Date: %s\n", info["build_date"])
-			fmt.Printf("  Commit:     %s\n", displayHash)
+			fmt.Printf("  Commit:     %s\n", version.ShortCommitHash())
 			fmt.Printf("  Go Version: %s\n", info["go_version"])
 			fmt.Printf("  Arch:       %s\n", info["arch"])
 			os.Exit(0)
@@ -59,17 +58,6 @@ func init() {
 
 	// Add --about/-a flag
 	rootCmd.PersistentFlags().BoolP("about", "a", false, "display comprehensive version information")
-}
-
-// formatCommitHash returns a short display hash (7 chars) or "unknown"
-func formatCommitHash(hash string) string {
-	if hash == "unknown" || hash == "" {
-		return "unknown"
-	}
-	if len(hash) >= 7 {
-		return hash[:7]
-	}
-	return hash
 }
 
 func SetTemplates(templates embed.FS) {

@@ -47,3 +47,19 @@ func Info() map[string]string {
 		"arch":        Arch,
 	}
 }
+
+// ShortCommitHash returns a 7-character commit hash or "unknown"
+func ShortCommitHash() string {
+	return FormatCommitHash(CommitHash)
+}
+
+// FormatCommitHash formats any commit hash to 7 characters or "unknown"
+func FormatCommitHash(hash string) string {
+	if hash == "unknown" || hash == "" {
+		return "unknown"
+	}
+	if len(hash) >= 7 {
+		return hash[:7]
+	}
+	return hash
+}
