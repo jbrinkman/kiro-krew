@@ -1,0 +1,22 @@
+name: custom-threshold-test
+description: "Test case with custom 90% success threshold"
+agent: architect
+min_score: 90.0
+input: |
+  Create a specification for GitHub issue #99: "Add high-quality validation feature"
+  
+  This should have a very high quality bar requiring 90% score to pass.
+setup:
+  - type: text
+    label: "Project Context"
+    content: "This is a Go project that requires detailed specifications with comprehensive validation."
+context:
+  - "Architect should create a detailed specification"
+  - "Spec must include comprehensive validation logic"
+  - "Should reference appropriate Go files and patterns"
+expected_output: |
+  A detailed specification that includes:
+  - Comprehensive problem analysis
+  - Detailed implementation tasks
+  - Error handling requirements
+  - Validation test cases

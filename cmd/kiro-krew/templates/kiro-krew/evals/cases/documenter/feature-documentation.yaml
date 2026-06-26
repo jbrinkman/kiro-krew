@@ -1,0 +1,25 @@
+name: feature-documentation
+description: "Test documenter's ability to create comprehensive feature documentation"
+agent: documenter
+input: |
+  Create documentation for the newly implemented status command feature.
+  Include usage examples, behavior details, and integration information.
+setup:
+  - type: text
+    label: "Feature Implementation"
+    content: "Status command added to TUI REPL, shows active agents in table format"
+  - type: text
+    label: "User Audience"
+    content: "End users who need to monitor agent activity and system state"
+context:
+  - "Documentation should be user-focused, not developer-focused"
+  - "Include practical usage examples"
+  - "Explain what the output means and when to use it"
+  - "Should integrate with existing documentation structure"
+expected_output: |
+  Feature documentation including:
+  - Clear description of the status command purpose
+  - Usage examples with sample output
+  - Explanation of table columns and their meaning
+  - When and why users would use this command
+  - Integration with overall workflow documentation

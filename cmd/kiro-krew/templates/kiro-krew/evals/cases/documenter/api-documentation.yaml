@@ -1,0 +1,25 @@
+name: api-documentation
+description: "Test documenter's technical API documentation capabilities"
+agent: documenter
+input: |
+  Document the authentication API endpoints for developer integration.
+  Include request/response formats, error codes, and security considerations.
+setup:
+  - type: text
+    label: "API Endpoints"
+    content: "POST /auth/register, POST /auth/login, POST /auth/refresh, POST /auth/logout with JWT tokens"
+  - type: text
+    label: "Target Audience"
+    content: "Developers integrating with the API, need technical details and examples"
+context:
+  - "Should include complete request/response examples"
+  - "Error codes and handling must be documented"
+  - "Security considerations are critical for auth APIs"
+  - "Should follow standard API documentation patterns"
+expected_output: |
+  API documentation with:
+  - Complete endpoint specifications (method, path, parameters)
+  - Request and response body examples with JSON schemas
+  - Error code documentation with troubleshooting guidance
+  - Security requirements (headers, token handling)
+  - Integration examples and best practices
