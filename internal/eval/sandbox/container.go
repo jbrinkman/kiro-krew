@@ -17,6 +17,8 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
+
+	"github.com/jbrinkman/kiro-krew/internal/eval/debug"
 )
 
 // Container manages Docker container lifecycle
@@ -24,6 +26,9 @@ type Container struct {
 	client      *client.Client
 	containerID string
 	imageName   string
+	debugMode   bool
+	registry    *Registry
+	platform    string
 }
 
 // DetectHostArchitecture returns the Docker platform string for the host architecture
@@ -36,6 +41,19 @@ func DetectHostArchitecture() (string, error) {
 	default:
 		return "", fmt.Errorf("unsupported architecture: %s", runtime.GOARCH)
 	}
+}
+
+// SetDebugMode enables or disables debug mode
+func (c *Container) SetDebugMode(debug bool) error {
+	c.debugMode = debug
+	if debug && c.registry == nil {
+		registry, err := NewRegistry()
+		if err != nil {
+			return fmt.Errorf("creating container registry: %w", err)
+		}
+		c.registry = registry
+	}
+	return nil
 }
 
 // LogStartup displays container creation details with resource limits
@@ -64,6 +82,11 @@ func (c *Container) GetContainerInfo() (string, string) {
 
 // NewContainer creates a new container manager
 func NewContainer(imageName string) (*Container, error) {
+	return NewContainerWithDebug(imageName, false)
+}
+
+// NewContainerWithDebug creates a new container manager with debug options
+func NewContainerWithDebug(imageName string, debugMode bool) (*Container, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return nil, err
@@ -77,9 +100,20 @@ func NewContainer(imageName string) (*Container, error) {
 		return nil, fmt.Errorf("Docker is not running. Start Docker and try again: %w", err)
 	}
 
+	var registry *Registry
+	if debugMode {
+		registry, err = NewRegistry()
+		if err != nil {
+			cli.Close()
+			return nil, fmt.Errorf("creating container registry: %w", err)
+		}
+	}
+
 	return &Container{
 		client:    cli,
 		imageName: imageName,
+		debugMode: debugMode,
+		registry:  registry,
 	}, nil
 }
 
@@ -96,10 +130,19 @@ func (c *Container) Create(ctx context.Context, config *container.Config, hostCo
 
 // CreateWithPlatform creates a Docker container with specified platform
 func (c *Container) CreateWithPlatform(ctx context.Context, config *container.Config, hostConfig *container.HostConfig, platform string) error {
+	c.platform = platform
+
+	if c.debugMode {
+		fmt.Printf("🔧 Debug: Creating container with image %s on platform %s\n", c.imageName, platform)
+	}
 
 	// Pull image if not exists
 	_, _, err := c.client.ImageInspectWithRaw(ctx, c.imageName)
 	if err != nil {
+		if c.debugMode {
+			fmt.Printf("🔧 Debug: Pulling image %s for platform %s\n", c.imageName, platform)
+		}
+
 		pullOptions := image.PullOptions{
 			Platform: platform,
 		}
@@ -127,12 +170,33 @@ func (c *Container) CreateWithPlatform(ctx context.Context, config *container.Co
 	}
 
 	c.containerID = resp.ID
+
+	if c.debugMode {
+		shortID := c.containerID[:12]
+		fmt.Printf("🔧 Debug: Container created with ID %s\n", shortID)
+
+		// Register container
+		if c.registry != nil {
+			if err := c.registry.Add(c.containerID, "kiro-eval", "debug", platform, c.imageName); err != nil {
+				fmt.Printf("⚠️ Warning: Failed to register container in debug registry: %v\n", err)
+			}
+		}
+	}
+
 	return nil
 }
 
 // Start starts the container
 func (c *Container) Start(ctx context.Context) error {
-	return c.client.ContainerStart(ctx, c.containerID, container.StartOptions{})
+	if c.debugMode {
+		fmt.Printf("🔧 Debug: Starting container %s\n", c.containerID[:12])
+	}
+
+	err := c.client.ContainerStart(ctx, c.containerID, container.StartOptions{})
+	if err == nil && c.debugMode && c.registry != nil {
+		c.registry.UpdateStatus(c.containerID, "running")
+	}
+	return err
 }
 
 // CopyTo copies a file to the container
@@ -224,8 +288,34 @@ func (c *Container) ExecWithOutput(ctx context.Context, cmd []string) (string, e
 
 // Cleanup stops and removes the container
 func (c *Container) Cleanup(ctx context.Context) error {
+	return c.CleanupWithDebugInfo(ctx, false)
+}
+
+// CleanupWithDebugInfo stops and removes the container with debug awareness
+func (c *Container) CleanupWithDebugInfo(ctx context.Context, failed bool) error {
 	if c.containerID == "" {
 		return nil
+	}
+
+	// In debug mode, preserve failed containers
+	if c.debugMode && failed {
+		if c.debugMode {
+			shortID := c.containerID[:12]
+			fmt.Printf("🔧 Debug: Preserving failed container %s for inspection\n", shortID)
+			fmt.Printf("🔧 Debug commands:\n")
+			fmt.Printf("  docker exec -it %s /bin/bash\n", shortID)
+			fmt.Printf("  docker logs %s\n", shortID)
+			fmt.Printf("  docker inspect %s\n", shortID)
+		}
+
+		if c.registry != nil {
+			c.registry.UpdateStatus(c.containerID, "failed-preserved")
+		}
+		return nil
+	}
+
+	if c.debugMode {
+		fmt.Printf("🔧 Debug: Stopping and removing container %s\n", c.containerID[:12])
 	}
 
 	timeout := 10 * time.Second
@@ -235,7 +325,14 @@ func (c *Container) Cleanup(ctx context.Context) error {
 		return err
 	}
 
-	return c.client.ContainerRemove(ctx, c.containerID, container.RemoveOptions{Force: true})
+	err = c.client.ContainerRemove(ctx, c.containerID, container.RemoveOptions{Force: true})
+
+	// Remove from registry after successful cleanup
+	if err == nil && c.registry != nil {
+		c.registry.Remove(c.containerID)
+	}
+
+	return err
 }
 
 // GenerateDockerfileWithPlatform creates a custom Dockerfile with platform-specific kiro-cli installation
@@ -278,7 +375,20 @@ func (c *Container) GenerateDockerfileWithPlatform(projectPath, platform string)
 	dockerfile.WriteString("USER sandbox\n")
 	dockerfile.WriteString("CMD [\"/bin/bash\"]\n")
 
-	return dockerfile.String(), nil
+	dockerfileContent := dockerfile.String()
+
+	// Save dockerfile in debug mode
+	if c.debugMode {
+		id := c.containerID
+		if id == "" {
+			id = c.imageName
+		}
+		if err := debug.SaveDockerfile(dockerfileContent, id); err != nil {
+			fmt.Printf("⚠️ Warning: Failed to save dockerfile: %v\n", err)
+		}
+	}
+
+	return dockerfileContent, nil
 }
 
 func (c *Container) loadTemplate(projectType ProjectType) (string, error) {
@@ -336,24 +446,43 @@ func (c *Container) verifyKiroCLIInstallation(ctx context.Context) error {
 	// Check if binary exists and is executable
 	_, err := c.ExecWithOutput(ctx, []string{"test", "-x", "/usr/local/bin/kiro-cli"})
 	if err != nil {
-		// Check if file exists but isn't executable
+		// Enhanced error reporting with file details
 		if _, statErr := c.ExecWithOutput(ctx, []string{"test", "-f", "/usr/local/bin/kiro-cli"}); statErr == nil {
+			// File exists but not executable - check permissions
+			if perms, permErr := c.ExecWithOutput(ctx, []string{"ls", "-la", "/usr/local/bin/kiro-cli"}); permErr == nil {
+				return fmt.Errorf("kiro-cli binary exists but is not executable: %s", perms)
+			}
 			return fmt.Errorf("kiro-cli binary exists but is not executable at /usr/local/bin/kiro-cli")
 		}
-		return fmt.Errorf("kiro-cli binary not found at /usr/local/bin/kiro-cli")
+
+		// Check if file exists in different location or if download failed
+		if locations, locErr := c.ExecWithOutput(ctx, []string{"sh", "-c", "find / -name kiro-cli 2>/dev/null"}); locErr == nil && locations != "" {
+			return fmt.Errorf("kiro-cli binary found in unexpected location: %s (expected /usr/local/bin/kiro-cli)", locations)
+		}
+
+		return fmt.Errorf("kiro-cli binary not found at /usr/local/bin/kiro-cli - installation may have failed during container build")
 	}
 
 	// Test version command with timeout and detailed errors
 	version, err := c.ExecWithOutput(ctx, []string{"kiro-cli", "--version"})
 	if err != nil {
+		// Check file size to detect corruption
+		if size, sizeErr := c.ExecWithOutput(ctx, []string{"stat", "-c", "%s", "/usr/local/bin/kiro-cli"}); sizeErr == nil {
+			return fmt.Errorf("kiro-cli --version command failed (binary size: %s bytes, may be corrupted): %w", size, err)
+		}
 		return fmt.Errorf("kiro-cli --version command failed (binary may be corrupted): %w", err)
 	}
 
 	if version == "" {
-		return fmt.Errorf("kiro-cli --version returned empty output")
+		return fmt.Errorf("kiro-cli --version returned empty output - binary may be corrupted or incompatible")
 	}
 
-	fmt.Printf("✅ kiro-cli installation verified: %s\n", version)
+	if c.debugMode {
+		size, _ := c.ExecWithOutput(ctx, []string{"stat", "-c", "%s", "/usr/local/bin/kiro-cli"})
+		fmt.Printf("✅ kiro-cli installation verified: %s (binary size: %s bytes, platform: %s)\n", version, size, c.platform)
+	} else {
+		fmt.Printf("✅ kiro-cli installation verified: %s\n", version)
+	}
 	return nil
 }
 

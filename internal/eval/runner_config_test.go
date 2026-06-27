@@ -87,7 +87,7 @@ func TestCreateContainerConfig_WithSandboxConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := createContainerConfig(tt.sandboxCfg, tt.resourceLimits)
+			result := createContainerConfig(tt.sandboxCfg, tt.resourceLimits, false)
 
 			// Compare all fields except Platform (which is dynamically detected)
 			if result.Image != tt.expectConfig.Image {
@@ -126,7 +126,7 @@ func TestCreateContainerConfig_WithSandboxConfig(t *testing.T) {
 }
 
 func TestCreateContainerConfig_NilSandboxConfig(t *testing.T) {
-	result := createContainerConfig(nil, nil)
+	result := createContainerConfig(nil, nil, false)
 
 	expectedDefaults := ContainerConfig{
 		Image:        "alpine:3.19",
@@ -234,7 +234,7 @@ func TestCreateContainerConfig_ResourceLimitOverrides(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := createContainerConfig(sandboxCfg, tt.resourceLimits)
+			result := createContainerConfig(sandboxCfg, tt.resourceLimits, false)
 
 			if result.ResourceLimits.CPUQuota != tt.expectCPU {
 				t.Errorf("CPUQuota = %d, expected %d", result.ResourceLimits.CPUQuota, tt.expectCPU)
@@ -259,7 +259,7 @@ func TestCreateContainerConfig_EmptyStringValues(t *testing.T) {
 		Timeout:      5 * time.Minute,
 	}
 
-	result := createContainerConfig(sandboxCfg, nil)
+	result := createContainerConfig(sandboxCfg, nil, false)
 
 	if result.Image != "alpine:3.19" {
 		t.Errorf("Image = %s, expected alpine:3.19 (default)", result.Image)
@@ -279,7 +279,7 @@ func TestCreateContainerConfig_ZeroValues(t *testing.T) {
 		Timeout:      0, // Zero - should use default
 	}
 
-	result := createContainerConfig(sandboxCfg, nil)
+	result := createContainerConfig(sandboxCfg, nil, false)
 
 	if result.ResourceLimits.CPUQuota != 1000000 {
 		t.Errorf("CPUQuota = %d, expected 1000000 (default)", result.ResourceLimits.CPUQuota)
@@ -289,5 +289,17 @@ func TestCreateContainerConfig_ZeroValues(t *testing.T) {
 	}
 	if result.ResourceLimits.Timeout != 5*time.Minute {
 		t.Errorf("Timeout = %v, expected 5m0s (default)", result.ResourceLimits.Timeout)
+	}
+}
+
+func TestCreateContainerConfig_DebugFlag(t *testing.T) {
+	result := createContainerConfig(nil, nil, true)
+	if !result.Debug {
+		t.Error("Debug should be propagated to container config")
+	}
+
+	result = createContainerConfig(nil, nil, false)
+	if result.Debug {
+		t.Error("Debug should be false when not enabled")
 	}
 }

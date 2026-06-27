@@ -15,6 +15,8 @@ var (
 	evalSandbox       bool
 	evalNoSandbox     bool
 	evalResourceLimit []string
+	evalDebug         bool
+	evalCleanup       bool
 )
 
 var evalCmd = &cobra.Command{
@@ -32,6 +34,11 @@ var evalCmd = &cobra.Command{
 		// Use --case flag if provided
 		if evalCase != "" {
 			testcase = evalCase
+		}
+
+		// Handle cleanup operation
+		if evalCleanup {
+			return eval.RunCleanup()
 		}
 
 		// Handle performance investigation
@@ -54,6 +61,8 @@ var evalCmd = &cobra.Command{
 			Sandbox:       evalSandbox,
 			NoSandbox:     evalNoSandbox,
 			ResourceLimit: resourceLimits,
+			Debug:         evalDebug,
+			Cleanup:       evalCleanup,
 		})
 	},
 }
@@ -75,6 +84,8 @@ func init() {
 	evalCmd.Flags().BoolVar(&evalSandbox, "sandbox", false, "Enable container sandboxing for agent execution")
 	evalCmd.Flags().BoolVar(&evalNoSandbox, "no-sandbox", false, "Explicitly disable container sandboxing")
 	evalCmd.Flags().StringSliceVar(&evalResourceLimit, "resource-limit", nil, "Override resource limits (cpu=1.0, memory=1073741824, timeout=5m)")
+	evalCmd.Flags().BoolVarP(&evalDebug, "debug", "d", false, "Enable debug mode with verbose logging and container persistence")
+	evalCmd.Flags().BoolVar(&evalCleanup, "cleanup", false, "Stop and remove all tracked debug containers and clean artifacts")
 
 	evalCmd.AddCommand(diffCmd)
 	rootCmd.AddCommand(evalCmd)

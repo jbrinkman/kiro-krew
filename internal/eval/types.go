@@ -75,6 +75,7 @@ type ErrorContext struct {
 	ExitCode       int               `json:"exit_code,omitempty"`
 	ContainerID    string            `json:"container_id,omitempty"`    // Container short ID for sandbox mode
 	ContainerImage string            `json:"container_image,omitempty"` // Container image name
+	Platform       string            `json:"platform,omitempty"`        // Container platform
 	DockerError    string            `json:"docker_error,omitempty"`    // Docker-specific error details
 }
 
@@ -92,6 +93,8 @@ type RunOptions struct {
 	Sandbox       bool              // Enable container sandboxing
 	NoSandbox     bool              // Explicitly disable sandboxing
 	ResourceLimit map[string]string // Resource limit overrides (cpu, memory, timeout)
+	Debug         bool              // Enable debug mode with verbose logging
+	Cleanup       bool              // Stop and remove tracked containers
 }
 
 // Summary holds aggregate results for an eval run.
@@ -109,6 +112,7 @@ type ContainerConfig struct {
 	Environment    map[string]string      `json:"environment"`
 	WorkspaceDir   string                 `json:"workspace_dir"`
 	MockGitHub     bool                   `json:"mock_github"`
+	Debug          bool                   `json:"debug"`
 }
 
 // ProjectDetection holds results from project type detection
