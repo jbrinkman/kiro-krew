@@ -474,7 +474,8 @@ func (c *Container) verifyKiroCLIInstallation(ctx context.Context) error {
 	}
 
 	if c.debugMode {
-		fmt.Printf("✅ kiro-cli installation verified: %s\n", version)
+		size, _ := c.ExecWithOutput(ctx, []string{"stat", "-c", "%s", "/usr/local/bin/kiro-cli"})
+		fmt.Printf("✅ kiro-cli installation verified: %s (binary size: %s bytes, platform: %s)\n", version, size, c.platform)
 	} else {
 		fmt.Printf("✅ kiro-cli installation verified: %s\n", version)
 	}

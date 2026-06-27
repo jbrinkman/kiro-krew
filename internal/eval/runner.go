@@ -593,10 +593,9 @@ func invokeAgentInContainer(agent, prompt string, cConfig *ContainerConfig) (str
 	if err := c.CreateWithPlatform(ctx, containerCfg, hostConfig, cConfig.Platform); err != nil {
 		return "", CostInfo{}, nil, fmt.Errorf("creating container: %w", err)
 	}
+	containerFailed := false
 	defer func() {
-		// Use debug-aware cleanup that preserves failed containers in debug mode
-		// Check if there was an execution error by examining return parameters
-		c.CleanupWithDebugInfo(ctx, false) // Will be updated when we return with error
+		c.CleanupWithDebugInfo(ctx, containerFailed)
 	}()
 
 	if err := c.Start(ctx); err != nil {
@@ -654,9 +653,7 @@ func invokeAgentInContainer(agent, prompt string, cConfig *ContainerConfig) (str
 
 		// In debug mode, preserve the failed container
 		if cConfig.Debug {
-			defer func() {
-				c.CleanupWithDebugInfo(timeoutCtx, true) // Mark as failed to preserve
-			}()
+			containerFailed = true
 		}
 
 		// Provide actionable error messages for common container issues
