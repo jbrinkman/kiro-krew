@@ -31,6 +31,9 @@ func SaveDockerfile(dockerfileContent, containerID string) error {
 		return fmt.Errorf("writing dockerfile to %s: %w", filePath, err)
 	}
 
+	// Prune old artifacts
+	_ = CleanOldDockerfiles()
+
 	fmt.Printf("🔧 Debug: Dockerfile saved to %s\n", filePath)
 	return nil
 }

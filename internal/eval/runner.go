@@ -43,6 +43,11 @@ func checkDockerAvailability() error {
 
 // RunWithOptions executes evaluation with extended CLI options.
 func RunWithOptions(agent string, testcase string, options RunOptions) error {
+	// Handle cleanup operation early
+	if options.Cleanup {
+		return RunCleanup()
+	}
+
 	// Configure container sandboxing
 	var cConfig *ContainerConfig
 	if options.Sandbox && !options.NoSandbox {

@@ -378,8 +378,12 @@ func (c *Container) GenerateDockerfileWithPlatform(projectPath, platform string)
 	dockerfileContent := dockerfile.String()
 
 	// Save dockerfile in debug mode
-	if c.debugMode && c.containerID != "" {
-		if err := debug.SaveDockerfile(dockerfileContent, c.containerID); err != nil {
+	if c.debugMode {
+		id := c.containerID
+		if id == "" {
+			id = c.imageName
+		}
+		if err := debug.SaveDockerfile(dockerfileContent, id); err != nil {
 			fmt.Printf("⚠️ Warning: Failed to save dockerfile: %v\n", err)
 		}
 	}
@@ -452,7 +456,7 @@ func (c *Container) verifyKiroCLIInstallation(ctx context.Context) error {
 		}
 
 		// Check if file exists in different location or if download failed
-		if locations, locErr := c.ExecWithOutput(ctx, []string{"find", "/", "-name", "kiro-cli", "2>/dev/null"}); locErr == nil && locations != "" {
+		if locations, locErr := c.ExecWithOutput(ctx, []string{"sh", "-c", "find / -name kiro-cli 2>/dev/null"}); locErr == nil && locations != "" {
 			return fmt.Errorf("kiro-cli binary found in unexpected location: %s (expected /usr/local/bin/kiro-cli)", locations)
 		}
 

@@ -291,3 +291,15 @@ func TestCreateContainerConfig_ZeroValues(t *testing.T) {
 		t.Errorf("Timeout = %v, expected 5m0s (default)", result.ResourceLimits.Timeout)
 	}
 }
+
+func TestCreateContainerConfig_DebugFlag(t *testing.T) {
+	result := createContainerConfig(nil, nil, true)
+	if !result.Debug {
+		t.Error("Debug should be propagated to container config")
+	}
+
+	result = createContainerConfig(nil, nil, false)
+	if result.Debug {
+		t.Error("Debug should be false when not enabled")
+	}
+}
