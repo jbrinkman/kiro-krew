@@ -613,6 +613,13 @@ func invokeAgentInContainer(agent, prompt string, cConfig *ContainerConfig) (str
 	// Phase 2: Container setup - Install kiro-cli and configure mocking
 	setupStart := time.Now()
 
+	// In debug mode, generate and save the Dockerfile for inspection
+	if cConfig.Debug {
+		if df, err := c.GenerateDockerfileWithPlatform(".", cConfig.Platform); err == nil {
+			_ = df // Dockerfile is saved internally by GenerateDockerfileWithPlatform in debug mode
+		}
+	}
+
 	// Install kiro-cli binary
 	if err := c.InstallKiroCLI(ctx, cConfig.Platform); err != nil {
 		return "", CostInfo{}, nil, fmt.Errorf("installing kiro-cli: %w", err)
