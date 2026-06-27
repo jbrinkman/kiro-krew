@@ -54,7 +54,7 @@ func RunWithOptions(agent string, testcase string, options RunOptions) error {
 		if cfg, err := config.Load(); err == nil {
 			sandboxCfg = &cfg.Sandbox
 		}
-		cConfig = createContainerConfig(sandboxCfg, options.ResourceLimit)
+		cConfig = createContainerConfig(sandboxCfg, options.ResourceLimit, options.Debug)
 	}
 
 	// Start performance profiling
@@ -82,6 +82,80 @@ func RunWithOptions(agent string, testcase string, options RunOptions) error {
 
 	// Default to original behavior for backward compatibility
 	return Run(agent, cConfig)
+}
+
+// RunCleanup stops and removes all tracked debug containers and cleans artifacts
+func RunCleanup() error {
+	fmt.Println("🧹 Starting cleanup of debug containers and artifacts...")
+
+	// Initialize registry to get tracked containers
+	registry, err := sandbox.NewRegistry()
+	if err != nil {
+		return fmt.Errorf("failed to access container registry: %w", err)
+	}
+
+	containers := registry.List()
+	if len(containers) == 0 {
+		fmt.Println("✅ No debug containers found to cleanup")
+		return nil
+	}
+
+	fmt.Printf("📋 Found %d tracked containers to cleanup\n", len(containers))
+
+	// Connect to Docker
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		return fmt.Errorf("failed to connect to Docker: %w", err)
+	}
+	defer cli.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	// Cleanup containers
+	cleaned := 0
+	for _, entry := range containers {
+		shortID := entry.ContainerID
+		if len(shortID) > 7 {
+			shortID = shortID[:7]
+		}
+
+		fmt.Printf("🐳 Stopping container %s (%s)... ", shortID, entry.Name)
+
+		// Stop container
+		timeout := 10 * time.Second
+		timeoutSec := int(timeout.Seconds())
+		if err := cli.ContainerStop(ctx, entry.ContainerID, container.StopOptions{Timeout: &timeoutSec}); err != nil {
+			fmt.Printf("⚠️ Stop failed: %v\n", err)
+		}
+
+		// Remove container
+		if err := cli.ContainerRemove(ctx, entry.ContainerID, container.RemoveOptions{Force: true}); err != nil {
+			fmt.Printf("⚠️ Remove failed: %v\n", err)
+		} else {
+			fmt.Println("✅ Removed")
+			cleaned++
+		}
+
+		// Remove from registry
+		registry.Remove(entry.ContainerID)
+	}
+
+	// Clear the registry
+	if err := registry.Clear(); err != nil {
+		fmt.Printf("⚠️ Warning: Failed to clear registry: %v\n", err)
+	}
+
+	fmt.Printf("✅ Cleanup complete: %d/%d containers removed\n", cleaned, len(containers))
+
+	// Prompt about Dockerfile preservation
+	dockerfileDir := filepath.Join(".kiro-krew", "evals", "tmp", "dockerfiles")
+	if entries, err := os.ReadDir(dockerfileDir); err == nil && len(entries) > 0 {
+		fmt.Printf("📁 Found %d preserved Dockerfiles in %s\n", len(entries), dockerfileDir)
+		fmt.Println("💡 These are preserved for debugging. Remove manually if no longer needed.")
+	}
+
+	return nil
 }
 
 // listTestCases displays available test cases for an agent.
@@ -414,7 +488,7 @@ func invokeAgent(agent, prompt string, cConfig *ContainerConfig) (string, CostIn
 }
 
 // createContainerConfig builds container configuration from CLI options
-func createContainerConfig(sandboxCfg *config.SandboxConfig, resourceLimits map[string]string) *ContainerConfig {
+func createContainerConfig(sandboxCfg *config.SandboxConfig, resourceLimits map[string]string, debug bool) *ContainerConfig {
 	// Detect host architecture for platform-aware container creation
 	platform, err := sandbox.DetectHostArchitecture()
 	if err != nil {
@@ -452,6 +526,7 @@ func createContainerConfig(sandboxCfg *config.SandboxConfig, resourceLimits map[
 		WorkspaceDir: workspaceDir,
 		MockGitHub:   true,
 		Platform:     platform,
+		Debug:        debug,
 		Environment: map[string]string{
 			"KIRO_CLI_DISABLE_TELEMETRY": "1",
 		},
@@ -491,7 +566,7 @@ func invokeAgentInContainer(agent, prompt string, cConfig *ContainerConfig) (str
 	// Phase 1: Container startup
 	createStart := time.Now()
 
-	c, err := sandbox.NewContainer(cConfig.Image)
+	c, err := sandbox.NewContainerWithDebug(cConfig.Image, cConfig.Debug)
 	if err != nil {
 		return "", CostInfo{}, nil, fmt.Errorf("creating container: %w", err)
 	}
@@ -518,7 +593,11 @@ func invokeAgentInContainer(agent, prompt string, cConfig *ContainerConfig) (str
 	if err := c.CreateWithPlatform(ctx, containerCfg, hostConfig, cConfig.Platform); err != nil {
 		return "", CostInfo{}, nil, fmt.Errorf("creating container: %w", err)
 	}
-	defer c.Cleanup(ctx)
+	defer func() {
+		// Use debug-aware cleanup that preserves failed containers in debug mode
+		// Check if there was an execution error by examining return parameters
+		c.CleanupWithDebugInfo(ctx, false) // Will be updated when we return with error
+	}()
 
 	if err := c.Start(ctx); err != nil {
 		return "", CostInfo{}, nil, fmt.Errorf("starting container: %w", err)
@@ -561,6 +640,7 @@ func invokeAgentInContainer(agent, prompt string, cConfig *ContainerConfig) (str
 	if err != nil {
 		// Enhanced error context with container information
 		shortID, imageName := c.GetContainerInfo()
+
 		errorContext := &ErrorContext{
 			Command:        strings.Join(cmd, " "),
 			WorkingDir:     cConfig.WorkspaceDir,
@@ -568,7 +648,15 @@ func invokeAgentInContainer(agent, prompt string, cConfig *ContainerConfig) (str
 			Stderr:         err.Error(),
 			ContainerID:    shortID,
 			ContainerImage: imageName,
+			Platform:       cConfig.Platform,
 			DockerError:    err.Error(),
+		}
+
+		// In debug mode, preserve the failed container
+		if cConfig.Debug {
+			defer func() {
+				c.CleanupWithDebugInfo(timeoutCtx, true) // Mark as failed to preserve
+			}()
 		}
 
 		// Provide actionable error messages for common container issues
