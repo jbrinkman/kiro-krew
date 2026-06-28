@@ -2,6 +2,7 @@ package sandbox
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"strings"
 	"sync"
@@ -15,7 +16,7 @@ import (
 type ImageManager struct {
 	mu           sync.Mutex
 	client       *client.Client
-	builtImages  map[string]string // dockerfilePath+platform -> imageName
+	builtImages  map[string]string // sha256(dockerfile+platform) -> imageName
 	evaluationID string
 	debugMode    bool
 }
@@ -44,12 +45,13 @@ func NewImageManager(evaluationID string, debugMode bool) (*ImageManager, error)
 }
 
 // BuildForEvaluation builds an image once per evaluation run and returns the cached name
-func (im *ImageManager) BuildForEvaluation(dockerfile, platform string) (string, error) {
+func (im *ImageManager) BuildForEvaluation(ctx context.Context, dockerfile, platform string) (string, error) {
 	im.mu.Lock()
 	defer im.mu.Unlock()
 
-	// Create cache key from dockerfile content and platform
-	cacheKey := fmt.Sprintf("%s:%s", platform, dockerfile[:min(50, len(dockerfile))])
+	// Create cache key from full dockerfile content hash and platform
+	hash := sha256.Sum256([]byte(platform + ":" + dockerfile))
+	cacheKey := fmt.Sprintf("%x", hash[:8])
 
 	// Check if already built
 	if imageName, exists := im.builtImages[cacheKey]; exists {
@@ -67,15 +69,14 @@ func (im *ImageManager) BuildForEvaluation(dockerfile, platform string) (string,
 			imageName, im.evaluationID, platform)
 	}
 
-	// Build the image using existing container functionality
+	// Build the image directly (bypasses imageManager check to prevent recursion)
 	container, err := NewContainerWithDebug("", im.debugMode)
 	if err != nil {
 		return "", fmt.Errorf("creating container for image build: %w", err)
 	}
 	defer container.Close()
 
-	ctx := context.Background()
-	if err := container.BuildImageFromDockerfile(ctx, dockerfile, imageName, platform); err != nil {
+	if err := container.buildImageDirect(ctx, dockerfile, imageName, platform); err != nil {
 		return "", fmt.Errorf("building image %s: %w", imageName, err)
 	}
 
@@ -91,10 +92,8 @@ func (im *ImageManager) BuildForEvaluation(dockerfile, platform string) (string,
 
 // generateImageName creates evaluation-scoped image name with platform support
 func (im *ImageManager) generateImageName(platform string) string {
-	// Replace slashes in platform for image name compatibility
 	safePlatform := strings.ReplaceAll(platform, "/", "-")
 
-	// Use evaluation ID for scoping
 	if im.debugMode {
 		return fmt.Sprintf("kiro-eval-debug:%s-%s", im.evaluationID, safePlatform)
 	}
@@ -131,12 +130,4 @@ func (im *ImageManager) Cleanup(ctx context.Context) error {
 // Close closes the Docker client connection
 func (im *ImageManager) Close() error {
 	return im.client.Close()
-}
-
-// min returns the minimum of two integers
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

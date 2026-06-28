@@ -244,3 +244,4 @@ time ./kiro-krew eval architect --sandbox
 - Preserve failed containers for inspection
 - Maintain image preservation for debugging
 - Keep all existing debug logging
+

@@ -362,7 +362,9 @@ func TestContainer_WorkspacePermissions(t *testing.T) {
 func TestWorkspaceValidation(t *testing.T) {
 	skipIfNoDocker(t)
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
 	c, err := NewContainer("alpine:3.19")
 	require.NoError(t, err)
 	defer c.Close()
@@ -461,22 +463,20 @@ func TestWorkspaceValidation(t *testing.T) {
 		assert.Error(t, err, "writing to read-only proc filesystem should fail")
 
 		// Test accessing non-existent command - check stderr capture
-		_, err = c.ExecWithOutput(ctx, []string{"sh", "-c", "nonexistent-command 2>&1"})
-		if err != nil {
-			// Error occurred as expected - this tests that error messages are captured
-			assert.Contains(t, err.Error(), "command failed", "error should contain command failure information")
-		}
+		_, err = c.ExecWithOutput(ctx, []string{"sh", "-c", "nonexistent-command"})
+		assert.Error(t, err, "running nonexistent command should fail")
+		assert.Contains(t, err.Error(), "not found", "error should contain 'not found' from shell stderr")
 	})
 
-	// 5. Debug mode preserves failed containers (tested by enabling debug mode above)
+	// 5. Debug mode preserves failed containers
 	t.Run("debug_preservation", func(t *testing.T) {
-		// Verify container is still running (not cleaned up due to debug mode)
-		shortID, _ := c.GetContainerInfo()
-		assert.NotEmpty(t, shortID, "container ID should be available in debug mode")
+		// Call cleanup with failed=true — in debug mode the container should be preserved
+		err := c.CleanupWithDebugInfo(ctx, true)
+		assert.NoError(t, err, "cleanup should succeed in debug mode with failed container")
 
-		// Container should still be accessible
-		_, err := c.ExecWithOutput(ctx, []string{"echo", "debug-test"})
-		assert.NoError(t, err, "container should remain accessible in debug mode")
+		// Container should still be accessible after debug cleanup preserves it
+		_, err = c.ExecWithOutput(ctx, []string{"echo", "debug-test"})
+		assert.NoError(t, err, "container should remain accessible after debug-mode preservation")
 	})
 }
 

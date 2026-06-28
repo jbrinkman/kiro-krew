@@ -303,14 +303,15 @@ func Run(agent string, cConfig *ContainerConfig) error {
 			return fmt.Errorf("generating dockerfile: %w", err)
 		}
 
-		_, err = imageManager.BuildForEvaluation(dockerfile, cConfig.Platform)
+		imageName, err := imageManager.BuildForEvaluation(context.Background(), dockerfile, cConfig.Platform)
 		if err != nil {
 			return fmt.Errorf("building evaluation image: %w", err)
 		}
 		fmt.Printf("✅ Images built: %v\n", time.Since(buildStart))
 
-		// Add image manager to config for test cases
+		// Add image manager and cached image name to config for test cases
 		cConfig.ImageManager = imageManager
+		cConfig.CachedImageName = imageName
 	}
 
 	// Measure startup overhead
@@ -572,7 +573,7 @@ func createContainerConfig(sandboxCfg *config.SandboxConfig, resourceLimits map[
 		MockGitHub:   true,
 		Platform:     platform,
 		Debug:        debug,
-		ImageManager: nil, // Will be set during evaluation Run
+		ImageManager: nil,
 		Environment: map[string]string{
 			"KIRO_CLI_DISABLE_TELEMETRY": "1",
 		},
@@ -615,19 +616,10 @@ func invokeAgentInContainer(agent, prompt string, cConfig *ContainerConfig) (str
 	}
 	defer c.Close()
 
-	// Task 4: Use pre-built image from ImageManager instead of building each time
+	// Use pre-built image or build one individually
 	var customImageName string
-	if cConfig.ImageManager != nil {
-		// Reuse cached image
-		dockerfile, err := c.GenerateDockerfileWithPlatform(cConfig.WorkspaceDir, cConfig.Platform)
-		if err != nil {
-			return "", CostInfo{}, nil, fmt.Errorf("generating dockerfile: %w", err)
-		}
-
-		customImageName, err = cConfig.ImageManager.BuildForEvaluation(dockerfile, cConfig.Platform)
-		if err != nil {
-			return "", CostInfo{}, nil, fmt.Errorf("getting cached image: %w", err)
-		}
+	if cConfig.CachedImageName != "" {
+		customImageName = cConfig.CachedImageName
 	} else {
 		// Fallback to individual build for compatibility
 		buildCtx, buildCancel := context.WithTimeout(ctx, 5*time.Minute)

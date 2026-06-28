@@ -53,16 +53,6 @@ func (c *Container) SetImageManager(imageManager *ImageManager) {
 	c.imageManager = imageManager
 }
 
-// UseImageReuse enables image reuse for this container by creating an image manager
-func (c *Container) UseImageReuse(evaluationID string) error {
-	imageManager, err := NewImageManager(evaluationID, c.debugMode)
-	if err != nil {
-		return fmt.Errorf("creating image manager: %w", err)
-	}
-	c.imageManager = imageManager
-	return nil
-}
-
 // SetDebugMode enables or disables debug mode
 func (c *Container) SetDebugMode(debug bool) error {
 	c.debugMode = debug
@@ -403,6 +393,7 @@ func (c *Container) GenerateDockerfileWithPlatform(projectPath, platform string)
 
 	// Add user and workspace setup
 	dockerfile.WriteString("RUN adduser -D -s /bin/bash sandbox\n")
+	dockerfile.WriteString("RUN mkdir -p /workspace && chown sandbox:sandbox /workspace\n")
 	dockerfile.WriteString("WORKDIR /workspace\n")
 	dockerfile.WriteString("USER sandbox\n")
 	dockerfile.WriteString("CMD [\"/bin/bash\"]\n")
@@ -427,15 +418,20 @@ func (c *Container) GenerateDockerfileWithPlatform(projectPath, platform string)
 func (c *Container) BuildImageFromDockerfile(ctx context.Context, dockerfile string, imageName string, platform string) error {
 	// Use image manager for reuse if available
 	if c.imageManager != nil {
-		reusedImage, err := c.imageManager.BuildForEvaluation(dockerfile, platform)
+		reusedImage, err := c.imageManager.BuildForEvaluation(ctx, dockerfile, platform)
 		if err != nil {
 			return fmt.Errorf("image manager build failed: %w", err)
 		}
-		// Update imageName to the reused/cached image
 		imageName = reusedImage
 		c.imageName = imageName
 		return nil
 	}
+
+	return c.buildImageDirect(ctx, dockerfile, imageName, platform)
+}
+
+// buildImageDirect performs the actual Docker image build without imageManager delegation.
+func (c *Container) buildImageDirect(ctx context.Context, dockerfile string, imageName string, platform string) error {
 
 	// Create tar archive with Dockerfile
 	var buf bytes.Buffer
@@ -484,11 +480,6 @@ func (c *Container) BuildImageFromDockerfile(ctx context.Context, dockerfile str
 
 	if c.debugMode {
 		fmt.Printf("🔧 Debug: Build output:\n%s\n", buildOutput)
-	}
-
-	// Check for error messages in the parsed output
-	if strings.Contains(buildOutput, "ERROR") || strings.Contains(buildOutput, "Error") {
-		return fmt.Errorf("image build failed: %s", strings.TrimSpace(buildOutput))
 	}
 
 	// Verify the image exists
@@ -615,14 +606,5 @@ func (c *Container) verifyKiroCLIInstallation(ctx context.Context) error {
 
 // Close closes the Docker client
 func (c *Container) Close() error {
-	// Close image manager if present
-	if c.imageManager != nil {
-		if err := c.imageManager.Close(); err != nil {
-			// Log but don't fail - continue with client close
-			if c.debugMode {
-				fmt.Printf("⚠️ Warning: Failed to close image manager: %v\n", err)
-			}
-		}
-	}
 	return c.client.Close()
 }
