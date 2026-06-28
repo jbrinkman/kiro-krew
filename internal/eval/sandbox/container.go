@@ -27,12 +27,13 @@ const ImageNamePrefix = "kiro-eval"
 
 // Container manages Docker container lifecycle
 type Container struct {
-	client      *client.Client
-	containerID string
-	imageName   string
-	debugMode   bool
-	registry    *Registry
-	platform    string
+	client       *client.Client
+	containerID  string
+	imageName    string
+	debugMode    bool
+	registry     *Registry
+	platform     string
+	imageManager *ImageManager
 }
 
 // DetectHostArchitecture returns the Docker platform string for the host architecture
@@ -45,6 +46,11 @@ func DetectHostArchitecture() (string, error) {
 	default:
 		return "", fmt.Errorf("unsupported architecture: %s", runtime.GOARCH)
 	}
+}
+
+// SetImageManager enables image reuse workflow for evaluation runs
+func (c *Container) SetImageManager(imageManager *ImageManager) {
+	c.imageManager = imageManager
 }
 
 // SetDebugMode enables or disables debug mode
@@ -387,6 +393,7 @@ func (c *Container) GenerateDockerfileWithPlatform(projectPath, platform string)
 
 	// Add user and workspace setup
 	dockerfile.WriteString("RUN adduser -D -s /bin/bash sandbox\n")
+	dockerfile.WriteString("RUN mkdir -p /workspace && chown sandbox:sandbox /workspace\n")
 	dockerfile.WriteString("WORKDIR /workspace\n")
 	dockerfile.WriteString("USER sandbox\n")
 	dockerfile.WriteString("CMD [\"/bin/bash\"]\n")
@@ -409,6 +416,23 @@ func (c *Container) GenerateDockerfileWithPlatform(projectPath, platform string)
 
 // BuildImageFromDockerfile builds a Docker image from generated Dockerfile content
 func (c *Container) BuildImageFromDockerfile(ctx context.Context, dockerfile string, imageName string, platform string) error {
+	// Use image manager for reuse if available
+	if c.imageManager != nil {
+		reusedImage, err := c.imageManager.BuildForEvaluation(ctx, dockerfile, platform)
+		if err != nil {
+			return fmt.Errorf("image manager build failed: %w", err)
+		}
+		imageName = reusedImage
+		c.imageName = imageName
+		return nil
+	}
+
+	return c.buildImageDirect(ctx, dockerfile, imageName, platform)
+}
+
+// buildImageDirect performs the actual Docker image build without imageManager delegation.
+func (c *Container) buildImageDirect(ctx context.Context, dockerfile string, imageName string, platform string) error {
+
 	// Create tar archive with Dockerfile
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
@@ -447,24 +471,15 @@ func (c *Container) BuildImageFromDockerfile(ctx context.Context, dockerfile str
 	}
 	defer resp.Body.Close()
 
-	// Parse build output stream for errors
-	buildOutput, err := io.ReadAll(resp.Body)
+	// Use build output parser for clean logs
+	parser := &DockerBuildOutputParser{Debug: c.debugMode}
+	buildOutput, err := parser.ParseBuildStream(resp.Body)
 	if err != nil {
-		return fmt.Errorf("reading build output: %w", err)
+		return fmt.Errorf("parsing build output: %w", err)
 	}
 
 	if c.debugMode {
-		fmt.Printf("🔧 Debug: Build output: %s\n", string(buildOutput))
-	}
-
-	// Check for error messages in the build stream
-	if strings.Contains(string(buildOutput), `"error"`) {
-		// Extract error details from JSON stream
-		for _, line := range strings.Split(string(buildOutput), "\n") {
-			if strings.Contains(line, `"error"`) {
-				return fmt.Errorf("image build failed: %s", strings.TrimSpace(line))
-			}
-		}
+		fmt.Printf("🔧 Debug: Build output:\n%s\n", buildOutput)
 	}
 
 	// Verify the image exists

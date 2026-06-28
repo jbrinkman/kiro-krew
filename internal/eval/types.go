@@ -106,12 +106,14 @@ type Summary struct {
 
 // ContainerConfig configures containerized execution
 type ContainerConfig struct {
-	Platform       string                 `json:"platform"`
-	ResourceLimits sandbox.ResourceLimits `json:"resource_limits"`
-	Environment    map[string]string      `json:"environment"`
-	WorkspaceDir   string                 `json:"workspace_dir"`
-	MockGitHub     bool                   `json:"mock_github"`
-	Debug          bool                   `json:"debug"`
+	Platform        string                 `json:"platform"`
+	ResourceLimits  sandbox.ResourceLimits `json:"resource_limits"`
+	Environment     map[string]string      `json:"environment"`
+	WorkspaceDir    string                 `json:"workspace_dir"`
+	MockGitHub      bool                   `json:"mock_github"`
+	Debug           bool                   `json:"debug"`
+	ImageManager    *sandbox.ImageManager  `json:"-"`
+	CachedImageName string                 `json:"-"`
 }
 
 // ProjectDetection holds results from project type detection

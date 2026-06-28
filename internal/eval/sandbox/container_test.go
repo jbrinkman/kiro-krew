@@ -358,6 +358,128 @@ func TestContainer_WorkspacePermissions(t *testing.T) {
 	assert.Contains(t, output, "test")
 }
 
+// TestWorkspaceValidation tests comprehensive workspace validation per Task 5
+func TestWorkspaceValidation(t *testing.T) {
+	skipIfNoDocker(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	c, err := NewContainer("alpine:3.19")
+	require.NoError(t, err)
+	defer c.Close()
+
+	// Enable debug mode to test container preservation
+	err = c.SetDebugMode(true)
+	require.NoError(t, err)
+
+	limits := DefaultLimits()
+	config := &container.Config{
+		Image: "alpine:3.19",
+		Cmd:   []string{"sleep", "60"},
+	}
+	hostConfig := NewHostConfigWithLimits(limits)
+
+	err = c.Create(ctx, config, hostConfig)
+	require.NoError(t, err)
+
+	err = c.Start(ctx)
+	require.NoError(t, err)
+	defer c.Cleanup(ctx)
+
+	// 1. Confirm /workspace is writable
+	t.Run("workspace_writability", func(t *testing.T) {
+		// Create nested directory structure
+		_, err := c.ExecWithOutput(ctx, []string{"mkdir", "-p", "/workspace/.kiro/skills"})
+		assert.NoError(t, err, "/workspace should be writable for nested directories")
+
+		// Test file operations
+		_, err = c.ExecWithOutput(ctx, []string{"sh", "-c", "echo 'writable' > /workspace/test-write.txt"})
+		assert.NoError(t, err, "should be able to write files to /workspace")
+
+		// Verify read-back
+		output, err := c.ExecWithOutput(ctx, []string{"cat", "/workspace/test-write.txt"})
+		assert.NoError(t, err, "should be able to read files from /workspace")
+		assert.Contains(t, output, "writable")
+	})
+
+	// 2. Test GitHub mocking setup succeeds
+	t.Run("github_mocking_setup", func(t *testing.T) {
+		// Create the .kiro/skills structure inside the container
+		_, err := c.ExecWithOutput(ctx, []string{"mkdir", "-p", "/workspace/.kiro/skills/github-cli"})
+		assert.NoError(t, err, "should be able to create GitHub CLI mock directory structure")
+
+		// Create a mock gh script inside the container using a simpler approach
+		_, err = c.ExecWithOutput(ctx, []string{"sh", "-c", "echo '#!/bin/sh' > /workspace/.kiro/skills/github-cli/gh"})
+		assert.NoError(t, err, "should be able to create mock script header")
+
+		_, err = c.ExecWithOutput(ctx, []string{"sh", "-c", "echo 'echo \"[MOCK] GitHub CLI: $@\"' >> /workspace/.kiro/skills/github-cli/gh"})
+		assert.NoError(t, err, "should be able to add mock script content")
+
+		// Make the script executable
+		_, err = c.ExecWithOutput(ctx, []string{"chmod", "755", "/workspace/.kiro/skills/github-cli/gh"})
+		assert.NoError(t, err, "should be able to make mock script executable")
+
+		// Verify the mock script exists and is executable
+		_, err = c.ExecWithOutput(ctx, []string{"test", "-x", "/workspace/.kiro/skills/github-cli/gh"})
+		assert.NoError(t, err, "GitHub CLI mock script should be executable")
+
+		// Test that the mock script works by running it with sh
+		output, err := c.ExecWithOutput(ctx, []string{"sh", "/workspace/.kiro/skills/github-cli/gh", "issue", "list"})
+		assert.NoError(t, err, "mock script should execute successfully")
+		assert.Contains(t, output, "[MOCK]", "mock script should produce expected output")
+	})
+
+	// 3. Test file operations work correctly
+	t.Run("file_operations", func(t *testing.T) {
+		// Complex file operations
+		commands := [][]string{
+			{"mkdir", "-p", "/workspace/test/subdir"},
+			{"touch", "/workspace/test/file1.txt"},
+			{"cp", "/workspace/test/file1.txt", "/workspace/test/file2.txt"},
+			{"ln", "-s", "/workspace/test/file1.txt", "/workspace/test/link.txt"},
+			{"chmod", "755", "/workspace/test/file1.txt"},
+		}
+
+		for _, cmd := range commands {
+			_, err := c.ExecWithOutput(ctx, cmd)
+			assert.NoError(t, err, "file operation should succeed: %v", cmd)
+		}
+
+		// Verify results
+		_, err := c.ExecWithOutput(ctx, []string{"ls", "-la", "/workspace/test"})
+		assert.NoError(t, err, "should be able to list workspace contents")
+	})
+
+	// 4. Test error messages are clear
+	t.Run("error_message_clarity", func(t *testing.T) {
+		// Test operation on non-existent path (should fail with clear message)
+		_, err := c.ExecWithOutput(ctx, []string{"cat", "/workspace/nonexistent.txt"})
+		assert.Error(t, err, "reading nonexistent file should produce clear error")
+		assert.Contains(t, err.Error(), "nonexistent.txt", "error message should mention the file")
+
+		// Test writing to /proc filesystem (should fail with clear error on most systems)
+		_, err = c.ExecWithOutput(ctx, []string{"sh", "-c", "echo 'fail' > /proc/version"})
+		assert.Error(t, err, "writing to read-only proc filesystem should fail")
+
+		// Test accessing non-existent command - check stderr capture
+		_, err = c.ExecWithOutput(ctx, []string{"sh", "-c", "nonexistent-command"})
+		assert.Error(t, err, "running nonexistent command should fail")
+		assert.Contains(t, err.Error(), "not found", "error should contain 'not found' from shell stderr")
+	})
+
+	// 5. Debug mode preserves failed containers
+	t.Run("debug_preservation", func(t *testing.T) {
+		// Call cleanup with failed=true — in debug mode the container should be preserved
+		err := c.CleanupWithDebugInfo(ctx, true)
+		assert.NoError(t, err, "cleanup should succeed in debug mode with failed container")
+
+		// Container should still be accessible after debug cleanup preserves it
+		_, err = c.ExecWithOutput(ctx, []string{"echo", "debug-test"})
+		assert.NoError(t, err, "container should remain accessible after debug-mode preservation")
+	})
+}
+
 func TestExecWithOutput_ErrorHandling(t *testing.T) {
 	skipIfNoDocker(t)
 
