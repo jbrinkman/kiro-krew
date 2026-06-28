@@ -25,8 +25,8 @@ func TestDockerfileGeneration_IncludesKiroCLI(t *testing.T) {
 			expected: []string{
 				"# Install kiro-cli",
 				"kirocli-x86_64-linux-musl.zip",
-				"chmod 755 kiro-cli",
-				"mv kiro-cli /usr/local/bin/kiro-cli",
+				"chmod 755 kirocli/bin/kiro-cli",
+				"mv kirocli/bin/kiro-cli /usr/local/bin/kiro-cli",
 			},
 		},
 		{
@@ -35,8 +35,8 @@ func TestDockerfileGeneration_IncludesKiroCLI(t *testing.T) {
 			expected: []string{
 				"# Install kiro-cli",
 				"kirocli-aarch64-linux-musl.zip",
-				"chmod 755 kiro-cli",
-				"mv kiro-cli /usr/local/bin/kiro-cli",
+				"chmod 755 kirocli/bin/kiro-cli",
+				"mv kirocli/bin/kiro-cli /usr/local/bin/kiro-cli",
 			},
 		},
 	}
@@ -128,9 +128,9 @@ func TestInstallationCommands_CrossPlatform(t *testing.T) {
 			assert.Contains(t, dockerfile, "RUN cd /tmp")
 			assert.Contains(t, dockerfile, "curl -fsSL")
 			assert.Contains(t, dockerfile, "unzip -q")
-			assert.Contains(t, dockerfile, "chmod 755 kiro-cli")
-			assert.Contains(t, dockerfile, "mv kiro-cli /usr/local/bin/kiro-cli")
-			assert.Contains(t, dockerfile, "rm -f kirocli.zip")
+			assert.Contains(t, dockerfile, "chmod 755 kirocli/bin/kiro-cli")
+			assert.Contains(t, dockerfile, "mv kirocli/bin/kiro-cli /usr/local/bin/kiro-cli")
+			assert.Contains(t, dockerfile, "rm -rf kirocli.zip kirocli")
 
 			// Verify platform-specific binary is referenced
 			switch platform {
@@ -253,7 +253,7 @@ func TestBuildTimeVsRuntime_Installation(t *testing.T) {
 		assert.Contains(t, dockerfile, "# Install kiro-cli")
 		assert.Contains(t, dockerfile, "curl -fsSL")
 		assert.Contains(t, dockerfile, "unzip -q")
-		assert.Contains(t, dockerfile, "chmod 755 kiro-cli")
+		assert.Contains(t, dockerfile, "chmod 755 kirocli/bin/kiro-cli")
 	})
 
 	t.Run("RuntimeVerification", func(t *testing.T) {
@@ -263,12 +263,12 @@ func TestBuildTimeVsRuntime_Installation(t *testing.T) {
 		require.NoError(t, err)
 		defer c.Close()
 
-		// Test that InstallKiroCLI only does verification, not installation
+		// Test that ValidateKiroCLI only does verification, not installation
 		ctx := context.Background()
 
 		// This would fail in a real container since kiro-cli isn't installed
 		// But we can test the method exists and has correct signature
-		err = c.InstallKiroCLI(ctx, "linux/amd64")
+		err = c.ValidateKiroCLI(ctx, "linux/amd64")
 		// Expect error since we don't have a running container with kiro-cli
 		assert.Error(t, err, "Should fail verification when kiro-cli not installed")
 	})
@@ -336,7 +336,7 @@ func TestDetectHostArchitecture_Unsupported(t *testing.T) {
 	assert.True(t, platform == "linux/amd64" || platform == "linux/arm64")
 }
 
-func TestInstallKiroCLI_Verification(t *testing.T) {
+func TestValidateKiroCLI_Verification(t *testing.T) {
 	skipIfNoDocker(t)
 
 	c, err := NewContainer("alpine:3.19")
@@ -346,7 +346,7 @@ func TestInstallKiroCLI_Verification(t *testing.T) {
 	ctx := context.Background()
 
 	// Should fail without a running container
-	err = c.InstallKiroCLI(ctx, "linux/amd64")
+	err = c.ValidateKiroCLI(ctx, "linux/amd64")
 	assert.Error(t, err, "Should fail when container not running")
 }
 

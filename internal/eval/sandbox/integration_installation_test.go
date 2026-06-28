@@ -57,7 +57,7 @@ func TestContainerIntegration_KiroCLIInstallation(t *testing.T) {
 	c.LogStartup(limits)
 
 	// Install and verify kiro-cli
-	err = c.InstallKiroCLI(ctx, hostPlatform)
+	err = c.ValidateKiroCLI(ctx, hostPlatform)
 	if err != nil {
 		// For this test, we expect installation to fail since we can't install
 		// kiro-cli in base Alpine without building the image
@@ -178,7 +178,7 @@ func TestCrossPlatform_InstallationVerification(t *testing.T) {
 	assert.Contains(t, dockerfile, "# Install kiro-cli")
 	assert.Contains(t, dockerfile, "curl -fsSL")
 	assert.Contains(t, dockerfile, "unzip -q")
-	assert.Contains(t, dockerfile, "chmod 755 kiro-cli")
+	assert.Contains(t, dockerfile, "chmod 755 kirocli/bin/kiro-cli")
 	assert.Contains(t, dockerfile, "/usr/local/bin/kiro-cli")
 
 	// Test URL generation for the platform

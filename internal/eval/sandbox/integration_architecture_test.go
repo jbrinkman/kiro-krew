@@ -160,7 +160,7 @@ func TestArchitectureIntegration_KiroCLIInstallation(t *testing.T) {
 
 	// Test installation (this will make a real network request)
 	if os.Getenv("SKIP_NETWORK_TESTS") == "" {
-		err = c.InstallKiroCLI(ctx)
+		err = c.ValidateKiroCLI(ctx, platform)
 		if err != nil {
 			// Network issues are common in CI, log but don't fail
 			t.Logf("kiro-cli installation failed (possibly network issue): %v", err)

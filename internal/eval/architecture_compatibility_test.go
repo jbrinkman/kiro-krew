@@ -91,7 +91,7 @@ func TestKiroCLIURLGeneration(t *testing.T) {
 			}
 			defer c.Close()
 
-			// The URL generation happens inside InstallKiroCLI
+			// The URL generation happens inside ValidateKiroCLI
 			// We can't test it directly but we validate the architecture detection works
 			platform, err := sandbox.DetectHostArchitecture()
 			require.NoError(t, err)

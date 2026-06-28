@@ -18,7 +18,6 @@ func TestCreateContainerConfig_WithSandboxConfig(t *testing.T) {
 		{
 			name: "complete sandbox config",
 			sandboxCfg: &config.SandboxConfig{
-				Image:        "ubuntu:22.04",
 				WorkspaceDir: "/app",
 				CPUCores:     2.0,
 				MemoryMB:     2048,
@@ -26,7 +25,6 @@ func TestCreateContainerConfig_WithSandboxConfig(t *testing.T) {
 			},
 			resourceLimits: nil,
 			expectConfig: ContainerConfig{
-				Image:        "ubuntu:22.04",
 				WorkspaceDir: "/app",
 				MockGitHub:   true,
 				Platform:     "", // Will be set by platform detection
@@ -43,12 +41,10 @@ func TestCreateContainerConfig_WithSandboxConfig(t *testing.T) {
 		{
 			name: "partial sandbox config",
 			sandboxCfg: &config.SandboxConfig{
-				Image:    "node:18",
 				MemoryMB: 512,
 			},
 			resourceLimits: nil,
 			expectConfig: ContainerConfig{
-				Image:        "node:18",
 				WorkspaceDir: "/workspace", // Default
 				MockGitHub:   true,
 				Platform:     "", // Will be set by platform detection
@@ -69,8 +65,7 @@ func TestCreateContainerConfig_WithSandboxConfig(t *testing.T) {
 			},
 			resourceLimits: nil,
 			expectConfig: ContainerConfig{
-				Image:        "alpine:3.19", // Default
-				WorkspaceDir: "/workspace",  // Default
+				WorkspaceDir: "/workspace", // Default
 				MockGitHub:   true,
 				Platform:     "", // Will be set by platform detection
 				Environment: map[string]string{
@@ -90,9 +85,6 @@ func TestCreateContainerConfig_WithSandboxConfig(t *testing.T) {
 			result := createContainerConfig(tt.sandboxCfg, tt.resourceLimits, false)
 
 			// Compare all fields except Platform (which is dynamically detected)
-			if result.Image != tt.expectConfig.Image {
-				t.Errorf("Image = %s, expected %s", result.Image, tt.expectConfig.Image)
-			}
 			if result.WorkspaceDir != tt.expectConfig.WorkspaceDir {
 				t.Errorf("WorkspaceDir = %s, expected %s", result.WorkspaceDir, tt.expectConfig.WorkspaceDir)
 			}
@@ -129,7 +121,6 @@ func TestCreateContainerConfig_NilSandboxConfig(t *testing.T) {
 	result := createContainerConfig(nil, nil, false)
 
 	expectedDefaults := ContainerConfig{
-		Image:        "alpine:3.19",
 		WorkspaceDir: "/workspace",
 		MockGitHub:   true,
 		Environment: map[string]string{
@@ -142,9 +133,6 @@ func TestCreateContainerConfig_NilSandboxConfig(t *testing.T) {
 		},
 	}
 
-	if result.Image != expectedDefaults.Image {
-		t.Errorf("Image = %s, expected %s", result.Image, expectedDefaults.Image)
-	}
 	if result.WorkspaceDir != expectedDefaults.WorkspaceDir {
 		t.Errorf("WorkspaceDir = %s, expected %s", result.WorkspaceDir, expectedDefaults.WorkspaceDir)
 	}
@@ -167,7 +155,6 @@ func TestCreateContainerConfig_NilSandboxConfig(t *testing.T) {
 
 func TestCreateContainerConfig_ResourceLimitOverrides(t *testing.T) {
 	sandboxCfg := &config.SandboxConfig{
-		Image:        "ubuntu:22.04",
 		WorkspaceDir: "/app",
 		CPUCores:     2.0,
 		MemoryMB:     2048,
@@ -252,7 +239,6 @@ func TestCreateContainerConfig_ResourceLimitOverrides(t *testing.T) {
 func TestCreateContainerConfig_EmptyStringValues(t *testing.T) {
 	// Test that empty string values in sandbox config fall back to defaults
 	sandboxCfg := &config.SandboxConfig{
-		Image:        "", // Empty - should use default
 		WorkspaceDir: "", // Empty - should use default
 		CPUCores:     2.0,
 		MemoryMB:     1024,
@@ -261,9 +247,6 @@ func TestCreateContainerConfig_EmptyStringValues(t *testing.T) {
 
 	result := createContainerConfig(sandboxCfg, nil, false)
 
-	if result.Image != "alpine:3.19" {
-		t.Errorf("Image = %s, expected alpine:3.19 (default)", result.Image)
-	}
 	if result.WorkspaceDir != "/workspace" {
 		t.Errorf("WorkspaceDir = %s, expected /workspace (default)", result.WorkspaceDir)
 	}
@@ -272,7 +255,6 @@ func TestCreateContainerConfig_EmptyStringValues(t *testing.T) {
 func TestCreateContainerConfig_ZeroValues(t *testing.T) {
 	// Test that zero values in sandbox config fall back to defaults
 	sandboxCfg := &config.SandboxConfig{
-		Image:        "custom:image",
 		WorkspaceDir: "/custom",
 		CPUCores:     0, // Zero - should use default
 		MemoryMB:     0, // Zero - should use default

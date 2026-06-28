@@ -502,16 +502,12 @@ func createContainerConfig(sandboxCfg *config.SandboxConfig, resourceLimits map[
 	}
 
 	// Use config values with fallbacks to defaults
-	image := "alpine:3.19"
 	workspaceDir := "/workspace"
 	cpuCores := 1.0
 	memoryMB := 1024
 	timeout := 5 * time.Minute
 
 	if sandboxCfg != nil {
-		if sandboxCfg.Image != "" {
-			image = sandboxCfg.Image
-		}
 		if sandboxCfg.WorkspaceDir != "" {
 			workspaceDir = sandboxCfg.WorkspaceDir
 		}
@@ -527,7 +523,6 @@ func createContainerConfig(sandboxCfg *config.SandboxConfig, resourceLimits map[
 	}
 
 	config := &ContainerConfig{
-		Image:        image,
 		WorkspaceDir: workspaceDir,
 		MockGitHub:   true,
 		Platform:     platform,
@@ -568,14 +563,43 @@ func createContainerConfig(sandboxCfg *config.SandboxConfig, resourceLimits map[
 func invokeAgentInContainer(agent, prompt string, cConfig *ContainerConfig) (string, CostInfo, *ErrorContext, error) {
 	ctx := context.Background()
 
-	// Phase 1: Container startup
-	createStart := time.Now()
+	// Phase 1: Generate Dockerfile and build custom image (with timeout)
+	buildCtx, buildCancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer buildCancel()
 
-	c, err := sandbox.NewContainerWithDebug(cConfig.Image, cConfig.Debug)
+	buildStart := time.Now()
+
+	c, err := sandbox.NewContainerWithDebug("", cConfig.Debug)
 	if err != nil {
 		return "", CostInfo{}, nil, fmt.Errorf("creating container: %w", err)
 	}
 	defer c.Close()
+
+	// Generate Dockerfile with kiro-cli pre-installed
+	dockerfile, err := c.GenerateDockerfileWithPlatform(cConfig.WorkspaceDir, cConfig.Platform)
+	if err != nil {
+		return "", CostInfo{}, nil, fmt.Errorf("generating dockerfile: %w", err)
+	}
+
+	// Build custom image from generated Dockerfile
+	customImageName := c.GetCustomImageName(cConfig.Platform)
+	if err := c.BuildImageFromDockerfile(buildCtx, dockerfile, customImageName, cConfig.Platform); err != nil {
+		return "", CostInfo{}, nil, fmt.Errorf("building custom image: %w", err)
+	}
+
+	fmt.Printf("  Image build: %v\n", time.Since(buildStart))
+
+	// Clean up custom image after use (preserve in debug mode for inspection)
+	if !cConfig.Debug {
+		defer func() {
+			if _, err := c.RemoveImage(ctx, customImageName); err != nil {
+				fmt.Printf("⚠️ Warning: Failed to remove custom image %s: %v\n", customImageName, err)
+			}
+		}()
+	}
+
+	// Phase 2: Container startup
+	createStart := time.Now()
 
 	hostConfig := sandbox.NewHostConfigWithLimits(cConfig.ResourceLimits)
 
@@ -588,7 +612,7 @@ func invokeAgentInContainer(agent, prompt string, cConfig *ContainerConfig) (str
 	}
 
 	containerCfg := &container.Config{
-		Image:      cConfig.Image,
+		Image:      customImageName, // Use custom image instead of alpine:3.19
 		Cmd:        []string{"sleep", "3600"},
 		Env:        envVars,
 		WorkingDir: cConfig.WorkspaceDir,
@@ -610,12 +634,20 @@ func invokeAgentInContainer(agent, prompt string, cConfig *ContainerConfig) (str
 	c.LogStartup(cConfig.ResourceLimits)
 	fmt.Printf("  Container startup: %v\n", time.Since(createStart))
 
-	// Phase 2: Container setup - Install kiro-cli and configure mocking
+	// Debug mode: Save container registry information
+	if cConfig.Debug {
+		shortID, imageName := c.GetContainerInfo()
+		if err := saveDebugContainerInfo(shortID, imageName, customImageName, cConfig.Platform, agent); err != nil {
+			fmt.Printf("⚠️ Warning: Failed to save debug container info: %v\n", err)
+		}
+	}
+
+	// Phase 3: Verify pre-installed kiro-cli
 	setupStart := time.Now()
 
-	// Install kiro-cli binary
-	if err := c.InstallKiroCLI(ctx, cConfig.Platform); err != nil {
-		return "", CostInfo{}, nil, fmt.Errorf("installing kiro-cli: %w", err)
+	// Verify kiro-cli is pre-installed and functional
+	if err := c.ValidateKiroCLI(ctx, cConfig.Platform); err != nil {
+		return "", CostInfo{}, nil, fmt.Errorf("validating kiro-cli: %w", err)
 	}
 
 	// Setup GitHub mocking if enabled
@@ -1647,5 +1679,46 @@ func RunPerformanceInvestigation(agent string) error {
 
 	fmt.Printf("\n📂 Detailed report saved to: %s/performance.json\n", resultsDir)
 
+	return nil
+}
+
+// saveDebugContainerInfo saves container registry information for debug mode
+func saveDebugContainerInfo(containerID, imageName, customImageName, platform, agent string) error {
+	debugDir := filepath.Join(".kiro-krew", "evals", "tmp", "debug")
+	if err := os.MkdirAll(debugDir, 0755); err != nil {
+		return fmt.Errorf("creating debug directory: %w", err)
+	}
+
+	// Create container info file
+	timestamp := time.Now().Format("20060102-150405")
+
+	infoFile := filepath.Join(debugDir, fmt.Sprintf("container-%s-%s.json", timestamp, containerID))
+
+	info := map[string]interface{}{
+		"container_id": containerID,
+		"short_id":     containerID,
+		"base_image":   imageName,
+		"custom_image": customImageName,
+		"platform":     platform,
+		"agent":        agent,
+		"timestamp":    time.Now().Format(time.RFC3339),
+		"debug_commands": map[string]string{
+			"inspect":    fmt.Sprintf("docker inspect %s", containerID),
+			"logs":       fmt.Sprintf("docker logs %s", containerID),
+			"exec":       fmt.Sprintf("docker exec -it %s /bin/bash", containerID),
+			"image_info": fmt.Sprintf("docker image inspect %s", customImageName),
+		},
+	}
+
+	data, err := json.MarshalIndent(info, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshaling container info: %w", err)
+	}
+
+	if err := os.WriteFile(infoFile, data, 0644); err != nil {
+		return fmt.Errorf("writing container info to %s: %w", infoFile, err)
+	}
+
+	fmt.Printf("🔧 Debug: Container info saved to %s\n", infoFile)
 	return nil
 }

@@ -39,7 +39,6 @@ func TestLoad_SandboxConfigDefaults(t *testing.T) {
 	}
 
 	expected := SandboxConfig{
-		Image:        "alpine:3.19",
 		WorkspaceDir: "/workspace",
 		CPUCores:     1.0,
 		MemoryMB:     1024,
@@ -61,13 +60,11 @@ func TestLoad_SandboxConfigParsing(t *testing.T) {
 			name: "complete sandbox config",
 			configContent: `repo: test/repo
 sandbox:
-  image: ubuntu:22.04
   workspace_dir: /app
   cpu_cores: 2.0
   memory_mb: 2048
   timeout: 10m`,
 			expectedConfig: SandboxConfig{
-				Image:        "ubuntu:22.04",
 				WorkspaceDir: "/app",
 				CPUCores:     2.0,
 				MemoryMB:     2048,
@@ -78,10 +75,8 @@ sandbox:
 			name: "partial sandbox config with defaults",
 			configContent: `repo: test/repo
 sandbox:
-  image: node:18
   memory_mb: 512`,
 			expectedConfig: SandboxConfig{
-				Image:        "node:18",
 				WorkspaceDir: "/workspace",
 				CPUCores:     1.0,
 				MemoryMB:     512,
@@ -93,7 +88,6 @@ sandbox:
 			configContent: `repo: test/repo
 sandbox:`,
 			expectedConfig: SandboxConfig{
-				Image:        "alpine:3.19",
 				WorkspaceDir: "/workspace",
 				CPUCores:     1.0,
 				MemoryMB:     1024,
@@ -194,13 +188,6 @@ sandbox:
 sandbox:
   timeout: 0s`,
 			expectError: "sandbox.timeout must be greater than 0",
-		},
-		{
-			name: "empty image",
-			configContent: `repo: test/repo
-sandbox:
-  image: ""`,
-			expectError: "sandbox.image cannot be empty",
 		},
 		{
 			name: "empty workspace_dir",

@@ -292,5 +292,5 @@ func TestKiroCLIInstallationMocking(t *testing.T) {
 	}
 
 	// Note: We don't actually install kiro-cli in this test to avoid network dependencies
-	// The InstallKiroCLI method would be tested in integration tests
+	// The ValidateKiroCLI method would be tested in integration tests
 }
