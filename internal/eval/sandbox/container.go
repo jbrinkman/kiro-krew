@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/docker/docker/api/types/build"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
@@ -132,26 +133,35 @@ func (c *Container) Create(ctx context.Context, config *container.Config, hostCo
 func (c *Container) CreateWithPlatform(ctx context.Context, config *container.Config, hostConfig *container.HostConfig, platform string) error {
 	c.platform = platform
 
-	if c.debugMode {
-		fmt.Printf("🔧 Debug: Creating container with image %s on platform %s\n", c.imageName, platform)
+	// Use the image from the config parameter, not c.imageName (which might be empty)
+	imageToUse := config.Image
+	if imageToUse == "" {
+		imageToUse = c.imageName // fallback to container's default image
 	}
 
-	// Pull image if not exists
-	_, _, err := c.client.ImageInspectWithRaw(ctx, c.imageName)
-	if err != nil {
+	if c.debugMode {
+		fmt.Printf("🔧 Debug: Creating container with image %s on platform %s\n", imageToUse, platform)
+	}
+
+	// Pull image if not exists (skip for custom local images)
+	isCustomImage := strings.HasPrefix(imageToUse, "kiro-eval")
+	_, _, err := c.client.ImageInspectWithRaw(ctx, imageToUse)
+	if err != nil && !isCustomImage {
 		if c.debugMode {
-			fmt.Printf("🔧 Debug: Pulling image %s for platform %s\n", c.imageName, platform)
+			fmt.Printf("🔧 Debug: Pulling image %s for platform %s\n", imageToUse, platform)
 		}
 
 		pullOptions := image.PullOptions{
 			Platform: platform,
 		}
-		reader, err := c.client.ImagePull(ctx, c.imageName, pullOptions)
+		reader, err := c.client.ImagePull(ctx, imageToUse, pullOptions)
 		if err != nil {
 			return err
 		}
 		defer reader.Close()
 		io.Copy(io.Discard, reader)
+	} else if err != nil && isCustomImage {
+		return fmt.Errorf("custom image %s not found locally - it should be built with BuildImageFromDockerfile first", imageToUse)
 	}
 
 	// Parse platform string for ContainerCreate
@@ -177,11 +187,14 @@ func (c *Container) CreateWithPlatform(ctx context.Context, config *container.Co
 
 		// Register container
 		if c.registry != nil {
-			if err := c.registry.Add(c.containerID, "kiro-eval", "debug", platform, c.imageName); err != nil {
+			if err := c.registry.Add(c.containerID, "kiro-eval", "debug", platform, imageToUse); err != nil {
 				fmt.Printf("⚠️ Warning: Failed to register container in debug registry: %v\n", err)
 			}
 		}
 	}
+
+	// Update the container's image name to match what was actually used
+	c.imageName = imageToUse
 
 	return nil
 }
@@ -391,6 +404,78 @@ func (c *Container) GenerateDockerfileWithPlatform(projectPath, platform string)
 	return dockerfileContent, nil
 }
 
+// BuildImageFromDockerfile builds a Docker image from generated Dockerfile content
+func (c *Container) BuildImageFromDockerfile(ctx context.Context, dockerfile string, imageName string, platform string) error {
+	// Create tar archive with Dockerfile
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+
+	dockerfileInfo := &tar.Header{
+		Name: "Dockerfile",
+		Size: int64(len(dockerfile)),
+		Mode: 0644,
+	}
+
+	if err := tw.WriteHeader(dockerfileInfo); err != nil {
+		return fmt.Errorf("writing dockerfile header: %w", err)
+	}
+
+	if _, err := tw.Write([]byte(dockerfile)); err != nil {
+		return fmt.Errorf("writing dockerfile content: %w", err)
+	}
+
+	if err := tw.Close(); err != nil {
+		return fmt.Errorf("closing tar writer: %w", err)
+	}
+
+	// Build the image
+	buildOptions := build.ImageBuildOptions{
+		Tags:     []string{imageName},
+		Platform: platform,
+	}
+
+	if c.debugMode {
+		fmt.Printf("🔧 Debug: Building image %s for platform %s\n", imageName, platform)
+	}
+
+	resp, err := c.client.ImageBuild(ctx, bytes.NewReader(buf.Bytes()), buildOptions)
+	if err != nil {
+		return fmt.Errorf("building image: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read build output to ensure completion and capture any errors
+	buildOutput, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading build output: %w", err)
+	}
+
+	if c.debugMode {
+		fmt.Printf("🔧 Debug: Build output: %s\n", string(buildOutput))
+	}
+
+	// Check if build was successful by looking for the image
+	_, _, err = c.client.ImageInspectWithRaw(ctx, imageName)
+	if err != nil {
+		return fmt.Errorf("image build completed but image %s not found: %w", imageName, err)
+	}
+
+	return nil
+}
+
+// GetCustomImageName generates a unique image name for the eval session
+func (c *Container) GetCustomImageName(platform string) string {
+	// Replace slashes in platform for image name compatibility
+	safePlatform := strings.ReplaceAll(platform, "/", "-")
+	timestamp := time.Now().Unix()
+
+	// Add debug identifier for easy cleanup when in debug mode
+	if c.debugMode {
+		return fmt.Sprintf("kiro-eval-debug:%s-%d", safePlatform, timestamp)
+	}
+	return fmt.Sprintf("kiro-eval:%s-%d", safePlatform, timestamp)
+}
+
 func (c *Container) loadTemplate(projectType ProjectType) (string, error) {
 	templatePath := fmt.Sprintf("internal/eval/dockerfile/templates/%s.Dockerfile", string(projectType))
 	content, err := os.ReadFile(templatePath)
@@ -425,15 +510,15 @@ func addKiroCLIToDockerfile(platform string) (string, error) {
 	dockerfile.WriteString("RUN cd /tmp && \\\n")
 	dockerfile.WriteString(fmt.Sprintf("    curl -fsSL %s -o kirocli.zip && \\\n", downloadURL))
 	dockerfile.WriteString("    unzip -q kirocli.zip && \\\n")
-	dockerfile.WriteString("    chmod 755 kiro-cli && \\\n")
-	dockerfile.WriteString("    mv kiro-cli /usr/local/bin/kiro-cli && \\\n")
-	dockerfile.WriteString("    rm -f kirocli.zip\n\n")
+	dockerfile.WriteString("    chmod 755 kirocli/bin/kiro-cli && \\\n")
+	dockerfile.WriteString("    mv kirocli/bin/kiro-cli /usr/local/bin/kiro-cli && \\\n")
+	dockerfile.WriteString("    rm -rf kirocli.zip kirocli\n\n")
 
 	return dockerfile.String(), nil
 }
 
-// InstallKiroCLI verifies kiro-cli installation at runtime
-func (c *Container) InstallKiroCLI(ctx context.Context, platform string) error {
+// ValidateKiroCLI verifies kiro-cli installation at runtime
+func (c *Container) ValidateKiroCLI(ctx context.Context, platform string) error {
 	// Runtime verification only - installation happens during build
 	if err := c.verifyKiroCLIInstallation(ctx); err != nil {
 		return fmt.Errorf("kiro-cli verification failed: %w", err)

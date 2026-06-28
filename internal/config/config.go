@@ -16,7 +16,6 @@ type SessionConfig struct {
 }
 
 type SandboxConfig struct {
-	Image        string        `yaml:"image"`
 	WorkspaceDir string        `yaml:"workspace_dir"`
 	CPUCores     float64       `yaml:"cpu_cores"`
 	MemoryMB     int           `yaml:"memory_mb"`
@@ -58,7 +57,6 @@ func Load() (*Config, error) {
 			SessionsDir:        ".kiro-krew/sessions",
 		},
 		Sandbox: SandboxConfig{
-			Image:        "alpine:3.19",
 			WorkspaceDir: "/workspace",
 			CPUCores:     1.0,
 			MemoryMB:     1024,
@@ -102,9 +100,6 @@ func Load() (*Config, error) {
 	}
 	if cfg.Sandbox.Timeout <= 0 {
 		return nil, fmt.Errorf("sandbox.timeout must be greater than 0")
-	}
-	if cfg.Sandbox.Image == "" {
-		return nil, fmt.Errorf("sandbox.image cannot be empty")
 	}
 	if cfg.Sandbox.WorkspaceDir == "" {
 		return nil, fmt.Errorf("sandbox.workspace_dir cannot be empty")
