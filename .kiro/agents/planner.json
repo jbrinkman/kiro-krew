@@ -5,5 +5,10 @@
   "resources": ["skill://.kiro/skills/planner-conventions/SKILL.md"],
   "tools": ["read", "write", "shell", "web_search", "web_fetch"],
   "allowedTools": ["read", "write", "shell", "web_search", "web_fetch"],
+  "toolsSettings": {
+    "write": {
+      "allowedPaths": [".worktrees/planning-*"]
+    }
+  },
   "model": "claude-sonnet-4"
 }
