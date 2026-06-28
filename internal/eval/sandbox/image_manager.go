@@ -1,0 +1,142 @@
+package sandbox
+
+import (
+	"context"
+	"fmt"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/docker/docker/api/types/image"
+	"github.com/docker/docker/client"
+)
+
+// ImageManager handles evaluation-scoped image building and reuse
+type ImageManager struct {
+	mu           sync.Mutex
+	client       *client.Client
+	builtImages  map[string]string // dockerfilePath+platform -> imageName
+	evaluationID string
+	debugMode    bool
+}
+
+// NewImageManager creates a new ImageManager for an evaluation run
+func NewImageManager(evaluationID string, debugMode bool) (*ImageManager, error) {
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		return nil, fmt.Errorf("creating Docker client: %w", err)
+	}
+
+	// Verify Docker is running
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := cli.Ping(ctx); err != nil {
+		cli.Close()
+		return nil, fmt.Errorf("Docker is not running. Start Docker and try again: %w", err)
+	}
+
+	return &ImageManager{
+		client:       cli,
+		builtImages:  make(map[string]string),
+		evaluationID: evaluationID,
+		debugMode:    debugMode,
+	}, nil
+}
+
+// BuildForEvaluation builds an image once per evaluation run and returns the cached name
+func (im *ImageManager) BuildForEvaluation(dockerfile, platform string) (string, error) {
+	im.mu.Lock()
+	defer im.mu.Unlock()
+
+	// Create cache key from dockerfile content and platform
+	cacheKey := fmt.Sprintf("%s:%s", platform, dockerfile[:min(50, len(dockerfile))])
+
+	// Check if already built
+	if imageName, exists := im.builtImages[cacheKey]; exists {
+		if im.debugMode {
+			fmt.Printf("🔧 Debug: Reusing cached image %s for platform %s\n", imageName, platform)
+		}
+		return imageName, nil
+	}
+
+	// Generate evaluation-scoped image name
+	imageName := im.generateImageName(platform)
+
+	if im.debugMode {
+		fmt.Printf("🔧 Debug: Building new image %s for evaluation %s on platform %s\n",
+			imageName, im.evaluationID, platform)
+	}
+
+	// Build the image using existing container functionality
+	container, err := NewContainerWithDebug("", im.debugMode)
+	if err != nil {
+		return "", fmt.Errorf("creating container for image build: %w", err)
+	}
+	defer container.Close()
+
+	ctx := context.Background()
+	if err := container.BuildImageFromDockerfile(ctx, dockerfile, imageName, platform); err != nil {
+		return "", fmt.Errorf("building image %s: %w", imageName, err)
+	}
+
+	// Cache the built image
+	im.builtImages[cacheKey] = imageName
+
+	if im.debugMode {
+		fmt.Printf("✅ Image %s built and cached for evaluation %s\n", imageName, im.evaluationID)
+	}
+
+	return imageName, nil
+}
+
+// generateImageName creates evaluation-scoped image name with platform support
+func (im *ImageManager) generateImageName(platform string) string {
+	// Replace slashes in platform for image name compatibility
+	safePlatform := strings.ReplaceAll(platform, "/", "-")
+
+	// Use evaluation ID for scoping
+	if im.debugMode {
+		return fmt.Sprintf("kiro-eval-debug:%s-%s", im.evaluationID, safePlatform)
+	}
+	return fmt.Sprintf("kiro-eval:%s-%s", im.evaluationID, safePlatform)
+}
+
+// Cleanup removes all built images for this evaluation (preserves in debug mode)
+func (im *ImageManager) Cleanup(ctx context.Context) error {
+	im.mu.Lock()
+	defer im.mu.Unlock()
+
+	if im.debugMode {
+		fmt.Printf("🔧 Debug: Preserving %d images for evaluation %s\n",
+			len(im.builtImages), im.evaluationID)
+		return nil
+	}
+
+	var errors []string
+	for _, imageName := range im.builtImages {
+		if _, err := im.client.ImageRemove(ctx, imageName, image.RemoveOptions{Force: false, PruneChildren: true}); err != nil {
+			errors = append(errors, fmt.Sprintf("failed to remove image %s: %v", imageName, err))
+		} else {
+			fmt.Printf("🧹 Cleaned up image %s\n", imageName)
+		}
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("cleanup errors: %s", strings.Join(errors, "; "))
+	}
+
+	return nil
+}
+
+// Close closes the Docker client connection
+func (im *ImageManager) Close() error {
+	return im.client.Close()
+}
+
+// min returns the minimum of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}

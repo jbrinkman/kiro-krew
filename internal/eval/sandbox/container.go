@@ -27,12 +27,13 @@ const ImageNamePrefix = "kiro-eval"
 
 // Container manages Docker container lifecycle
 type Container struct {
-	client      *client.Client
-	containerID string
-	imageName   string
-	debugMode   bool
-	registry    *Registry
-	platform    string
+	client       *client.Client
+	containerID  string
+	imageName    string
+	debugMode    bool
+	registry     *Registry
+	platform     string
+	imageManager *ImageManager
 }
 
 // DetectHostArchitecture returns the Docker platform string for the host architecture
@@ -45,6 +46,21 @@ func DetectHostArchitecture() (string, error) {
 	default:
 		return "", fmt.Errorf("unsupported architecture: %s", runtime.GOARCH)
 	}
+}
+
+// SetImageManager enables image reuse workflow for evaluation runs
+func (c *Container) SetImageManager(imageManager *ImageManager) {
+	c.imageManager = imageManager
+}
+
+// UseImageReuse enables image reuse for this container by creating an image manager
+func (c *Container) UseImageReuse(evaluationID string) error {
+	imageManager, err := NewImageManager(evaluationID, c.debugMode)
+	if err != nil {
+		return fmt.Errorf("creating image manager: %w", err)
+	}
+	c.imageManager = imageManager
+	return nil
 }
 
 // SetDebugMode enables or disables debug mode
@@ -409,6 +425,18 @@ func (c *Container) GenerateDockerfileWithPlatform(projectPath, platform string)
 
 // BuildImageFromDockerfile builds a Docker image from generated Dockerfile content
 func (c *Container) BuildImageFromDockerfile(ctx context.Context, dockerfile string, imageName string, platform string) error {
+	// Use image manager for reuse if available
+	if c.imageManager != nil {
+		reusedImage, err := c.imageManager.BuildForEvaluation(dockerfile, platform)
+		if err != nil {
+			return fmt.Errorf("image manager build failed: %w", err)
+		}
+		// Update imageName to the reused/cached image
+		imageName = reusedImage
+		c.imageName = imageName
+		return nil
+	}
+
 	// Create tar archive with Dockerfile
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
@@ -447,24 +475,20 @@ func (c *Container) BuildImageFromDockerfile(ctx context.Context, dockerfile str
 	}
 	defer resp.Body.Close()
 
-	// Parse build output stream for errors
-	buildOutput, err := io.ReadAll(resp.Body)
+	// Use build output parser for clean logs
+	parser := &DockerBuildOutputParser{Debug: c.debugMode}
+	buildOutput, err := parser.ParseBuildStream(resp.Body)
 	if err != nil {
-		return fmt.Errorf("reading build output: %w", err)
+		return fmt.Errorf("parsing build output: %w", err)
 	}
 
 	if c.debugMode {
-		fmt.Printf("🔧 Debug: Build output: %s\n", string(buildOutput))
+		fmt.Printf("🔧 Debug: Build output:\n%s\n", buildOutput)
 	}
 
-	// Check for error messages in the build stream
-	if strings.Contains(string(buildOutput), `"error"`) {
-		// Extract error details from JSON stream
-		for _, line := range strings.Split(string(buildOutput), "\n") {
-			if strings.Contains(line, `"error"`) {
-				return fmt.Errorf("image build failed: %s", strings.TrimSpace(line))
-			}
-		}
+	// Check for error messages in the parsed output
+	if strings.Contains(buildOutput, "ERROR") || strings.Contains(buildOutput, "Error") {
+		return fmt.Errorf("image build failed: %s", strings.TrimSpace(buildOutput))
 	}
 
 	// Verify the image exists
@@ -591,5 +615,14 @@ func (c *Container) verifyKiroCLIInstallation(ctx context.Context) error {
 
 // Close closes the Docker client
 func (c *Container) Close() error {
+	// Close image manager if present
+	if c.imageManager != nil {
+		if err := c.imageManager.Close(); err != nil {
+			// Log but don't fail - continue with client close
+			if c.debugMode {
+				fmt.Printf("⚠️ Warning: Failed to close image manager: %v\n", err)
+			}
+		}
+	}
 	return c.client.Close()
 }

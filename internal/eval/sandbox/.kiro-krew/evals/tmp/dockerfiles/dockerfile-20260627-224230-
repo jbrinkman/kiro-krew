@@ -1,0 +1,21 @@
+FROM alpine:3.19
+
+RUN apk add --no-cache \
+    git \
+    curl \
+    bash \
+    unzip \
+    ca-certificates
+
+# Install kiro-cli
+RUN cd /tmp && \
+    curl -fsSL https://desktop-release.q.us-east-1.amazonaws.com/latest/kirocli-aarch64-linux-musl.zip -o kirocli.zip && \
+    unzip -q kirocli.zip && \
+    chmod 755 kirocli/bin/kiro-cli && \
+    mv kirocli/bin/kiro-cli /usr/local/bin/kiro-cli && \
+    rm -rf kirocli.zip kirocli
+
+RUN adduser -D -s /bin/bash sandbox
+WORKDIR /workspace
+USER sandbox
+CMD ["/bin/bash"]

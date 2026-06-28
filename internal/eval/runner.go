@@ -226,7 +226,7 @@ func runSingleTestCase(agent string, testcase string) error {
 		return fmt.Errorf("failed to create results directory: %w", err)
 	}
 
-	// Run evaluation on single test case
+	// Run evaluation on single test case (without container config for now)
 	result := evaluate(*rubric, []TestCase{*targetCase}, gitHash, os.Stdout, nil)
 
 	// Write result file
@@ -267,6 +267,51 @@ func Run(agent string, cConfig *ContainerConfig) error {
 	StartProfiling()
 
 	fmt.Println("🚀 Starting evaluation framework...")
+
+	// Task 4: Build images once at evaluation start if using containers
+	if cConfig != nil {
+		// Generate evaluation ID for image scoping
+		gitHash, err := getGitShortHash()
+		if err != nil {
+			return fmt.Errorf("failed to get git hash: %w", err)
+		}
+		timestamp := generateTimestampPrefix()
+		evaluationID := fmt.Sprintf("%s-%s", timestamp, gitHash)
+
+		fmt.Println("🔨 Building evaluation images...")
+		imageManager, err := sandbox.NewImageManager(evaluationID, cConfig.Debug)
+		if err != nil {
+			return fmt.Errorf("failed to create image manager: %w", err)
+		}
+		defer func() {
+			if err := imageManager.Cleanup(context.Background()); err != nil {
+				fmt.Printf("⚠️ Warning: Failed to cleanup images: %v\n", err)
+			}
+			imageManager.Close()
+		}()
+
+		// Pre-build the image for this platform
+		buildStart := time.Now()
+		c, err := sandbox.NewContainerWithDebug("", cConfig.Debug)
+		if err != nil {
+			return fmt.Errorf("creating container for image build: %w", err)
+		}
+		defer c.Close()
+
+		dockerfile, err := c.GenerateDockerfileWithPlatform(cConfig.WorkspaceDir, cConfig.Platform)
+		if err != nil {
+			return fmt.Errorf("generating dockerfile: %w", err)
+		}
+
+		_, err = imageManager.BuildForEvaluation(dockerfile, cConfig.Platform)
+		if err != nil {
+			return fmt.Errorf("building evaluation image: %w", err)
+		}
+		fmt.Printf("✅ Images built: %v\n", time.Since(buildStart))
+
+		// Add image manager to config for test cases
+		cConfig.ImageManager = imageManager
+	}
 
 	// Measure startup overhead
 	fmt.Print("📊 Measuring kiro-cli startup overhead...")
@@ -527,6 +572,7 @@ func createContainerConfig(sandboxCfg *config.SandboxConfig, resourceLimits map[
 		MockGitHub:   true,
 		Platform:     platform,
 		Debug:        debug,
+		ImageManager: nil, // Will be set during evaluation Run
 		Environment: map[string]string{
 			"KIRO_CLI_DISABLE_TELEMETRY": "1",
 		},
@@ -559,15 +605,9 @@ func createContainerConfig(sandboxCfg *config.SandboxConfig, resourceLimits map[
 	return config
 }
 
-// invokeAgentInContainer executes kiro-cli in a Docker container
+// invokeAgentInContainer executes kiro-cli in a Docker container with cached images
 func invokeAgentInContainer(agent, prompt string, cConfig *ContainerConfig) (string, CostInfo, *ErrorContext, error) {
 	ctx := context.Background()
-
-	// Phase 1: Generate Dockerfile and build custom image (with timeout)
-	buildCtx, buildCancel := context.WithTimeout(ctx, 5*time.Minute)
-	defer buildCancel()
-
-	buildStart := time.Now()
 
 	c, err := sandbox.NewContainerWithDebug("", cConfig.Debug)
 	if err != nil {
@@ -575,30 +615,47 @@ func invokeAgentInContainer(agent, prompt string, cConfig *ContainerConfig) (str
 	}
 	defer c.Close()
 
-	// Generate Dockerfile with kiro-cli pre-installed
-	dockerfile, err := c.GenerateDockerfileWithPlatform(cConfig.WorkspaceDir, cConfig.Platform)
-	if err != nil {
-		return "", CostInfo{}, nil, fmt.Errorf("generating dockerfile: %w", err)
+	// Task 4: Use pre-built image from ImageManager instead of building each time
+	var customImageName string
+	if cConfig.ImageManager != nil {
+		// Reuse cached image
+		dockerfile, err := c.GenerateDockerfileWithPlatform(cConfig.WorkspaceDir, cConfig.Platform)
+		if err != nil {
+			return "", CostInfo{}, nil, fmt.Errorf("generating dockerfile: %w", err)
+		}
+
+		customImageName, err = cConfig.ImageManager.BuildForEvaluation(dockerfile, cConfig.Platform)
+		if err != nil {
+			return "", CostInfo{}, nil, fmt.Errorf("getting cached image: %w", err)
+		}
+	} else {
+		// Fallback to individual build for compatibility
+		buildCtx, buildCancel := context.WithTimeout(ctx, 5*time.Minute)
+		defer buildCancel()
+
+		buildStart := time.Now()
+		dockerfile, err := c.GenerateDockerfileWithPlatform(cConfig.WorkspaceDir, cConfig.Platform)
+		if err != nil {
+			return "", CostInfo{}, nil, fmt.Errorf("generating dockerfile: %w", err)
+		}
+
+		customImageName = c.GetCustomImageName(cConfig.Platform)
+		if err := c.BuildImageFromDockerfile(buildCtx, dockerfile, customImageName, cConfig.Platform); err != nil {
+			return "", CostInfo{}, nil, fmt.Errorf("building custom image: %w", err)
+		}
+		fmt.Printf("  Image build: %v\n", time.Since(buildStart))
+
+		// Clean up image after use (preserve in debug mode)
+		if !cConfig.Debug {
+			defer func() {
+				if _, err := c.RemoveImage(ctx, customImageName); err != nil {
+					fmt.Printf("⚠️ Warning: Failed to remove custom image %s: %v\n", customImageName, err)
+				}
+			}()
+		}
 	}
 
-	// Build custom image from generated Dockerfile
-	customImageName := c.GetCustomImageName(cConfig.Platform)
-	if err := c.BuildImageFromDockerfile(buildCtx, dockerfile, customImageName, cConfig.Platform); err != nil {
-		return "", CostInfo{}, nil, fmt.Errorf("building custom image: %w", err)
-	}
-
-	fmt.Printf("  Image build: %v\n", time.Since(buildStart))
-
-	// Clean up custom image after use (preserve in debug mode for inspection)
-	if !cConfig.Debug {
-		defer func() {
-			if _, err := c.RemoveImage(ctx, customImageName); err != nil {
-				fmt.Printf("⚠️ Warning: Failed to remove custom image %s: %v\n", customImageName, err)
-			}
-		}()
-	}
-
-	// Phase 2: Container startup
+	// Container startup (same as before)
 	createStart := time.Now()
 
 	hostConfig := sandbox.NewHostConfigWithLimits(cConfig.ResourceLimits)
@@ -612,7 +669,7 @@ func invokeAgentInContainer(agent, prompt string, cConfig *ContainerConfig) (str
 	}
 
 	containerCfg := &container.Config{
-		Image:      customImageName, // Use custom image instead of alpine:3.19
+		Image:      customImageName,
 		Cmd:        []string{"sleep", "3600"},
 		Env:        envVars,
 		WorkingDir: cConfig.WorkspaceDir,
@@ -642,7 +699,7 @@ func invokeAgentInContainer(agent, prompt string, cConfig *ContainerConfig) (str
 		}
 	}
 
-	// Phase 3: Verify pre-installed kiro-cli
+	// Container setup (same as before)
 	setupStart := time.Now()
 
 	// Verify kiro-cli is pre-installed and functional
@@ -663,7 +720,7 @@ func invokeAgentInContainer(agent, prompt string, cConfig *ContainerConfig) (str
 
 	fmt.Printf("  Container setup: %v\n", time.Since(setupStart))
 
-	// Phase 3: Command execution
+	// Command execution (same as before)
 	timeoutCtx, cancel := context.WithTimeout(ctx, cConfig.ResourceLimits.Timeout)
 	defer cancel()
 

@@ -112,6 +112,7 @@ type ContainerConfig struct {
 	WorkspaceDir   string                 `json:"workspace_dir"`
 	MockGitHub     bool                   `json:"mock_github"`
 	Debug          bool                   `json:"debug"`
+	ImageManager   *sandbox.ImageManager  `json:"-"` // Image manager for evaluation-scoped image reuse
 }
 
 // ProjectDetection holds results from project type detection
