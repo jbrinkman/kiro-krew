@@ -3,7 +3,12 @@
   "description": "Interactive planning agent that collaborates with the user to create well-structured GitHub issues. Does NOT implement or fix code.",
   "prompt": "file://./planner-prompt.md",
   "resources": ["skill://.kiro/skills/planner-conventions/SKILL.md"],
-  "tools": ["read", "shell", "web_search", "web_fetch"],
-  "allowedTools": ["read", "shell", "web_search", "web_fetch"],
+  "tools": ["read", "write", "shell", "web_search", "web_fetch"],
+  "allowedTools": ["read", "write", "shell", "web_search", "web_fetch"],
+  "toolsSettings": {
+    "write": {
+      "allowedPaths": [".worktrees/planning-*"]
+    }
+  },
   "model": "claude-sonnet-4"
 }
