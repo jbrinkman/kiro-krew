@@ -112,3 +112,4 @@ docker run --rm -it alpine:3.19 sh -c "ls -la /workspace/.kiro/skills/github-cli
 - Method signature can remain the same (workspacePath ignored in container mode)
 - All existing tests should pass without modification
 - No changes to caller code required
+

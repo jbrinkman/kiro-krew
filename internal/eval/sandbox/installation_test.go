@@ -432,7 +432,6 @@ func TestMockGitHub_Functions(t *testing.T) {
 	defer c.Close()
 
 	ctx := context.Background()
-	tempDir := t.TempDir()
 
 	config := &container.Config{
 		Image: "alpine:3.19",
@@ -445,7 +444,7 @@ func TestMockGitHub_Functions(t *testing.T) {
 	require.NoError(t, err)
 	defer c.Cleanup(ctx)
 
-	err = c.SetupGitHubMocking(ctx, tempDir)
+	err = c.SetupGitHubMocking(ctx, "/workspace")
 	assert.NoError(t, err, "SetupGitHubMocking should not fail")
 
 	// Test ConfigureMockGitHubPath (requires running container)

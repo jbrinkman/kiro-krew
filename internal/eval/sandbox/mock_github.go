@@ -21,18 +21,20 @@ func (c *Container) SetupGitHubMocking(ctx context.Context, workspacePath string
 		return fmt.Errorf("container not created - call Create() before SetupGitHubMocking")
 	}
 
+	skillPath := filepath.Join(workspacePath, ".kiro", "skills", "github-cli")
+
 	// Create skills directory if it doesn't exist
-	if _, err := c.ExecWithOutput(ctx, []string{"mkdir", "-p", "/workspace/.kiro/skills"}); err != nil {
+	if _, err := c.ExecWithOutput(ctx, []string{"mkdir", "-p", filepath.Dir(skillPath)}); err != nil {
 		return err
 	}
 
 	// Remove existing github-cli skill if present
-	if _, err := c.ExecWithOutput(ctx, []string{"rm", "-rf", "/workspace/.kiro/skills/github-cli"}); err != nil {
+	if _, err := c.ExecWithOutput(ctx, []string{"rm", "-rf", skillPath}); err != nil {
 		return err
 	}
 
 	// Create mock skill directory
-	if _, err := c.ExecWithOutput(ctx, []string{"mkdir", "-p", "/workspace/.kiro/skills/github-cli"}); err != nil {
+	if _, err := c.ExecWithOutput(ctx, []string{"mkdir", "-p", skillPath}); err != nil {
 		return err
 	}
 
@@ -47,7 +49,7 @@ func (c *Container) SetupGitHubMocking(ctx context.Context, workspacePath string
 		}
 
 		relPath, _ := filepath.Rel("testdata/github-cli-mock", path)
-		destPath := filepath.Join("/workspace/.kiro/skills/github-cli", relPath)
+		destPath := filepath.Join(skillPath, relPath)
 
 		content, err := mockGitHubSkill.ReadFile(path)
 		if err != nil {
