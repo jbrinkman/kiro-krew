@@ -215,10 +215,15 @@ func (c *Container) Start(ctx context.Context) error {
 	}
 
 	err := c.client.ContainerStart(ctx, c.containerID, container.StartOptions{})
-	if err == nil && c.debugMode && c.registry != nil {
+	if err != nil {
+		return err
+	}
+
+	if c.debugMode && c.registry != nil {
 		c.registry.UpdateStatus(c.containerID, "running")
 	}
-	return err
+
+	return nil
 }
 
 // CopyTo copies a file to the container

@@ -570,3 +570,49 @@ func TestContainer_GitHubMockingSetup(t *testing.T) {
 	_, err = c.ExecWithOutput(ctx, []string{"touch", "/workspace/test/file"})
 	assert.NoError(t, err, "should be able to create files in workspace")
 }
+
+// generateTestDockerfile creates a simple test Dockerfile for workspace permission testing
+func generateTestDockerfile() string {
+	return `FROM alpine:3.19
+RUN adduser -D -s /bin/bash sandbox
+RUN mkdir -p /workspace && chown sandbox:sandbox /workspace
+USER sandbox
+WORKDIR /workspace
+`
+}
+
+func TestWorkspacePermissions(t *testing.T) {
+	skipIfNoDocker(t)
+
+	ctx := context.Background()
+	c, err := NewContainerWithDebug("test-workspace-perms", true)
+	require.NoError(t, err)
+	defer c.Close()
+
+	// Build container with workspace setup
+	dockerfile := generateTestDockerfile()
+	imageName := c.GetCustomImageName("linux/amd64")
+	err = c.BuildImageFromDockerfile(ctx, dockerfile, imageName, "linux/amd64")
+	require.NoError(t, err)
+
+	// Create and start container
+	config := &container.Config{Image: imageName, Cmd: []string{"sleep", "30"}}
+	hostConfig := &container.HostConfig{}
+
+	err = c.Create(ctx, config, hostConfig)
+	require.NoError(t, err)
+
+	err = c.Start(ctx)
+	require.NoError(t, err)
+	defer c.Cleanup(ctx)
+
+	// Validate workspace permissions directly in the test
+	_, err = c.ExecWithOutput(ctx, []string{"test", "-d", "/workspace"})
+	require.NoError(t, err, "/workspace directory should exist")
+
+	_, err = c.ExecWithOutput(ctx, []string{"sh", "-c", "touch /workspace/.permission_test && rm /workspace/.permission_test"})
+	assert.NoError(t, err, "Sandbox user should be able to write to /workspace")
+
+	_, err = c.ExecWithOutput(ctx, []string{"mkdir", "-p", "/workspace/subdir/nested"})
+	assert.NoError(t, err, "Sandbox user should be able to create nested directories")
+}
