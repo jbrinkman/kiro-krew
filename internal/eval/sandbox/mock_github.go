@@ -1,11 +1,15 @@
 package sandbox
 
 import (
+	"archive/tar"
+	"bytes"
 	"context"
 	"embed"
+	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
+
+	"github.com/docker/docker/api/types/container"
 )
 
 //go:embed testdata/github-cli-mock/*
@@ -13,18 +17,24 @@ var mockGitHubSkill embed.FS
 
 // SetupGitHubMocking replaces .kiro/skills/github-cli/ with mock version in container
 func (c *Container) SetupGitHubMocking(ctx context.Context, workspacePath string) error {
+	if c.containerID == "" {
+		return fmt.Errorf("container not created - call Create() before SetupGitHubMocking")
+	}
+
 	skillPath := filepath.Join(workspacePath, ".kiro", "skills", "github-cli")
 
 	// Create skills directory if it doesn't exist
-	if err := os.MkdirAll(filepath.Dir(skillPath), 0755); err != nil {
+	if _, err := c.ExecWithOutput(ctx, []string{"mkdir", "-p", filepath.Dir(skillPath)}); err != nil {
 		return err
 	}
 
 	// Remove existing github-cli skill if present
-	os.RemoveAll(skillPath)
+	if _, err := c.ExecWithOutput(ctx, []string{"rm", "-rf", skillPath}); err != nil {
+		return err
+	}
 
 	// Create mock skill directory
-	if err := os.MkdirAll(skillPath, 0755); err != nil {
+	if _, err := c.ExecWithOutput(ctx, []string{"mkdir", "-p", skillPath}); err != nil {
 		return err
 	}
 
@@ -46,12 +56,36 @@ func (c *Container) SetupGitHubMocking(ctx context.Context, workspacePath string
 			return err
 		}
 
-		if err := os.WriteFile(destPath, content, 0755); err != nil {
-			return err
-		}
-
-		return nil
+		return c.copyContentToContainer(ctx, destPath, content, 0755)
 	})
+}
+
+// copyContentToContainer copies byte content to a file in the container
+func (c *Container) copyContentToContainer(ctx context.Context, destPath string, content []byte, mode int64) error {
+	// Create tar archive with the content
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+
+	header := &tar.Header{
+		Name: filepath.Base(destPath),
+		Mode: mode,
+		Size: int64(len(content)),
+	}
+
+	if err := tw.WriteHeader(header); err != nil {
+		return err
+	}
+
+	if _, err := tw.Write(content); err != nil {
+		return err
+	}
+
+	if err := tw.Close(); err != nil {
+		return err
+	}
+
+	// Copy to container
+	return c.client.CopyToContainer(ctx, c.containerID, filepath.Dir(destPath), &buf, container.CopyToContainerOptions{})
 }
 
 // ConfigureMockGitHubPath configures PATH to use mock gh binary in container
