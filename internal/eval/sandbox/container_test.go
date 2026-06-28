@@ -604,8 +604,15 @@ func TestWorkspacePermissions(t *testing.T) {
 
 	err = c.Start(ctx)
 	require.NoError(t, err)
+	defer c.Cleanup(ctx)
 
-	// Validate workspace permissions
-	err = c.ValidateWorkspacePermissions(ctx)
+	// Validate workspace permissions directly in the test
+	_, err = c.ExecWithOutput(ctx, []string{"test", "-d", "/workspace"})
+	require.NoError(t, err, "/workspace directory should exist")
+
+	_, err = c.ExecWithOutput(ctx, []string{"sh", "-c", "touch /workspace/.permission_test && rm /workspace/.permission_test"})
 	assert.NoError(t, err, "Sandbox user should be able to write to /workspace")
+
+	_, err = c.ExecWithOutput(ctx, []string{"mkdir", "-p", "/workspace/subdir/nested"})
+	assert.NoError(t, err, "Sandbox user should be able to create nested directories")
 }

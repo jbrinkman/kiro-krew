@@ -9,10 +9,6 @@ jobs:
     name: Validate PR
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    services:
-      docker:
-        image: docker:24-dind
-        options: --privileged
     
     steps:
     - name: Checkout code

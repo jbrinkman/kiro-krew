@@ -17,6 +17,9 @@ type DockerBuildOutputParser struct {
 // ansiRegex matches ANSI escape sequences
 var ansiRegex = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
 
+// stepRegex matches Docker build step lines
+var stepRegex = regexp.MustCompile(`^Step (\d+/\d+) : (.+)$`)
+
 // dockerStreamMessage represents a Docker JSON stream message
 type dockerStreamMessage struct {
 	Stream      string             `json:"stream"`
@@ -88,7 +91,6 @@ func (p *DockerBuildOutputParser) formatDebugOutput(clean string) string {
 	}
 
 	// Format "Step X/Y : INSTRUCTION" lines
-	stepRegex := regexp.MustCompile(`^Step (\d+/\d+) : (.+)$`)
 	if match := stepRegex.FindStringSubmatch(clean); match != nil {
 		return fmt.Sprintf("Step %s: %s\n", match[1], match[2])
 	}
