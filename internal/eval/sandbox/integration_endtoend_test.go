@@ -2,6 +2,10 @@ package sandbox
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -172,6 +176,31 @@ func TestEndToEndFlowWithDebug(t *testing.T) {
 	shortID, imageName := c.GetContainerInfo()
 	assert.NotEmpty(t, shortID, "Debug mode should provide container ID")
 	assert.NotEmpty(t, imageName, "Debug mode should provide image name")
+
+	// Exercise the artifact-saving path (same as runner.go debug flow)
+	debugDir := filepath.Join(os.TempDir(), "kiro-eval-debug-test")
+	err = os.MkdirAll(debugDir, 0755)
+	require.NoError(t, err)
+	defer os.RemoveAll(debugDir)
+
+	// Save debug artifacts similar to saveDebugContainerInfo in runner.go
+	infoFile := filepath.Join(debugDir, fmt.Sprintf("container-%s.json", shortID))
+	info := map[string]interface{}{
+		"container_id": shortID,
+		"image_name":   imageName,
+		"custom_image": customImageName,
+		"platform":     hostPlatform,
+	}
+	data, err := json.MarshalIndent(info, "", "  ")
+	require.NoError(t, err)
+	err = os.WriteFile(infoFile, data, 0644)
+	require.NoError(t, err)
+
+	// Verify artifact was written correctly
+	savedData, err := os.ReadFile(infoFile)
+	require.NoError(t, err)
+	assert.Contains(t, string(savedData), shortID)
+	assert.Contains(t, string(savedData), customImageName)
 }
 
 // TestFlowConsistencyBetweenTestAndProduction validates that test and production
@@ -231,5 +260,9 @@ func TestFlowConsistencyBetweenTestAndProduction(t *testing.T) {
 	err = c.ValidateKiroCLI(ctx, hostPlatform)
 	require.NoError(t, err)
 
-	t.Log("✅ Test and production use identical flow: generate → build → create → verify")
+	// Note: This is a unit-level validation that the sandbox helpers work correctly
+	// in the same sequence used by the production runner (internal/eval/runner.go:562-639).
+	// It does not call the runner directly — changes to runner orchestration order
+	// should be caught by runner-level integration tests.
+	t.Log("✅ Unit validation: sandbox helpers support the generate → build → create → verify flow")
 }

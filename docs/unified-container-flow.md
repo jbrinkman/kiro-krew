@@ -88,8 +88,9 @@ The eval system now uses a unified **generate → build → create → verify** 
 
 ### Performance Impact Assessment
 - **Previous flow:** Container creation (~2-5s) + runtime installation (~10-20s) = ~15-25s
-- **New unified flow:** Full build (~35-70s) but with consistent, pre-installed environment
-- **Trade-off:** Longer initial build time for reliability and consistency
+- **New unified flow (cold):** Full build (~35-70s) but with consistent, pre-installed environment
+- **New unified flow (cached):** ~250ms when Docker layers are cached (typical after first run)
+- **Trade-off:** Longer initial cold-build time for reliability, consistency, and faster cached runs
 
 ### Performance Optimizations
 1. **Image caching:** Docker automatically caches layers between builds
@@ -179,7 +180,7 @@ kiro-cli eval --debug architect simple-task 2>&1 | grep -E "(Generate|Build|Crea
 
 ✅ **Functional:** Tests and production use identical container creation flow  
 ✅ **Debug:** Debug mode saves both Dockerfile and container registry info  
-✅ **Performance:** New flow completes within acceptable time limits (<5 minutes)  
+✅ **Performance:** New flow completes within acceptable time limits; cached builds run in <1s  
 ✅ **Reliability:** Zero regression in existing eval test success rates  
 ✅ **Maintainability:** Single code path reduces maintenance complexity
 

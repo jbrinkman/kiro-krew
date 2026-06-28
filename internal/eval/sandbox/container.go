@@ -22,6 +22,9 @@ import (
 	"github.com/jbrinkman/kiro-krew/internal/eval/debug"
 )
 
+// ImageNamePrefix is the prefix used for custom eval images.
+const ImageNamePrefix = "kiro-eval"
+
 // Container manages Docker container lifecycle
 type Container struct {
 	client      *client.Client
@@ -144,8 +147,8 @@ func (c *Container) CreateWithPlatform(ctx context.Context, config *container.Co
 	}
 
 	// Pull image if not exists (skip for custom local images)
-	isCustomImage := strings.HasPrefix(imageToUse, "kiro-eval")
-	_, _, err := c.client.ImageInspectWithRaw(ctx, imageToUse)
+	isCustomImage := strings.HasPrefix(imageToUse, ImageNamePrefix)
+	_, err := c.client.ImageInspect(ctx, imageToUse)
 	if err != nil && !isCustomImage {
 		if c.debugMode {
 			fmt.Printf("🔧 Debug: Pulling image %s for platform %s\n", imageToUse, platform)
@@ -444,7 +447,7 @@ func (c *Container) BuildImageFromDockerfile(ctx context.Context, dockerfile str
 	}
 	defer resp.Body.Close()
 
-	// Read build output to ensure completion and capture any errors
+	// Parse build output stream for errors
 	buildOutput, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("reading build output: %w", err)
@@ -454,8 +457,18 @@ func (c *Container) BuildImageFromDockerfile(ctx context.Context, dockerfile str
 		fmt.Printf("🔧 Debug: Build output: %s\n", string(buildOutput))
 	}
 
-	// Check if build was successful by looking for the image
-	_, _, err = c.client.ImageInspectWithRaw(ctx, imageName)
+	// Check for error messages in the build stream
+	if strings.Contains(string(buildOutput), `"error"`) {
+		// Extract error details from JSON stream
+		for _, line := range strings.Split(string(buildOutput), "\n") {
+			if strings.Contains(line, `"error"`) {
+				return fmt.Errorf("image build failed: %s", strings.TrimSpace(line))
+			}
+		}
+	}
+
+	// Verify the image exists
+	_, err = c.client.ImageInspect(ctx, imageName)
 	if err != nil {
 		return fmt.Errorf("image build completed but image %s not found: %w", imageName, err)
 	}
@@ -467,13 +480,18 @@ func (c *Container) BuildImageFromDockerfile(ctx context.Context, dockerfile str
 func (c *Container) GetCustomImageName(platform string) string {
 	// Replace slashes in platform for image name compatibility
 	safePlatform := strings.ReplaceAll(platform, "/", "-")
-	timestamp := time.Now().Unix()
+	timestamp := time.Now().UnixNano()
 
 	// Add debug identifier for easy cleanup when in debug mode
 	if c.debugMode {
 		return fmt.Sprintf("kiro-eval-debug:%s-%d", safePlatform, timestamp)
 	}
 	return fmt.Sprintf("kiro-eval:%s-%d", safePlatform, timestamp)
+}
+
+// RemoveImage removes a Docker image by name
+func (c *Container) RemoveImage(ctx context.Context, imageName string) ([]image.DeleteResponse, error) {
+	return c.client.ImageRemove(ctx, imageName, image.RemoveOptions{Force: false, PruneChildren: true})
 }
 
 func (c *Container) loadTemplate(projectType ProjectType) (string, error) {

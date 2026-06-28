@@ -563,7 +563,10 @@ func createContainerConfig(sandboxCfg *config.SandboxConfig, resourceLimits map[
 func invokeAgentInContainer(agent, prompt string, cConfig *ContainerConfig) (string, CostInfo, *ErrorContext, error) {
 	ctx := context.Background()
 
-	// Phase 1: Generate Dockerfile and build custom image
+	// Phase 1: Generate Dockerfile and build custom image (with timeout)
+	buildCtx, buildCancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer buildCancel()
+
 	buildStart := time.Now()
 
 	c, err := sandbox.NewContainerWithDebug("", cConfig.Debug)
@@ -580,11 +583,20 @@ func invokeAgentInContainer(agent, prompt string, cConfig *ContainerConfig) (str
 
 	// Build custom image from generated Dockerfile
 	customImageName := c.GetCustomImageName(cConfig.Platform)
-	if err := c.BuildImageFromDockerfile(ctx, dockerfile, customImageName, cConfig.Platform); err != nil {
+	if err := c.BuildImageFromDockerfile(buildCtx, dockerfile, customImageName, cConfig.Platform); err != nil {
 		return "", CostInfo{}, nil, fmt.Errorf("building custom image: %w", err)
 	}
 
 	fmt.Printf("  Image build: %v\n", time.Since(buildStart))
+
+	// Clean up custom image after use (preserve in debug mode for inspection)
+	if !cConfig.Debug {
+		defer func() {
+			if _, err := c.RemoveImage(ctx, customImageName); err != nil {
+				fmt.Printf("⚠️ Warning: Failed to remove custom image %s: %v\n", customImageName, err)
+			}
+		}()
+	}
 
 	// Phase 2: Container startup
 	createStart := time.Now()
@@ -635,7 +647,7 @@ func invokeAgentInContainer(agent, prompt string, cConfig *ContainerConfig) (str
 
 	// Verify kiro-cli is pre-installed and functional
 	if err := c.ValidateKiroCLI(ctx, cConfig.Platform); err != nil {
-		return "", CostInfo{}, nil, fmt.Errorf("installing kiro-cli: %w", err)
+		return "", CostInfo{}, nil, fmt.Errorf("validating kiro-cli: %w", err)
 	}
 
 	// Setup GitHub mocking if enabled
@@ -1679,25 +1691,21 @@ func saveDebugContainerInfo(containerID, imageName, customImageName, platform, a
 
 	// Create container info file
 	timestamp := time.Now().Format("20060102-150405")
-	shortID := containerID
-	if len(shortID) > 7 {
-		shortID = shortID[:7]
-	}
 
-	infoFile := filepath.Join(debugDir, fmt.Sprintf("container-%s-%s.json", timestamp, shortID))
+	infoFile := filepath.Join(debugDir, fmt.Sprintf("container-%s-%s.json", timestamp, containerID))
 
 	info := map[string]interface{}{
 		"container_id": containerID,
-		"short_id":     shortID,
+		"short_id":     containerID,
 		"base_image":   imageName,
 		"custom_image": customImageName,
 		"platform":     platform,
 		"agent":        agent,
 		"timestamp":    time.Now().Format(time.RFC3339),
 		"debug_commands": map[string]string{
-			"inspect":    fmt.Sprintf("docker inspect %s", shortID),
-			"logs":       fmt.Sprintf("docker logs %s", shortID),
-			"exec":       fmt.Sprintf("docker exec -it %s /bin/bash", shortID),
+			"inspect":    fmt.Sprintf("docker inspect %s", containerID),
+			"logs":       fmt.Sprintf("docker logs %s", containerID),
+			"exec":       fmt.Sprintf("docker exec -it %s /bin/bash", containerID),
 			"image_info": fmt.Sprintf("docker image inspect %s", customImageName),
 		},
 	}

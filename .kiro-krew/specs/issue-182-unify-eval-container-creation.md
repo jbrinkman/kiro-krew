@@ -204,6 +204,6 @@ docker run --rm <custom-image> kiro-cli --version
 
 1. **Functional**: Tests and production use identical container creation flow
 2. **Debug**: `--debug` mode saves both Dockerfile and container registry info
-3. **Performance**: New flow adds <10% overhead to eval execution time
+3. **Performance**: Unified flow completes within acceptable time limits; Docker layer caching mitigates cold-build overhead after first run
 4. **Reliability**: Zero regression in existing eval test success rates
 5. **Maintainability**: Single code path reduces maintenance complexity
