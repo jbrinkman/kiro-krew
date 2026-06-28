@@ -215,10 +215,87 @@ func (c *Container) Start(ctx context.Context) error {
 	}
 
 	err := c.client.ContainerStart(ctx, c.containerID, container.StartOptions{})
-	if err == nil && c.debugMode && c.registry != nil {
+	if err != nil {
+		return err
+	}
+
+	if c.debugMode && c.registry != nil {
 		c.registry.UpdateStatus(c.containerID, "running")
 	}
-	return err
+
+	// Validate workspace permissions after container start (only for custom images with workspace setup)
+	if strings.HasPrefix(c.imageName, ImageNamePrefix) {
+		if err := c.ValidateWorkspacePermissions(ctx); err != nil {
+			return fmt.Errorf("workspace permission validation failed: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// ValidateWorkspacePermissions validates that the sandbox user can write to /workspace
+func (c *Container) ValidateWorkspacePermissions(ctx context.Context) error {
+	// First check if /workspace directory exists
+	if _, err := c.ExecWithOutput(ctx, []string{"test", "-d", "/workspace"}); err != nil {
+		return fmt.Errorf("workspace directory not found: %w", err)
+	}
+
+	// Test write access as sandbox user
+	testCmd := []string{"sh", "-c", "touch /workspace/.permission_test && rm /workspace/.permission_test"}
+
+	if _, err := c.ExecWithOutput(ctx, testCmd); err != nil {
+		// Permission test failed, try to fix permissions by running command as root
+		if c.debugMode {
+			fmt.Printf("🔧 Debug: Initial permission test failed, attempting to fix workspace ownership\n")
+		}
+
+		// Create exec config to run as root (user ID 0) to fix permissions
+		execConfig := container.ExecOptions{
+			User:         "root", // Run as root to fix permissions
+			Cmd:          []string{"chown", "-R", "sandbox:sandbox", "/workspace"},
+			AttachStdout: true,
+			AttachStderr: true,
+		}
+
+		resp, err := c.client.ContainerExecCreate(ctx, c.containerID, execConfig)
+		if err != nil {
+			if c.debugMode {
+				fmt.Printf("🔧 Debug: Failed to create exec for permission fix: %v\n", err)
+			}
+		} else {
+			err = c.client.ContainerExecStart(ctx, resp.ID, container.ExecStartOptions{})
+			if err != nil {
+				if c.debugMode {
+					fmt.Printf("🔧 Debug: Failed to execute permission fix: %v\n", err)
+				}
+			}
+		}
+
+		// Try the write test again after permission fix attempt
+		if _, retryErr := c.ExecWithOutput(ctx, testCmd); retryErr != nil {
+			// Enhanced error reporting with diagnostic info
+			diagInfo := ""
+			if user, userErr := c.ExecWithOutput(ctx, []string{"whoami"}); userErr == nil {
+				diagInfo += fmt.Sprintf(" (user: %s", user)
+			}
+			if perms, permsErr := c.ExecWithOutput(ctx, []string{"ls", "-ld", "/workspace"}); permsErr == nil {
+				diagInfo += fmt.Sprintf(", /workspace perms: %s)", perms)
+			} else {
+				diagInfo += ")"
+			}
+
+			return fmt.Errorf("workspace not writable by sandbox user%s: %w", diagInfo, retryErr)
+		}
+
+		if c.debugMode {
+			fmt.Printf("🔧 Debug: Workspace permissions fixed successfully\n")
+		}
+	}
+
+	if c.debugMode {
+		fmt.Printf("🔧 Debug: Workspace permissions validated for sandbox user\n")
+	}
+	return nil
 }
 
 // CopyTo copies a file to the container

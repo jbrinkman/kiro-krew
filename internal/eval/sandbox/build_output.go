@@ -41,12 +41,6 @@ func (p *DockerBuildOutputParser) ParseBuildStream(reader io.Reader) (string, er
 	for scanner.Scan() {
 		line := scanner.Text()
 
-		if p.Debug {
-			result.WriteString(line + "\n")
-			parsed++
-			continue
-		}
-
 		var msg dockerStreamMessage
 		if err := json.Unmarshal([]byte(line), &msg); err != nil {
 			continue
@@ -64,7 +58,14 @@ func (p *DockerBuildOutputParser) ParseBuildStream(reader io.Reader) (string, er
 
 		if msg.Stream != "" {
 			clean := ansiRegex.ReplaceAllString(msg.Stream, "")
-			result.WriteString(clean)
+
+			if p.Debug {
+				// Format debug output for better readability
+				formatted := p.formatDebugOutput(clean)
+				result.WriteString(formatted)
+			} else {
+				result.WriteString(clean)
+			}
 		}
 	}
 
@@ -77,4 +78,38 @@ func (p *DockerBuildOutputParser) ParseBuildStream(reader io.Reader) (string, er
 	}
 
 	return result.String(), nil
+}
+
+// formatDebugOutput formats Docker build steps for better debug readability
+func (p *DockerBuildOutputParser) formatDebugOutput(clean string) string {
+	clean = strings.TrimSpace(clean)
+	if clean == "" {
+		return ""
+	}
+
+	// Format "Step X/Y : INSTRUCTION" lines
+	stepRegex := regexp.MustCompile(`^Step (\d+/\d+) : (.+)$`)
+	if match := stepRegex.FindStringSubmatch(clean); match != nil {
+		return fmt.Sprintf("Step %s: %s\n", match[1], match[2])
+	}
+
+	// Format "--->" hash lines to show progression
+	if strings.HasPrefix(clean, " ---> ") {
+		hash := strings.TrimPrefix(clean, " ---> ")
+		return fmt.Sprintf(" → %s\n", hash)
+	}
+
+	// Format "Successfully built" and "Successfully tagged" lines
+	if strings.HasPrefix(clean, "Successfully built ") {
+		hash := strings.TrimPrefix(clean, "Successfully built ")
+		return fmt.Sprintf("✅ Built: %s\n", hash)
+	}
+
+	if strings.HasPrefix(clean, "Successfully tagged ") {
+		tag := strings.TrimPrefix(clean, "Successfully tagged ")
+		return fmt.Sprintf("✅ Tagged: %s\n", tag)
+	}
+
+	// Return other lines as-is with newline
+	return clean + "\n"
 }
