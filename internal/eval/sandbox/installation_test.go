@@ -434,6 +434,17 @@ func TestMockGitHub_Functions(t *testing.T) {
 	ctx := context.Background()
 	tempDir := t.TempDir()
 
+	config := &container.Config{
+		Image: "alpine:3.19",
+		Cmd:   []string{"sleep", "30"},
+	}
+	err = c.Create(ctx, config, &container.HostConfig{})
+	require.NoError(t, err)
+
+	err = c.Start(ctx)
+	require.NoError(t, err)
+	defer c.Cleanup(ctx)
+
 	err = c.SetupGitHubMocking(ctx, tempDir)
 	assert.NoError(t, err, "SetupGitHubMocking should not fail")
 
