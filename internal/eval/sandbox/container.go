@@ -396,11 +396,21 @@ func (c *Container) GenerateDockerfileWithPlatform(projectPath, platform string)
 	}
 	dockerfile.WriteString(kiroCLIInstall)
 
+	// Add build-time file copying
+	copyCommands, err := c.generateBuildTimeCopyCommands(projectPath)
+	if err != nil {
+		return "", fmt.Errorf("generating build-time copy commands: %w", err)
+	}
+	dockerfile.WriteString(copyCommands)
+
 	// Add user and workspace setup
 	dockerfile.WriteString("RUN adduser -D -s /bin/bash sandbox\n")
 	dockerfile.WriteString("RUN mkdir -p /workspace && chown sandbox:sandbox /workspace\n")
 	dockerfile.WriteString("WORKDIR /workspace\n")
 	dockerfile.WriteString("USER sandbox\n")
+
+	// Set PATH to include GitHub CLI mock
+	dockerfile.WriteString("ENV PATH=\"/workspace/.kiro/skills/github-cli:$PATH\"\n")
 	dockerfile.WriteString("CMD [\"/bin/bash\"]\n")
 
 	dockerfileContent := dockerfile.String()
@@ -512,6 +522,43 @@ func (c *Container) GetCustomImageName(platform string) string {
 // RemoveImage removes a Docker image by name
 func (c *Container) RemoveImage(ctx context.Context, imageName string) ([]image.DeleteResponse, error) {
 	return c.client.ImageRemove(ctx, imageName, image.RemoveOptions{Force: false, PruneChildren: true})
+}
+
+// generateBuildTimeCopyCommands creates Dockerfile COPY commands for build-time file embedding
+func (c *Container) generateBuildTimeCopyCommands(projectPath string) (string, error) {
+	var commands strings.Builder
+
+	// Copy GitHub CLI mock files
+	mockPath := filepath.Join(projectPath, "internal/eval/sandbox/testdata/github-cli-mock")
+	if _, err := os.Stat(mockPath); err == nil {
+		commands.WriteString("# Copy GitHub CLI mock files\n")
+		commands.WriteString("COPY internal/eval/sandbox/testdata/github-cli-mock/ /workspace/.kiro/skills/github-cli/\n")
+		commands.WriteString("RUN chmod +x /workspace/.kiro/skills/github-cli/gh\n\n")
+	}
+
+	// Copy agent configurations
+	agentPath := filepath.Join(projectPath, ".kiro/agents")
+	if _, err := os.Stat(agentPath); err == nil {
+		commands.WriteString("# Copy agent configurations\n")
+		commands.WriteString("COPY .kiro/agents/ /workspace/.kiro/agents/\n\n")
+	}
+
+	// Copy evaluation data
+	evalPath := filepath.Join(projectPath, ".kiro-krew/evals")
+	if _, err := os.Stat(evalPath); err == nil {
+		commands.WriteString("# Copy evaluation data\n")
+		commands.WriteString("COPY .kiro-krew/evals/ /workspace/.kiro-krew/evals/\n\n")
+	}
+
+	// Copy kiro-krew binary if available
+	binaryPath := filepath.Join(projectPath, "kiro-krew")
+	if _, err := os.Stat(binaryPath); err == nil {
+		commands.WriteString("# Copy kiro-krew binary\n")
+		commands.WriteString("COPY kiro-krew /usr/local/bin/kiro-krew\n")
+		commands.WriteString("RUN chmod +x /usr/local/bin/kiro-krew\n\n")
+	}
+
+	return commands.String(), nil
 }
 
 func (c *Container) loadTemplate(projectType ProjectType) (string, error) {
