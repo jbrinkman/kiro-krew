@@ -76,7 +76,7 @@ func (im *ImageManager) BuildForEvaluation(ctx context.Context, dockerfile, plat
 	}
 	defer container.Close()
 
-	if err := container.buildImageDirect(ctx, dockerfile, imageName, platform); err != nil {
+	if err := container.buildImageWithContext(ctx, dockerfile, imageName, platform); err != nil {
 		return "", fmt.Errorf("building image %s: %w", imageName, err)
 	}
 

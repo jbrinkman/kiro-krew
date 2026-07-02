@@ -363,6 +363,7 @@ func (c *Container) CleanupWithDebugInfo(ctx context.Context, failed bool) error
 }
 
 // GenerateDockerfileWithPlatform creates a custom Dockerfile with platform-specific kiro-cli installation
+// and embedded files for build-time setup
 func (c *Container) GenerateDockerfileWithPlatform(projectPath, platform string) (string, error) {
 	projects := DetectProject(projectPath)
 
@@ -399,6 +400,36 @@ func (c *Container) GenerateDockerfileWithPlatform(projectPath, platform string)
 	// Add user and workspace setup
 	dockerfile.WriteString("RUN adduser -D -s /bin/bash sandbox\n")
 	dockerfile.WriteString("RUN mkdir -p /workspace && chown sandbox:sandbox /workspace\n")
+
+	// Create directories for embedded files with proper ownership
+	dockerfile.WriteString("RUN mkdir -p /workspace/.kiro/agents && \\\n")
+	dockerfile.WriteString("    mkdir -p /workspace/.kiro/skills/github-cli && \\\n")
+	dockerfile.WriteString("    mkdir -p /workspace/.kiro-krew/evals && \\\n")
+	dockerfile.WriteString("    chown -R sandbox:sandbox /workspace/.kiro && \\\n")
+	dockerfile.WriteString("    chown -R sandbox:sandbox /workspace/.kiro-krew\n\n")
+
+	// Copy kiro-krew binary from build context
+	dockerfile.WriteString("# Copy kiro-krew binary from build context\n")
+	dockerfile.WriteString("COPY --chown=sandbox:sandbox kiro-krew /usr/local/bin/kiro-krew\n")
+	dockerfile.WriteString("RUN chmod +x /usr/local/bin/kiro-krew\n\n")
+
+	// Copy agent configurations from build context
+	dockerfile.WriteString("# Copy agent configurations\n")
+	dockerfile.WriteString("COPY --chown=sandbox:sandbox .kiro/agents/ /workspace/.kiro/agents/\n\n")
+
+	// Copy GitHub CLI mock files from build context
+	dockerfile.WriteString("# Copy GitHub CLI mock files\n")
+	dockerfile.WriteString("COPY --chown=sandbox:sandbox github-cli-mock/ /workspace/.kiro/skills/github-cli/\n")
+	dockerfile.WriteString("RUN chmod +x /workspace/.kiro/skills/github-cli/gh\n\n")
+
+	// Copy evaluation files from build context
+	dockerfile.WriteString("# Copy evaluation files\n")
+	dockerfile.WriteString("COPY --chown=sandbox:sandbox .kiro-krew/evals/ /workspace/.kiro-krew/evals/\n\n")
+
+	// Configure PATH to include mock GitHub CLI
+	dockerfile.WriteString("# Configure PATH for mock GitHub CLI\n")
+	dockerfile.WriteString("ENV PATH=\"/workspace/.kiro/skills/github-cli:$PATH\"\n\n")
+
 	dockerfile.WriteString("WORKDIR /workspace\n")
 	dockerfile.WriteString("USER sandbox\n")
 	dockerfile.WriteString("CMD [\"/bin/bash\"]\n")
@@ -419,7 +450,7 @@ func (c *Container) GenerateDockerfileWithPlatform(projectPath, platform string)
 	return dockerfileContent, nil
 }
 
-// BuildImageFromDockerfile builds a Docker image from generated Dockerfile content
+// BuildImageFromDockerfile builds a Docker image from generated Dockerfile content with build context
 func (c *Container) BuildImageFromDockerfile(ctx context.Context, dockerfile string, imageName string, platform string) error {
 	// Use image manager for reuse if available
 	if c.imageManager != nil {
@@ -432,32 +463,22 @@ func (c *Container) BuildImageFromDockerfile(ctx context.Context, dockerfile str
 		return nil
 	}
 
-	return c.buildImageDirect(ctx, dockerfile, imageName, platform)
+	return c.buildImageWithContext(ctx, dockerfile, imageName, platform)
 }
 
-// buildImageDirect performs the actual Docker image build without imageManager delegation.
-func (c *Container) buildImageDirect(ctx context.Context, dockerfile string, imageName string, platform string) error {
-
-	// Create tar archive with Dockerfile
-	var buf bytes.Buffer
-	tw := tar.NewWriter(&buf)
-
-	dockerfileInfo := &tar.Header{
-		Name: "Dockerfile",
-		Size: int64(len(dockerfile)),
-		Mode: 0644,
+// buildImageWithContext performs Docker image build with prepared build context containing all required files
+func (c *Container) buildImageWithContext(ctx context.Context, dockerfile string, imageName string, platform string) error {
+	// Prepare build context with all required files
+	buildContext, err := PrepareBuildContext("")
+	if err != nil {
+		return fmt.Errorf("preparing build context: %w", err)
 	}
+	defer buildContext.Cleanup()
 
-	if err := tw.WriteHeader(dockerfileInfo); err != nil {
-		return fmt.Errorf("writing dockerfile header: %w", err)
-	}
-
-	if _, err := tw.Write([]byte(dockerfile)); err != nil {
-		return fmt.Errorf("writing dockerfile content: %w", err)
-	}
-
-	if err := tw.Close(); err != nil {
-		return fmt.Errorf("closing tar writer: %w", err)
+	// Create tar archive with Dockerfile and build context files
+	tarData, err := c.createBuildContextTar(dockerfile, buildContext)
+	if err != nil {
+		return fmt.Errorf("creating build context tar: %w", err)
 	}
 
 	// Build the image
@@ -467,10 +488,11 @@ func (c *Container) buildImageDirect(ctx context.Context, dockerfile string, ima
 	}
 
 	if c.debugMode {
-		fmt.Printf("🔧 Debug: Building image %s for platform %s\n", imageName, platform)
+		fmt.Printf("🔧 Debug: Building image %s for platform %s with build context\n", imageName, platform)
+		fmt.Printf("🔧 Debug: Build context contains %d files\n", len(buildContext.Files))
 	}
 
-	resp, err := c.client.ImageBuild(ctx, bytes.NewReader(buf.Bytes()), buildOptions)
+	resp, err := c.client.ImageBuild(ctx, tarData, buildOptions)
 	if err != nil {
 		return fmt.Errorf("building image: %w", err)
 	}
@@ -607,6 +629,75 @@ func (c *Container) verifyKiroCLIInstallation(ctx context.Context) error {
 		fmt.Printf("✅ kiro-cli installation verified: %s\n", version)
 	}
 	return nil
+}
+
+// createBuildContextTar creates a tar archive containing the Dockerfile and build context files
+func (c *Container) createBuildContextTar(dockerfile string, buildContext *BuildContext) (*bytes.Reader, error) {
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+
+	// Add Dockerfile
+	dockerfileHeader := &tar.Header{
+		Name: "Dockerfile",
+		Size: int64(len(dockerfile)),
+		Mode: 0644,
+	}
+	if err := tw.WriteHeader(dockerfileHeader); err != nil {
+		return nil, fmt.Errorf("writing dockerfile header: %w", err)
+	}
+	if _, err := tw.Write([]byte(dockerfile)); err != nil {
+		return nil, fmt.Errorf("writing dockerfile content: %w", err)
+	}
+
+	// Add all build context files
+	err := filepath.Walk(buildContext.TempDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if info.IsDir() {
+			return nil
+		}
+
+		// Get relative path from build context temp dir
+		relPath, err := filepath.Rel(buildContext.TempDir, path)
+		if err != nil {
+			return err
+		}
+
+		// Read file content
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("reading build context file %s: %w", path, err)
+		}
+
+		// Add to tar
+		header := &tar.Header{
+			Name: relPath,
+			Size: int64(len(content)),
+			Mode: int64(info.Mode().Perm()),
+		}
+
+		if err := tw.WriteHeader(header); err != nil {
+			return fmt.Errorf("writing header for %s: %w", relPath, err)
+		}
+
+		if _, err := tw.Write(content); err != nil {
+			return fmt.Errorf("writing content for %s: %w", relPath, err)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("walking build context: %w", err)
+	}
+
+	if err := tw.Close(); err != nil {
+		return nil, fmt.Errorf("closing tar writer: %w", err)
+	}
+
+	return bytes.NewReader(buf.Bytes()), nil
 }
 
 // Close closes the Docker client
