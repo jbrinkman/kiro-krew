@@ -27,9 +27,7 @@ Sync is **one-way** (live → template). CI enforces this via `task sync:check` 
 
 ### Exclusion Patterns
 
-**Never sync `*-conventions` skills** — they are project-specific and must NOT be distributed in templates:
-- `builder-conventions`
-- `planner-conventions`
+**Never sync `*-conventions` skills** — they are project-specific and must NOT be distributed in templates.
 
 ### Sync Commands
 
