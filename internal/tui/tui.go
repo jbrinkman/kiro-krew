@@ -94,6 +94,9 @@ type model struct {
 
 	// About dialog state
 	aboutDialog *AboutDialog
+
+	// Footer system
+	footerManager *FooterManager
 }
 
 func newModel(w *watcher.Watcher, m *agent.Manager, cfg *config.Config, logFile *os.File, logReader *os.File) model {
@@ -113,6 +116,9 @@ func newModel(w *watcher.Watcher, m *agent.Manager, cfg *config.Config, logFile 
 	mainTab := NewMainTab()
 	tabManager.AddTab(mainTab)
 
+	// Initialize footer system
+	footerManager := NewFooterManager(styles, cfg, autocompleteInput)
+
 	return model{
 		watcher:          w,
 		manager:          m,
@@ -130,10 +136,11 @@ func newModel(w *watcher.Watcher, m *agent.Manager, cfg *config.Config, logFile 
 			inputValue:    "",
 			activityLines: make([]string, 0),
 		},
-		tabManager:  tabManager,
-		mainTab:     mainTab,
-		knownAgents: make(map[string]bool),
-		aboutDialog: NewAboutDialog(),
+		tabManager:    tabManager,
+		mainTab:       mainTab,
+		knownAgents:   make(map[string]bool),
+		aboutDialog:   NewAboutDialog(),
+		footerManager: footerManager,
 	}
 }
 
@@ -167,15 +174,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		// Resize console viewport — account for tab header + separator + input
-		activityHeight := m.height - 2 - tabHeaderHeight
+
+		// Update footer manager dimensions
+		m.footerManager.Resize(msg.Width, msg.Height)
+
+		// Resize console viewport — account for tab header + footer system height
+		footerHeight := m.footerManager.GetFooterHeight()
+		activityHeight := m.height - footerHeight - tabHeaderHeight
 		if activityHeight < 1 {
 			activityHeight = 1
 		}
 		m.consoleViewport.SetWidth(msg.Width)
 		m.consoleViewport.SetHeight(activityHeight)
+
 		// Forward to tab manager
 		m.tabManager.Resize(msg.Width, msg.Height)
+
 		// Recalculate overlay dimensions on resize
 		if m.activeOverlay != overlayNone {
 			m.overlayWidth = int(float64(m.width) * 0.6)
@@ -195,13 +209,33 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if msg.err != nil {
 			m = m.appendActivity(m.styles.Error.Render(fmt.Sprintf("Planning session exited with error: %v", msg.err)))
+
+			// Log the error for debugging
+			log.Printf("Planning session error: %v", msg.err)
 		} else {
-			m = m.appendActivity(m.styles.Success.Render("Planning session completed."))
+			m = m.appendActivity(m.styles.Success.Render("Planning session completed successfully."))
 		}
 
-		// Clean up planning session tracking
+		// Clean up planning session tracking with comprehensive error handling
 		if m.activePlanningSession != nil {
+			// Attempt to properly save session state before cleanup
+			if saveErr := m.activePlanningSession.SaveState(); saveErr != nil {
+				m = m.appendActivity(m.styles.Warning.Render(fmt.Sprintf("Warning: Failed to save planning session state: %v", saveErr)))
+				log.Printf("Planning session save error: %v", saveErr)
+			}
+
+			// Cleanup the session resources
+			if cleanupErr := m.activePlanningSession.Cleanup(); cleanupErr != nil {
+				m = m.appendActivity(m.styles.Warning.Render(fmt.Sprintf("Warning: Planning session cleanup had issues: %v", cleanupErr)))
+				log.Printf("Planning session cleanup error: %v", cleanupErr)
+			}
+
 			m.activePlanningSession = nil
+		}
+
+		// Stop context tracking when exiting planning mode
+		if m.footerManager != nil && m.footerManager.GetContextTracker() != nil {
+			m.footerManager.GetContextTracker().StopPlanningSession()
 		}
 
 		m = m.restoreConsoleState()
@@ -407,8 +441,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			input := strings.ToLower(strings.TrimSpace(msg.String()))
 			switch input {
 			case "y", "yes":
-				m.manager.StopAll()
-				m.watcher.Stop()
+				// Perform comprehensive cleanup
+				m = m.performExitCleanup()
 				m.quitting = true
 				return m, tea.Quit
 			default:
@@ -540,73 +574,28 @@ func (m model) clearOverlay() model {
 }
 
 func (m model) renderBaseView() string {
-	// Reserve 2 lines for prompt area (separator + input); tab header accounted for in viewport height
-	activityHeight := m.height - 2 - tabHeaderHeight
+	// Calculate activity height accounting for footer and tab header
+	footerHeight := m.footerManager.GetFooterHeightWithDropdown()
+	activityHeight := m.height - footerHeight - tabHeaderHeight
 	if activityHeight < 1 {
 		activityHeight = 1
 	}
 
-	// Check if dropdown is visible and adjust activity height accordingly
-	var dropdownContent string
-	var dropdownHeight int
-	if m.input.IsDropdownVisible() {
-		dropdownContent = m.input.ViewDropdown()
-		if dropdownContent != "" {
-			dropdownHeight = len(strings.Split(dropdownContent, "\n"))
-			// Reserve space for dropdown above the input, but ensure minimum activity space
-			newActivityHeight := activityHeight - dropdownHeight
-			if newActivityHeight >= 1 {
-				activityHeight = newActivityHeight
-			} else {
-				// Terminal too small for dropdown, hide it
-				dropdownContent = ""
-				dropdownHeight = 0
-			}
-		}
-	}
-
-	// Update viewport height to accommodate dropdown
+	// Update viewport height for the available space
 	m.consoleViewport.SetHeight(activityHeight)
 	activity := m.consoleViewport.View()
 
-	separator := m.styles.Separator.Render(strings.Repeat("─", m.width))
-
-	// Create theme label
-	themeLabel := m.styles.ThemeLabel.Render(fmt.Sprintf("theme: %s", m.config.Theme))
-	themeLabelWidth := lipgloss.Width(themeLabel)
-
-	// If the terminal is too narrow to fit both prompt + theme label, hide the theme label.
-	if m.width > 0 && themeLabelWidth+20 > m.width {
-		themeLabel = ""
-		themeLabelWidth = 0
+	// Render footer using the footer system
+	activeTab := m.tabManager.GetActiveTab()
+	activeTabType := TabTypeMain
+	if activeTab != nil {
+		activeTabType = activeTab.Type()
 	}
 
-	// Calculate available width for prompt (minimum 20 columns when possible)
-	promptWidth := m.width - themeLabelWidth
-	if m.width >= 20 && promptWidth < 20 {
-		promptWidth = 20
-	}
-	if promptWidth < 1 {
-		promptWidth = 1
-	}
-	// Create prompt with adjusted width
-	promptInput := m.input.View()
-	prompt := m.styles.Prompt.Width(promptWidth).Render(promptInput)
+	footerWithDropdown, _ := m.footerManager.RenderDropdownWithFooter(activeTabType)
 
-	// Join prompt and theme label horizontally
-	promptLine := lipgloss.JoinHorizontal(lipgloss.Top, prompt, themeLabel)
-
-	// Compose view with dropdown above input
-	baseView := m.styles.Activity.Render(activity) + "\n" + separator
-
-	// Insert dropdown above the input line if visible and fits
-	if dropdownContent != "" {
-		baseView += "\n" + dropdownContent
-	}
-
-	baseView += "\n" + promptLine
-
-	return baseView
+	// Compose the complete base view
+	return m.styles.Activity.Render(activity) + "\n" + footerWithDropdown
 }
 
 func (m model) View() tea.View {
@@ -816,15 +805,72 @@ func (m model) tryExit() (model, tea.Cmd) {
 		}
 	}
 
-	if running > 0 {
+	// Count active planning tabs
+	activePlanningTabs := 0
+	for _, tab := range m.tabManager.GetTabs() {
+		if planningTab, ok := tab.(*PlanningTab); ok && planningTab.IsActive() {
+			activePlanningTabs++
+		}
+	}
+
+	if running > 0 || activePlanningTabs > 0 {
 		m.confirmingExit = true
-		m = m.appendActivity(m.styles.Warning.Render(fmt.Sprintf("There are %d agents still running. Stop all and exit? (y/N)", running)))
+		if running > 0 && activePlanningTabs > 0 {
+			m = m.appendActivity(m.styles.Warning.Render(fmt.Sprintf("There are %d agents running and %d active planning sessions. Stop all and exit? (y/N)", running, activePlanningTabs)))
+		} else if running > 0 {
+			m = m.appendActivity(m.styles.Warning.Render(fmt.Sprintf("There are %d agents still running. Stop all and exit? (y/N)", running)))
+		} else {
+			m = m.appendActivity(m.styles.Warning.Render(fmt.Sprintf("There are %d active planning sessions. Close all and exit? (y/N)", activePlanningTabs)))
+		}
 		return m, nil
 	}
 
-	m.watcher.Stop()
+	// Perform cleanup before exit
+	m = m.performExitCleanup()
 	m.quitting = true
 	return m, tea.Quit
+}
+
+// performExitCleanup performs comprehensive cleanup when exiting
+func (m model) performExitCleanup() model {
+	cleanupErrors := []string{}
+
+	// Stop all agents
+	m.manager.StopAll()
+
+	// Stop watcher
+	m.watcher.Stop()
+
+	// Cleanup all planning tabs
+	for _, tab := range m.tabManager.GetTabs() {
+		if planningTab, ok := tab.(*PlanningTab); ok {
+			// Force save session state before cleanup
+			planningTab.SaveSession()
+
+			// Close tab (includes ACP client cleanup)
+			planningTab.Close()
+		}
+	}
+
+	// Stop context tracking
+	if m.footerManager != nil && m.footerManager.GetContextTracker() != nil {
+		m.footerManager.GetContextTracker().StopPlanningSession()
+	}
+
+	// Session manager cleanup
+	if err := m.sessionManager.CleanupOnExit(); err != nil {
+		cleanupErrors = append(cleanupErrors, fmt.Sprintf("Session cleanup warning: %v", err))
+	}
+
+	// Report cleanup issues (non-blocking)
+	if len(cleanupErrors) > 0 {
+		m = m.appendActivity(m.styles.Warning.Render("Cleanup warnings:"))
+		for _, err := range cleanupErrors {
+			m = m.appendActivity(m.styles.Warning.Render(fmt.Sprintf("  %s", err)))
+		}
+	}
+
+	return m
 }
 
 func (m model) executeCommand(input string) (model, tea.Cmd) {
@@ -847,6 +893,17 @@ func (m model) executeCommand(input string) (model, tea.Cmd) {
 		}
 		return m.handleStop(parts[1])
 	case "plan":
+		// Check if this is "plan classic" command
+		if len(parts) >= 2 && strings.ToLower(parts[1]) == "classic" {
+			// Extract description after "classic"
+			description := ""
+			if len(parts) > 2 {
+				description = strings.Join(parts[2:], " ")
+			}
+			return m.handlePlanClassic(description)
+		}
+
+		// Regular plan command - uses ACP-based planning tabs
 		description := ""
 		if len(parts) > 1 {
 			description = strings.Join(parts[1:], " ")
@@ -897,6 +954,45 @@ func (m model) updateAgentTabs() model {
 	}
 
 	return m
+}
+
+// testACPConnection tests the ACP connection for a planning tab
+func (m model) testACPConnection(planningTab Tab) error {
+	if planningTab == nil {
+		return fmt.Errorf("planning tab is nil")
+	}
+
+	// Ensure this is actually a planning tab
+	if planningTab.Type() != TabTypePlanning {
+		return fmt.Errorf("tab is not a planning tab")
+	}
+
+	// This is a placeholder for ACP connection testing
+	// In a real implementation, this would attempt to establish an ACP connection
+	// and verify that kiro-cli is accessible
+	return nil
+}
+
+// hasACPWarnings checks if a planning tab has ACP-related warnings
+func (m model) hasACPWarnings(planningTab Tab) bool {
+	if planningTab == nil || planningTab.Type() != TabTypePlanning {
+		return true
+	}
+
+	// Cast to PlanningTab to access planning-specific methods
+	if pt, ok := planningTab.(*PlanningTab); ok {
+		// Check if the planning tab has any system messages indicating warnings
+		if pt.GetMessageCount() == 0 {
+			return false
+		}
+
+		lastMessage := pt.GetLastMessage()
+		if lastMessage != nil && lastMessage.Role == "system" {
+			return strings.Contains(lastMessage.Content, "⚠️") || strings.Contains(lastMessage.Content, "warning")
+		}
+	}
+
+	return false
 }
 
 func Run(w *watcher.Watcher, m *agent.Manager, cfg *config.Config) error {

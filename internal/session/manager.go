@@ -242,8 +242,39 @@ func (sm *SessionManager) recoverCorruptedSession(id, filename string, data []by
 	}
 
 	if sessionType != "" {
-		// Create new session with recovered type
-		recovered := NewSessionState(sessionType)
+		var recovered *SessionState
+
+		if sessionType == Planning {
+			// Try to extract planning data for better recovery
+			var planningData struct {
+				PlanningData *PlanningSessionData `json:"planning_data"`
+			}
+
+			tabID := "recovered-" + id
+			title := "Recovered Planning Tab"
+
+			// Attempt to extract planning metadata if possible
+			if json.Unmarshal(data, &planningData) == nil && planningData.PlanningData != nil {
+				if planningData.PlanningData.TabID != "" {
+					tabID = planningData.PlanningData.TabID
+				}
+				if planningData.PlanningData.Title != "" {
+					title = planningData.PlanningData.Title
+				}
+			}
+
+			recovered = NewPlanningSessionState(tabID, title)
+		} else {
+			recovered = NewSessionState(sessionType)
+		}
+
+		// Try to recover conversation history
+		var historyData struct {
+			History []Message `json:"history"`
+		}
+		if json.Unmarshal(data, &historyData) == nil && len(historyData.History) > 0 {
+			recovered.History = historyData.History
+		}
 
 		// Create backup of corrupted file
 		backupName := filename + ".corrupt." + time.Now().Format("20060102-150405")
@@ -277,6 +308,54 @@ func (sm *SessionManager) ValidateSession(id string, state *SessionState) error 
 		}
 	}
 
+	// Validate planning-specific data
+	if state.Type == Planning {
+		// Planning data is only required for sessions created with NewPlanningSessionState
+		// Sessions created with NewSessionState(Planning) don't have planning data by design
+		if state.PlanningData != nil {
+			if state.PlanningData.TabID == "" {
+				return &ValidationError{SessionID: id, Field: "planning_data.tab_id", Message: "planning session missing tab ID"}
+			}
+
+			if state.PlanningData.Title == "" {
+				return &ValidationError{SessionID: id, Field: "planning_data.title", Message: "planning session missing title"}
+			}
+
+			// Validate planning state enum
+			planningState := state.PlanningData.State
+			if planningState < PlanningStateIdle || planningState > PlanningStateReadOnly {
+				return &ValidationError{SessionID: id, Field: "planning_data.state", Message: fmt.Sprintf("invalid planning state: %d", planningState)}
+			}
+
+			// Validate ACP connection metadata
+			if state.PlanningData.ACPConnection.Agent == "" {
+				return &ValidationError{SessionID: id, Field: "planning_data.acp_connection.agent", Message: "ACP agent name is empty"}
+			}
+
+			if state.PlanningData.ACPConnection.Model == "" {
+				return &ValidationError{SessionID: id, Field: "planning_data.acp_connection.model", Message: "ACP model name is empty"}
+			}
+
+			// Validate context usage
+			if state.PlanningData.ContextUsage.Total <= 0 {
+				return &ValidationError{SessionID: id, Field: "planning_data.context_usage.total", Message: "invalid context total"}
+			}
+
+			if state.PlanningData.ContextUsage.Used < 0 {
+				return &ValidationError{SessionID: id, Field: "planning_data.context_usage.used", Message: "invalid context used (negative)"}
+			}
+
+			// Validate timestamps
+			if state.PlanningData.CreatedAt.IsZero() {
+				return &ValidationError{SessionID: id, Field: "planning_data.created_at", Message: "missing creation timestamp"}
+			}
+
+			if state.PlanningData.LastActivity.IsZero() {
+				return &ValidationError{SessionID: id, Field: "planning_data.last_activity", Message: "missing last activity timestamp"}
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -290,7 +369,7 @@ func (sm *SessionManager) RepairSession(id string, state *SessionState) {
 		state.History = make([]Message, 0)
 	}
 
-	// Fix zero timestamps
+	// Fix zero timestamps in message history
 	for i := range state.History {
 		if state.History[i].Timestamp.IsZero() {
 			state.History[i].Timestamp = time.Now()
@@ -300,6 +379,81 @@ func (sm *SessionManager) RepairSession(id string, state *SessionState) {
 	// Trim excessive history (memory protection)
 	if len(state.History) > 10000 {
 		state.History = state.History[len(state.History)-5000:]
+	}
+
+	// Repair planning-specific data
+	if state.Type == Planning {
+		if state.PlanningData == nil {
+			// Reconstruct planning data with defaults if missing
+			now := time.Now()
+			state.PlanningData = &PlanningSessionData{
+				TabID:        "recovered-" + id,
+				Title:        "Recovered Planning Tab",
+				State:        PlanningStateIdle,
+				CreatedAt:    now,
+				LastActivity: now,
+				ACPConnection: ACPConnectionMetadata{
+					Agent:          "kiro-agent",
+					Model:          "claude-sonnet-4",
+					Connected:      false,
+					Timeout:        60 * time.Second,
+					ResponseFormat: "text",
+					Streaming:      true,
+				},
+				ContextUsage: ContextUsage{
+					Used:  0,
+					Total: 200000,
+				},
+			}
+		} else {
+			// Fix individual fields in existing planning data
+			if state.PlanningData.TabID == "" {
+				state.PlanningData.TabID = "recovered-" + id
+			}
+
+			if state.PlanningData.Title == "" {
+				state.PlanningData.Title = "Recovered Planning Tab"
+			}
+
+			now := time.Now()
+			if state.PlanningData.CreatedAt.IsZero() {
+				state.PlanningData.CreatedAt = now
+			}
+
+			if state.PlanningData.LastActivity.IsZero() {
+				state.PlanningData.LastActivity = now
+			}
+
+			// Fix ACP connection defaults
+			if state.PlanningData.ACPConnection.Agent == "" {
+				state.PlanningData.ACPConnection.Agent = "kiro-agent"
+			}
+
+			if state.PlanningData.ACPConnection.Model == "" {
+				state.PlanningData.ACPConnection.Model = "claude-sonnet-4"
+			}
+
+			if state.PlanningData.ACPConnection.Timeout == 0 {
+				state.PlanningData.ACPConnection.Timeout = 60 * time.Second
+			}
+
+			if state.PlanningData.ACPConnection.ResponseFormat == "" {
+				state.PlanningData.ACPConnection.ResponseFormat = "text"
+			}
+
+			if state.PlanningData.ACPConnection.LastActivity.IsZero() {
+				state.PlanningData.ACPConnection.LastActivity = now
+			}
+
+			// Fix context usage defaults
+			if state.PlanningData.ContextUsage.Total <= 0 {
+				state.PlanningData.ContextUsage.Total = 200000
+			}
+
+			if state.PlanningData.ContextUsage.Used < 0 {
+				state.PlanningData.ContextUsage.Used = 0
+			}
+		}
 	}
 }
 
@@ -330,4 +484,185 @@ func (sm *SessionManager) ValidateSessionFlow(sessionID string) error {
 	}
 
 	return nil
+}
+
+// Planning Tab Session Management
+
+// CreatePlanningSession creates a new planning session with ACP metadata
+func (sm *SessionManager) CreatePlanningSession(tabID, title string) (string, *SessionState, error) {
+	// Generate session ID
+	sessionID, err := generateSessionID()
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to generate session ID: %w", err)
+	}
+
+	// Create planning session state
+	state := NewPlanningSessionState(tabID, title)
+
+	// Save to disk
+	if err := sm.Save(sessionID, state); err != nil {
+		return "", nil, fmt.Errorf("failed to save planning session: %w", err)
+	}
+
+	return sessionID, state, nil
+}
+
+// LoadPlanningSession loads a planning session by session ID
+func (sm *SessionManager) LoadPlanningSession(sessionID string) (*SessionState, error) {
+	state, err := sm.Load(sessionID)
+	if err != nil {
+		return nil, err
+	}
+
+	if !state.IsPlanning() {
+		return nil, fmt.Errorf("session %s is not a planning session", sessionID)
+	}
+
+	return state, nil
+}
+
+// FindPlanningSessionByTabID finds a planning session by tab ID
+func (sm *SessionManager) FindPlanningSessionByTabID(tabID string) (string, *SessionState, error) {
+	sessions, err := sm.List()
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to list sessions: %w", err)
+	}
+
+	for _, sessionID := range sessions {
+		state, err := sm.Load(sessionID)
+		if err != nil {
+			continue // Skip corrupted sessions
+		}
+
+		if state.IsPlanning() && state.GetTabID() == tabID {
+			return sessionID, state, nil
+		}
+	}
+
+	return "", nil, fmt.Errorf("no planning session found for tab ID: %s", tabID)
+}
+
+// ListPlanningSessions returns all planning session IDs and their states
+func (sm *SessionManager) ListPlanningSessions() (map[string]*SessionState, error) {
+	sessions, err := sm.List()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list sessions: %w", err)
+	}
+
+	planningSessions := make(map[string]*SessionState)
+	for _, sessionID := range sessions {
+		state, err := sm.Load(sessionID)
+		if err != nil {
+			continue // Skip corrupted sessions
+		}
+
+		if state.IsPlanning() {
+			planningSessions[sessionID] = state
+		}
+	}
+
+	return planningSessions, nil
+}
+
+// RestorablePlanningSessions returns planning sessions that can be restored on startup
+func (sm *SessionManager) RestorablePlanningSessions() (map[string]*SessionState, error) {
+	allSessions, err := sm.ListPlanningSessions()
+	if err != nil {
+		return nil, err
+	}
+
+	restorable := make(map[string]*SessionState)
+	for sessionID, state := range allSessions {
+		if state.CanRestore() {
+			restorable[sessionID] = state
+		}
+	}
+
+	return restorable, nil
+}
+
+// UpdatePlanningSessionState updates the state of a planning session
+func (sm *SessionManager) UpdatePlanningSessionState(sessionID string, state PlanningTabState) error {
+	sessionState, err := sm.LoadPlanningSession(sessionID)
+	if err != nil {
+		return err
+	}
+
+	sessionState.UpdatePlanningState(state)
+	return sm.SaveQuiet(sessionID, sessionState)
+}
+
+// UpdatePlanningSessionACP updates ACP connection metadata for a planning session
+func (sm *SessionManager) UpdatePlanningSessionACP(sessionID string, connected bool, agent, model string) error {
+	sessionState, err := sm.LoadPlanningSession(sessionID)
+	if err != nil {
+		return err
+	}
+
+	sessionState.UpdateACPConnection(connected, agent, model)
+	return sm.SaveQuiet(sessionID, sessionState)
+}
+
+// UpdatePlanningSessionContext updates context usage for a planning session
+func (sm *SessionManager) UpdatePlanningSessionContext(sessionID string, used, total int) error {
+	sessionState, err := sm.LoadPlanningSession(sessionID)
+	if err != nil {
+		return err
+	}
+
+	sessionState.UpdateContextUsage(used, total)
+	return sm.SaveQuiet(sessionID, sessionState)
+}
+
+// CleanupCompletedPlanningSessions removes completed/failed planning sessions older than maxAge
+func (sm *SessionManager) CleanupCompletedPlanningSessions(maxAge time.Duration) (int, error) {
+	sessions, err := sm.ListPlanningSessions()
+	if err != nil {
+		return 0, fmt.Errorf("failed to list planning sessions: %w", err)
+	}
+
+	cutoff := time.Now().Add(-maxAge)
+	cleaned := 0
+
+	for sessionID, state := range sessions {
+		planningState := state.GetPlanningState()
+
+		// Only cleanup completed or failed sessions
+		if planningState == PlanningStateCompleted || planningState == PlanningStateFailed {
+			if state.PlanningData.LastActivity.Before(cutoff) {
+				if err := sm.Delete(sessionID); err == nil {
+					cleaned++
+				}
+			}
+		}
+	}
+
+	return cleaned, nil
+}
+
+// CleanupOrphanedPlanningSessions removes planning sessions for tabs that no longer exist
+func (sm *SessionManager) CleanupOrphanedPlanningSessions(activeTabIDs []string) (int, error) {
+	sessions, err := sm.ListPlanningSessions()
+	if err != nil {
+		return 0, fmt.Errorf("failed to list planning sessions: %w", err)
+	}
+
+	// Create lookup map of active tab IDs
+	activeMap := make(map[string]bool)
+	for _, tabID := range activeTabIDs {
+		activeMap[tabID] = true
+	}
+
+	cleaned := 0
+	for sessionID, state := range sessions {
+		tabID := state.GetTabID()
+		if !activeMap[tabID] {
+			// This session belongs to a tab that no longer exists
+			if err := sm.Delete(sessionID); err == nil {
+				cleaned++
+			}
+		}
+	}
+
+	return cleaned, nil
 }

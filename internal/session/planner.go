@@ -335,3 +335,44 @@ func (ps *PlanningSession) captureHistory() {
 		_ = ps.Manager.SaveQuiet(ps.ID, ps.State)
 	}
 }
+
+// SaveState saves the current session state
+func (ps *PlanningSession) SaveState() error {
+	if ps.State == nil {
+		return fmt.Errorf("session state is nil")
+	}
+	if ps.Manager == nil {
+		return fmt.Errorf("session manager is nil")
+	}
+
+	return ps.Manager.Save(ps.ID, ps.State)
+}
+
+// Cleanup performs comprehensive cleanup of session resources
+func (ps *PlanningSession) Cleanup() error {
+	var errors []string
+
+	// Save final state
+	if ps.State != nil && ps.Manager != nil {
+		if err := ps.SaveState(); err != nil {
+			errors = append(errors, fmt.Sprintf("failed to save state: %v", err))
+		}
+	}
+
+	// Stop the process
+	if ps.Process != nil {
+		if err := ps.Process.Stop(); err != nil {
+			errors = append(errors, fmt.Sprintf("failed to stop process: %v", err))
+		}
+	}
+
+	// Clear references
+	ps.Process = nil
+	ps.State = nil
+
+	if len(errors) > 0 {
+		return fmt.Errorf("cleanup errors: %v", errors)
+	}
+
+	return nil
+}
