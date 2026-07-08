@@ -63,8 +63,8 @@ Enhance the builder-conventions skill with mandatory template synchronization th
 This is a single-agent task focused on enhancing one skill file. No parallel coordination required.
 
 **Builder Agent Tasks**:
-1. All tasks can be executed sequentially by a single builder agent
-2. No dependencies between tasks - each builds upon previous completion
+1. All tasks are executed sequentially by a single builder agent
+2. Each task depends on the previous task's completion
 3. Verification task blocks completion until sync is confirmed
 
 ## Step-by-Step Task Breakdown
@@ -131,8 +131,7 @@ echo $? # Should be 0 when files are synced, 1 when out of sync
 ### Exclusion Pattern Logic
 The *-conventions skills are project-specific and should never be distributed in templates:
 - `builder-conventions` - Project-specific build patterns
-- `planner-conventions` - Project-specific analysis methodology  
-- `discover-qa-tools` - Project-specific QA discovery
+- `planner-conventions` - Project-specific analysis methodology
 
 ### Sync Command Structure
 ```bash

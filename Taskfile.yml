@@ -50,6 +50,118 @@ tasks:
     cmds:
       - test -z "$(gofmt -l .)"
 
+  sync:check:
+    desc: Verify template-synchronized files match their live counterparts
+    cmds:
+      - |
+        sync_error=0
+
+        # Check agent files (JSON configs and prompt files)
+        for file in .kiro/agents/*.json .kiro/agents/*.md; do
+          if [ -f "$file" ]; then
+            template_file="cmd/kiro-krew/templates/kiro/agents/$(basename "$file")"
+            if [ -f "$template_file" ]; then
+              if ! diff -q "$file" "$template_file" >/dev/null 2>&1; then
+                echo "DESYNC: $file != $template_file"
+                sync_error=1
+              fi
+            else
+              echo "MISSING: $template_file (expected from $file)"
+              sync_error=1
+            fi
+          fi
+        done
+
+        # Check scripts
+        for file in .kiro-krew/scripts/*.sh; do
+          if [ -f "$file" ]; then
+            template_file="cmd/kiro-krew/templates/kiro-krew/scripts/$(basename "$file")"
+            if [ -f "$template_file" ]; then
+              if ! diff -q "$file" "$template_file" >/dev/null 2>&1; then
+                echo "DESYNC: $file != $template_file"
+                sync_error=1
+              fi
+            else
+              echo "MISSING: $template_file (expected from $file)"
+              sync_error=1
+            fi
+          fi
+        done
+
+        # Check themes
+        for file in .kiro-krew/themes/*.yaml; do
+          if [ -f "$file" ]; then
+            template_file="cmd/kiro-krew/templates/kiro-krew/themes/$(basename "$file")"
+            if [ -f "$template_file" ]; then
+              if ! diff -q "$file" "$template_file" >/dev/null 2>&1; then
+                echo "DESYNC: $file != $template_file"
+                sync_error=1
+              fi
+            else
+              echo "MISSING: $template_file (expected from $file)"
+              sync_error=1
+            fi
+          fi
+        done
+
+        # Check eval fixtures
+        for file in .kiro-krew/evals/fixtures/*; do
+          if [ -f "$file" ]; then
+            template_file="cmd/kiro-krew/templates/kiro-krew/evals/fixtures/$(basename "$file")"
+            if [ -f "$template_file" ]; then
+              if ! diff -q "$file" "$template_file" >/dev/null 2>&1; then
+                echo "DESYNC: $file != $template_file"
+                sync_error=1
+              fi
+            else
+              echo "MISSING: $template_file (expected from $file)"
+              sync_error=1
+            fi
+          fi
+        done
+
+        # Check eval rubrics
+        for file in .kiro-krew/evals/rubrics/*; do
+          if [ -f "$file" ]; then
+            template_file="cmd/kiro-krew/templates/kiro-krew/evals/rubrics/$(basename "$file")"
+            if [ -f "$template_file" ]; then
+              if ! diff -q "$file" "$template_file" >/dev/null 2>&1; then
+                echo "DESYNC: $file != $template_file"
+                sync_error=1
+              fi
+            else
+              echo "MISSING: $template_file (expected from $file)"
+              sync_error=1
+            fi
+          fi
+        done
+
+        # Check eval cases (recursive)
+        if [ -d ".kiro-krew/evals/cases" ]; then
+          while IFS= read -r file; do
+            relative_path="${file#.kiro-krew/evals/cases/}"
+            template_file="cmd/kiro-krew/templates/kiro-krew/evals/cases/$relative_path"
+            if [ -f "$template_file" ]; then
+              if ! diff -q "$file" "$template_file" >/dev/null 2>&1; then
+                echo "DESYNC: $file != $template_file"
+                sync_error=1
+              fi
+            else
+              echo "MISSING: $template_file (expected from $file)"
+              sync_error=1
+            fi
+          done < <(find .kiro-krew/evals/cases -type f)
+        fi
+
+        if [ $sync_error -eq 0 ]; then
+          echo "✅ All template-synchronized files match"
+        else
+          echo ""
+          echo "❌ Template sync check failed"
+          echo "Run the sync commands from .kiro/skills/builder-conventions/SKILL.md to fix."
+          exit 1
+        fi
+
   clean:
     desc: Clean build artifacts
     cmds:
