@@ -26,6 +26,9 @@ jobs:
         
     - name: Format check
       run: task fmt:check
+
+    - name: Template sync check
+      run: task sync:check
       
     - name: Lint
       run: task lint

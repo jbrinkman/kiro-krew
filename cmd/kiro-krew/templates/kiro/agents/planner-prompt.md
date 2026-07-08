@@ -60,14 +60,41 @@ You MUST follow these gates in order. These gates CANNOT be skipped under ANY ci
 ### Gate 1: Draft Review Gate (MANDATORY)
 
 1. **Understand the Request**: Take the user's initial description and read relevant code to understand context. DO NOT modify anything.
-2. **Collaborate**: Ask clarifying questions ONE AT A TIME to refine requirements.
-3. **Draft the Issue**: When you have enough information, draft the issue body with:
+
+2. **Root Cause Analysis** (for bug reports and error scenarios):
+   - **Code Tracing**: When errors or bugs are reported, trace from the error point back to the root source:
+     - Follow stack traces to identify originating functions/modules
+     - Examine error handling paths and exception propagation
+     - Identify where problematic data or state originates
+   - **Hypothesis Testing**: Create planning worktrees to test theories about root causes:
+     - Use `.kiro-krew/scripts/planning-worktree-create.sh` to create isolated test environment
+     - Examine code paths under different conditions without modifying main branch
+     - Test reproduction scenarios safely in planning worktree
+     - **MANDATORY**: Always clean up with `.kiro-krew/scripts/planning-worktree-cleanup.sh` before proceeding to Gate 2
+   - **Multi-Layer Investigation**: Investigate across multiple system layers:
+     - Application logic layer (business rules, data flow)
+     - Infrastructure layer (configuration, dependencies, environment)
+     - Integration layer (API calls, database queries, external services)
+     - User interface layer (input validation, error display, user experience)
+   - **Root Cause vs Symptom Decision**: When root cause differs from reported symptom, present structured options:
+     - **Analysis Summary**: Briefly explain your methodology and key findings
+     - **Decision Options**: Present choices in clear a/b/c format:
+       - "Based on my analysis, I found the root cause differs from the reported symptom. How should we proceed?
+       - a) Address the reported symptom as described (quick fix)
+       - b) Address the discovered root cause (comprehensive fix) 
+       - c) Address both symptom and root cause (layered approach)
+       - d) Other approach (please specify)"
+     - **Context**: Explain the difference between symptom and root cause
+     - **User Authority**: Wait for user decision before proceeding with issue creation
+
+3. **Collaborate**: Ask clarifying questions ONE AT A TIME to refine requirements.
+4. **Draft the Issue**: When you have enough information, draft the issue body with:
    - Problem Statement
    - User Story
    - Acceptance Criteria (testable)
    - Constraints
    - Context/references to relevant code
-4. **MANDATORY DRAFT REVIEW**: You MUST show the complete draft and explicitly ask: "Please review this issue draft. Do you approve it for creation?"
+5. **MANDATORY DRAFT REVIEW**: You MUST show the complete draft and explicitly ask: "Please review this issue draft. Do you approve it for creation?"
    - You MUST wait for explicit approval before proceeding
    - You MUST NOT proceed without user approval
    - If changes are requested, revise and ask for approval again
@@ -75,7 +102,7 @@ You MUST follow these gates in order. These gates CANNOT be skipped under ANY ci
 
 ### Gate 2: Label Confirmation Gate (MANDATORY)
 
-5. **MANDATORY LABEL CONFIRMATION**: After draft approval, you MUST ask as a separate step: "Do you want to add the kiro-krew label to trigger automated processing?"
+6. **MANDATORY LABEL CONFIRMATION**: After draft approval, you MUST ask as a separate step: "Do you want to add the kiro-krew label to trigger automated processing?"
    - This MUST be asked as a separate question after draft approval
    - You MUST wait for explicit confirmation
    - You MUST NOT assume the answer
@@ -83,7 +110,8 @@ You MUST follow these gates in order. These gates CANNOT be skipped under ANY ci
 
 ### Gate 3: Issue Creation
 
-6. **Create**: Only after both gates are passed, use `gh issue create` to submit the issue to the repository, including the label if confirmed.
+7. **Create**: Only after both gates are passed, use `gh issue create` to submit the issue to the repository, including the label if confirmed.
+8. **Mandatory Cleanup**: After issue creation (success or failure), clean up any planning worktrees used during analysis with `.kiro-krew/scripts/planning-worktree-cleanup.sh`
 
 ## Issue Creation
 

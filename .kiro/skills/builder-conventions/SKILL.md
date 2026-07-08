@@ -7,51 +7,85 @@ description: Project-specific conventions and patterns for the builder agent. Ma
 
 Project-specific conventions, patterns, and best practices for the builder agent to follow during implementation tasks.
 
-## Template/Live Synchronization
+## Mandatory Template Synchronization
 
-When updating any project files that have corresponding templates, ensure both template and live versions are updated:
+**Critical for Self-Hosting**: Kiro Krew uses itself to build itself. Live project files and embedded templates must stay in sync so that `kiro-krew init` and `kiro-krew update` always deploy current configurations.
 
-### Agent Files
-- **Live**: `.kiro/agents/*.json`
-- **Template**: `cmd/kiro-krew/templates/kiro/agents/*.json`
-- **Sync Rule**: Both versions must have identical JSON structure and content
+Sync is **one-way** (live → template). CI enforces this via `task sync:check` in the Validate PR workflow.
 
-### Evaluation Cases
-- **Live**: `.kiro/evals/**/*`
-- **Template**: `cmd/kiro-krew/templates/kiro/evals/**/*`
-- **Sync Rule**: Template contains representative test cases, live may have additional project-specific cases
+### Sync Mappings
 
-### Rubrics
-- **Live**: `.kiro/rubrics/**/*`
-- **Template**: `cmd/kiro-krew/templates/kiro/rubrics/**/*`
-- **Sync Rule**: Templates contain standard rubrics, live may have project-specific extensions
+| Live Path | Template Path |
+|-----------|---------------|
+| `.kiro/agents/*.json` | `cmd/kiro-krew/templates/kiro/agents/` |
+| `.kiro/agents/*.md` | `cmd/kiro-krew/templates/kiro/agents/` |
+| `.kiro-krew/scripts/*.sh` | `cmd/kiro-krew/templates/kiro-krew/scripts/` |
+| `.kiro-krew/themes/*.yaml` | `cmd/kiro-krew/templates/kiro-krew/themes/` |
+| `.kiro-krew/evals/fixtures/*` | `cmd/kiro-krew/templates/kiro-krew/evals/fixtures/` |
+| `.kiro-krew/evals/rubrics/*` | `cmd/kiro-krew/templates/kiro-krew/evals/rubrics/` |
+| `.kiro-krew/evals/cases/**/*` | `cmd/kiro-krew/templates/kiro-krew/evals/cases/` |
 
-### Scripts
-- **Live**: `.kiro-krew/scripts/**/*`
-- **Template**: `cmd/kiro-krew/templates/kiro-krew/scripts/**/*`
-- **Sync Rule**: Both versions must be functionally equivalent
+### Exclusion Patterns
 
-### Themes
-- **Live**: `.kiro/themes/**/*`
-- **Template**: `cmd/kiro-krew/templates/kiro/themes/**/*`
-- **Sync Rule**: Templates contain default themes, live may have project customizations
+**Never sync `*-conventions` skills** — they are project-specific and must NOT be distributed in templates.
 
-## Sync Verification Commands
+### Sync Commands
 
-Before completing tasks that modify template-synchronized files:
+Run the appropriate commands after modifying any template-synchronized files:
 
 ```bash
-# Verify JSON manifests match
-diff .kiro/agents/builder.json cmd/kiro-krew/templates/kiro/agents/builder.json
+# Agent files (JSON configs and prompt files)
+cp .kiro/agents/*.json cmd/kiro-krew/templates/kiro/agents/
+cp .kiro/agents/*.md cmd/kiro-krew/templates/kiro/agents/
 
-# Check all agent manifests
-for agent in architect builder documenter krew-lead planner validator; do
-  diff .kiro/agents/$agent.json cmd/kiro-krew/templates/kiro/agents/$agent.json || echo "DIFF: $agent"
-done
+# Scripts
+cp .kiro-krew/scripts/*.sh cmd/kiro-krew/templates/kiro-krew/scripts/
 
-# Verify script functionality (when modifying scripts)
-.kiro-krew/scripts/worktree-create.sh test-worktree
-.kiro-krew/scripts/worktree-merge.sh test-worktree
+# Themes
+cp .kiro-krew/themes/*.yaml cmd/kiro-krew/templates/kiro-krew/themes/
+
+# Evals (excluding results directory)
+cp .kiro-krew/evals/fixtures/* cmd/kiro-krew/templates/kiro-krew/evals/fixtures/
+cp .kiro-krew/evals/rubrics/* cmd/kiro-krew/templates/kiro-krew/evals/rubrics/
+mkdir -p cmd/kiro-krew/templates/kiro-krew/evals/cases/
+cp -r .kiro-krew/evals/cases/* cmd/kiro-krew/templates/kiro-krew/evals/cases/
+```
+
+### Verification
+
+Run `task sync:check` to verify all template-synchronized files match. This is the same check CI runs — if it passes locally, CI will pass.
+
+```bash
+task sync:check
+```
+
+If verification fails, re-run the sync commands above for the affected file category, then re-run `task sync:check`.
+
+## Workflow Integration
+
+When completing tasks that modify template-synchronized files, follow this sequence:
+
+1. **Implement** — complete the assigned task
+2. **Sync** — run the appropriate sync commands from above
+3. **Verify** — run `task sync:check` (task cannot be marked complete if this fails)
+4. **QA** — run `task lint` and `task test`
+5. **Complete** — create sentinel file documenting results
+
+### Sentinel File Requirements
+
+Include sync verification status in sentinel files:
+
+```markdown
+## Task Complete
+
+**Template Sync**: ✅ VERIFIED (or "N/A - no template files modified")
+**QA Results**:
+- Linting: ✅ PASS
+- Tests: ✅ PASS
+- Sync Verification: ✅ PASS
+
+**Sync Commands Used**:
+- `cp .kiro/agents/builder.json cmd/kiro-krew/templates/kiro/agents/`
 ```
 
 ## Implementation Patterns
@@ -64,11 +98,13 @@ done
 ### File Modifications
 - Preserve existing formatting and structure
 - Maintain JSON validity for configuration files
-- Document changes in sentinel files
+- Verify template sync before task completion
+- Document changes in sentinel files including sync status
 
 ### Error Recovery
 - Address validator feedback from `.kiro-krew/artifacts/validator-<issue>.md`
 - Focus on specific failing commands identified by validator
+- Include sync verification in error recovery process
 - Document how feedback was incorporated
 
 ## Project Standards
