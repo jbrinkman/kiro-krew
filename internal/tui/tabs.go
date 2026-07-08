@@ -8,6 +8,7 @@ type TabType int
 const (
 	TabTypeMain TabType = iota
 	TabTypeAgent
+	TabTypePlanning
 )
 
 // Tab interface defines the contract for all tab implementations

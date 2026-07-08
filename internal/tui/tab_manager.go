@@ -1,10 +1,18 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/jbrinkman/kiro-krew/internal/agent"
+)
+
+// Constants for tab management
+const (
+	maxPlanningTabs = 10
+	tabPadding      = 2    // horizontal padding applied to each tab by lipgloss
+	closeBtnText    = " ×" // close button suffix for closable tabs
 )
 
 // TabManager manages the lifecycle and state of all tabs
@@ -35,6 +43,35 @@ func (tm *TabManager) AddTab(tab Tab) {
 	if len(tm.tabs) == 1 {
 		tm.activeTab = 0
 	}
+}
+
+// AddPlanningTab creates and adds a new planning tab
+func (tm *TabManager) AddPlanningTab(styles *Styles) error {
+	// Enforce 10-tab limit
+	planningTabCount := tm.countPlanningTabs()
+	if planningTabCount >= maxPlanningTabs {
+		return fmt.Errorf("maximum %d Planning tabs allowed", maxPlanningTabs)
+	}
+
+	planningTab, err := NewPlanningTab(styles)
+	if err != nil {
+		return fmt.Errorf("failed to create planning tab: %w", err)
+	}
+
+	tm.AddTab(planningTab)
+	tm.SetActiveTab(len(tm.tabs) - 1) // Focus new tab
+	return nil
+}
+
+// countPlanningTabs counts the number of planning tabs
+func (tm *TabManager) countPlanningTabs() int {
+	count := 0
+	for _, tab := range tm.tabs {
+		if tab.Type() == TabTypePlanning {
+			count++
+		}
+	}
+	return count
 }
 
 // RemoveTab removes a tab by ID if it's closable
@@ -200,12 +237,6 @@ func (tm *TabManager) ToggleView() {
 	}
 }
 
-// tabPadding is the horizontal padding applied to each tab by lipgloss (Padding(0, 1) = 1 char each side)
-const tabPadding = 2
-
-// closeBtnText is the close button suffix for closable tabs
-const closeBtnText = " ×"
-
 // RenderTabHeaders renders visual tab headers showing all tabs with active highlighting and close buttons.
 // The width parameter controls overflow — tabs exceeding width are truncated with an indicator.
 func (tm *TabManager) RenderTabHeaders(width int, styles *Styles) string {
@@ -256,6 +287,20 @@ func (tm *TabManager) RenderTabHeaders(width int, styles *Styles) string {
 					case agent.StatusFailed:
 						styledTab = styles.AgentFail.Render(title)
 					default:
+						styledTab = styles.TabInactive.Render(title)
+					}
+				} else {
+					styledTab = styles.TabInactive.Render(title)
+				}
+			} else if tab.Type() == TabTypePlanning {
+				// For planning tabs, use state-based coloring
+				if planningTab, ok := tab.(*PlanningTab); ok {
+					switch planningTab.state {
+					case StateCompleted:
+						styledTab = styles.AgentSuccess.Render(title)
+					case StateFailed:
+						styledTab = styles.AgentFail.Render(title)
+					case StateActive:
 						styledTab = styles.TabInactive.Render(title)
 					}
 				} else {

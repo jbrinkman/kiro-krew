@@ -189,7 +189,7 @@ func (m model) handleHelp() (model, tea.Cmd) {
 		"  watch stop     - Stop watching",
 		"  status         - List all agents with details",
 		"  stop <issue>   - Stop agent for specific issue number",
-		"  plan [desc]    - Start interactive planning session",
+		"  plan [desc]    - Start ACP-based planning tab (use 'plan classic' for legacy mode)",
 		"  logs           - View incident logs",
 		"  theme          - Show current theme",
 		"  theme <name>   - Switch to theme",
@@ -207,6 +207,39 @@ func (m model) handleHelp() (model, tea.Cmd) {
 }
 
 func (m model) handlePlan(description string) (model, tea.Cmd) {
+	// Check for classic mode first
+	parts := strings.Fields(description)
+	if len(parts) > 0 && parts[0] == "classic" {
+		// Preserve existing subprocess behavior
+		classicDescription := strings.Join(parts[1:], " ")
+		return m.handlePlanClassic(classicDescription)
+	}
+
+	// New ACP-based planning tab
+	err := m.tabManager.AddPlanningTab(m.styles)
+	if err != nil {
+		m = m.appendActivity(m.styles.Error.Render(fmt.Sprintf("Failed to create planning tab: %v", err)))
+		return m, nil
+	}
+
+	// Send initial message if provided
+	if description != "" {
+		activeTab := m.tabManager.GetActiveTab()
+		if planningTab, ok := activeTab.(*PlanningTab); ok {
+			go func() {
+				if err := planningTab.SendMessage(description); err != nil {
+					// Error is already logged in SendMessage
+				}
+			}()
+		}
+	}
+
+	m = m.appendActivity(m.styles.Success.Render("Planning tab created"))
+	return m, nil
+}
+
+// handlePlanClassic preserves the existing subprocess-based planning behavior
+func (m model) handlePlanClassic(description string) (model, tea.Cmd) {
 	// Suspend agent output capture before starting planning mode
 	m.manager.SuspendOutputCapture()
 
@@ -382,6 +415,8 @@ func getTabTypeName(tabType TabType) string {
 		return "Main Console"
 	case TabTypeAgent:
 		return "Agent Output"
+	case TabTypePlanning:
+		return "Planning Session"
 	default:
 		return "Unknown"
 	}

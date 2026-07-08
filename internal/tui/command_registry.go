@@ -53,7 +53,7 @@ func NewCommandRegistry(agentManager *agent.Manager) *CommandRegistry {
 
 	registry.register(&Command{
 		Name:        "plan",
-		Description: "Start interactive planning session",
+		Description: "Start ACP-based planning tab (use 'plan classic' for legacy mode)",
 		HasArgs:     true,
 		ArgPattern:  "[desc]",
 	})
