@@ -32,9 +32,9 @@ Create design spec at `.kiro-krew/specs/issue-<number>-<slug>.md` (relative to c
 - Design specifications provide implementation roadmaps, not multi-phase project plans
 
 **Prohibited Patterns**:
-- Multi-PR implementation plans (e.g., "PR 1: Foundation", "PR 2: Core Logic")
-- Incremental delivery suggestions across separate PRs
-- Partial completion milestones that defer work to future PRs
+- Phase-based planning (e.g., "Phase 1: Foundation", "Phase 2: Core Logic")
+- Incremental delivery suggestions that imply deferred work
+- Partial completion milestones that leave acceptance criteria unaddressed
 
 **Required Approach**:
 - All acceptance criteria addressed within one pull request
@@ -94,11 +94,13 @@ After completing your design spec, write a sentinel file at `.kiro-krew/artifact
 
 ### Anti-Patterns to Avoid (❌ DON'T DO THIS):
 ```markdown
-### PR 1: Foundation Setup
-- Basic structure (to be completed in a follow-up PR)
+### Phase 1: Foundation Setup
+- Basic structure (to be enhanced in Phase 2)
+- Partial implementation for later completion
 
-### PR 2: Core Implementation
-- Complete remaining functionality in a separate pull request
+### Phase 2: Core Implementation
+- Complete remaining functionality
+- Build upon Phase 1 foundation
 ```
 
 ### Key Principles:
