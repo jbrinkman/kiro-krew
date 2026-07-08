@@ -17,7 +17,6 @@ var (
 	ErrMissingAgent          = errors.New("agent name is required")
 	ErrMissingMessage        = errors.New("message is required")
 	ErrInvalidResponseFormat = errors.New("response format must be 'json' or 'text'")
-	ErrAgentNotFound         = errors.New("agent not found")
 	ErrRequestTimeout        = errors.New("request timed out")
 	ErrStreamingFailed       = errors.New("streaming failed")
 	ErrAuthenticationFailed  = errors.New("authentication failed")
@@ -83,27 +82,6 @@ type StreamingResponse struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
-// AgentInfo represents information about an available ACP agent
-type AgentInfo struct {
-	// Name is the agent name/identifier
-	Name string `json:"name"`
-
-	// Description provides a description of the agent's purpose
-	Description string `json:"description,omitempty"`
-
-	// Status indicates the agent's current status
-	Status string `json:"status"`
-
-	// Capabilities lists the agent's capabilities
-	Capabilities []string `json:"capabilities,omitempty"`
-
-	// Model indicates the AI model used by the agent
-	Model string `json:"model,omitempty"`
-
-	// Available indicates if the agent is currently available
-	Available bool `json:"available"`
-}
-
 // ConnectionConfig represents ACP connection configuration
 type ConnectionConfig struct {
 	// KiroCLIPath is the path to the Kiro CLI executable
@@ -138,12 +116,6 @@ type Client interface {
 
 	// StreamMessage sends a message to an agent and returns a streaming response
 	StreamMessage(ctx context.Context, req *MessageRequest) (<-chan *StreamingResponse, error)
-
-	// ListAgents returns a list of available agents
-	ListAgents(ctx context.Context) ([]AgentInfo, error)
-
-	// GetAgent returns information about a specific agent
-	GetAgent(ctx context.Context, name string) (*AgentInfo, error)
 
 	// Close closes the client and cleans up resources
 	Close() error

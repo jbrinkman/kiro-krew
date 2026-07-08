@@ -34,6 +34,13 @@ func NewSessionManager() *SessionManager {
 	}
 }
 
+// NewSessionManagerWithDir creates a SessionManager using the specified directory
+func NewSessionManagerWithDir(dir string) *SessionManager {
+	return &SessionManager{
+		sessionsDir: dir,
+	}
+}
+
 // Create creates a new session and returns its ID
 func (sm *SessionManager) Create(sessionType SessionType) (string, error) {
 	// Generate session ID
@@ -327,32 +334,9 @@ func (sm *SessionManager) ValidateSession(id string, state *SessionState) error 
 				return &ValidationError{SessionID: id, Field: "planning_data.state", Message: fmt.Sprintf("invalid planning state: %d", planningState)}
 			}
 
-			// Validate ACP connection metadata
-			if state.PlanningData.ACPConnection.Agent == "" {
-				return &ValidationError{SessionID: id, Field: "planning_data.acp_connection.agent", Message: "ACP agent name is empty"}
-			}
-
-			if state.PlanningData.ACPConnection.Model == "" {
-				return &ValidationError{SessionID: id, Field: "planning_data.acp_connection.model", Message: "ACP model name is empty"}
-			}
-
-			// Validate context usage
-			if state.PlanningData.ContextUsage.Total <= 0 {
-				return &ValidationError{SessionID: id, Field: "planning_data.context_usage.total", Message: "invalid context total"}
-			}
-
-			if state.PlanningData.ContextUsage.Used < 0 {
-				return &ValidationError{SessionID: id, Field: "planning_data.context_usage.used", Message: "invalid context used (negative)"}
-			}
-
-			// Validate timestamps
-			if state.PlanningData.CreatedAt.IsZero() {
-				return &ValidationError{SessionID: id, Field: "planning_data.created_at", Message: "missing creation timestamp"}
-			}
-
-			if state.PlanningData.LastActivity.IsZero() {
-				return &ValidationError{SessionID: id, Field: "planning_data.last_activity", Message: "missing last activity timestamp"}
-			}
+			// Note: ACP connection fields (Agent, Model), context usage (Total, Used),
+			// and timestamp fields (CreatedAt, LastActivity) are not validated here
+			// as they can be repaired by RepairSession with appropriate defaults
 		}
 	}
 

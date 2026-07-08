@@ -18,11 +18,13 @@ type KiroACPClient struct {
 	connected bool
 	mu        sync.RWMutex
 	client    acp.Client
+	sessionID string
 }
 
 // KiroClient implements the acp.Client interface for permission handling
 type KiroClient struct {
 	autoApprove bool
+	respChan    chan<- *StreamingResponse
 }
 
 // RequestPermission handles permission requests from agents
@@ -91,8 +93,14 @@ func (k *KiroClient) SessionUpdate(ctx context.Context, params acp.SessionNotifi
 	case u.AgentMessageChunk != nil:
 		content := u.AgentMessageChunk.Content
 		if content.Text != nil {
-			// This is where we'd capture agent responses
-			// For now, just log for debugging
+			// Forward text content to the response channel if available
+			if k.respChan != nil {
+				k.respChan <- &StreamingResponse{
+					Type:      "text",
+					Content:   content.Text.Text,
+					Timestamp: time.Now(),
+				}
+			}
 		}
 	case u.ToolCall != nil:
 		// Tool call started
@@ -180,7 +188,7 @@ func (c *KiroACPClient) Connect(ctx context.Context) error {
 	conn := acp.NewClientSideConnection(c.client, stdin, stdout)
 
 	// Initialize the connection
-	initResp, err := conn.Initialize(ctx, acp.InitializeRequest{
+	_, err = conn.Initialize(ctx, acp.InitializeRequest{
 		ProtocolVersion: acp.ProtocolVersionNumber,
 		ClientCapabilities: acp.ClientCapabilities{
 			Fs: acp.FileSystemCapabilities{
@@ -190,16 +198,16 @@ func (c *KiroACPClient) Connect(ctx context.Context) error {
 		},
 	})
 	if err != nil {
+		stdin.Close()
+		stdout.Close()
 		cmd.Process.Kill()
+		cmd.Wait()
 		return fmt.Errorf("failed to initialize ACP connection: %w", err)
 	}
 
 	c.conn = conn
 	c.cmd = cmd
 	c.connected = true
-
-	// Log successful connection
-	fmt.Printf("✅ Connected to Kiro CLI via ACP (protocol v%v)\n", initResp.ProtocolVersion)
 
 	return nil
 }
@@ -243,6 +251,7 @@ func (c *KiroACPClient) SendMessage(ctx context.Context, req *MessageRequest) (*
 		return nil, ErrNotConnected
 	}
 	conn := c.conn
+	sessionID := c.sessionID
 	c.mu.RUnlock()
 
 	// Apply request timeout if specified
@@ -252,17 +261,25 @@ func (c *KiroACPClient) SendMessage(ctx context.Context, req *MessageRequest) (*
 		defer cancel()
 	}
 
-	// Create a new session for this request
-	sessionResp, err := conn.NewSession(ctx, acp.NewSessionRequest{
-		McpServers: []acp.McpServer{},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create session: %w", err)
+	// Create a new session or reuse existing one
+	if sessionID == "" {
+		sessionResp, err := conn.NewSession(ctx, acp.NewSessionRequest{
+			McpServers: []acp.McpServer{},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create session: %w", err)
+		}
+		sessionID = string(sessionResp.SessionId)
+
+		// Store the session ID for reuse
+		c.mu.Lock()
+		c.sessionID = sessionID
+		c.mu.Unlock()
 	}
 
 	// Send the prompt - responses will come via SessionUpdate
-	_, err = conn.Prompt(ctx, acp.PromptRequest{
-		SessionId: sessionResp.SessionId,
+	_, err := conn.Prompt(ctx, acp.PromptRequest{
+		SessionId: acp.SessionId(sessionID),
 		Prompt:    []acp.ContentBlock{acp.TextBlock(req.Message)},
 	})
 	if err != nil {
@@ -276,7 +293,7 @@ func (c *KiroACPClient) SendMessage(ctx context.Context, req *MessageRequest) (*
 		Message:   "Message sent successfully. Response will be received via session updates.",
 		Timestamp: time.Now(),
 		Metadata: map[string]interface{}{
-			"session_id": sessionResp.SessionId,
+			"session_id": sessionID,
 			"agent":      req.Agent,
 		},
 	}
@@ -296,6 +313,7 @@ func (c *KiroACPClient) StreamMessage(ctx context.Context, req *MessageRequest) 
 		return nil, ErrNotConnected
 	}
 	conn := c.conn
+	sessionID := c.sessionID
 	c.mu.RUnlock()
 
 	// Create response channel
@@ -312,17 +330,33 @@ func (c *KiroACPClient) StreamMessage(ctx context.Context, req *MessageRequest) 
 			defer cancel()
 		}
 
-		// Create a new session for this streaming request
-		sessionResp, err := conn.NewSession(streamCtx, acp.NewSessionRequest{
-			McpServers: []acp.McpServer{},
-		})
-		if err != nil {
-			respChan <- &StreamingResponse{
-				Type:      "error",
-				Error:     fmt.Sprintf("failed to create session: %v", err),
-				Timestamp: time.Now(),
+		// Create a new session or reuse existing one
+		if sessionID == "" {
+			sessionResp, err := conn.NewSession(streamCtx, acp.NewSessionRequest{
+				McpServers: []acp.McpServer{},
+			})
+			if err != nil {
+				respChan <- &StreamingResponse{
+					Type:      "error",
+					Error:     fmt.Sprintf("failed to create session: %v", err),
+					Timestamp: time.Now(),
+				}
+				return
 			}
-			return
+			sessionID = string(sessionResp.SessionId)
+
+			// Store the session ID for reuse
+			c.mu.Lock()
+			c.sessionID = sessionID
+			c.mu.Unlock()
+		}
+
+		// Set the response channel on the client before sending the prompt
+		if kiroClient, ok := c.client.(*KiroClient); ok {
+			kiroClient.respChan = respChan
+			defer func() {
+				kiroClient.respChan = nil
+			}()
 		}
 
 		// Send streaming response indicating start
@@ -332,9 +366,9 @@ func (c *KiroACPClient) StreamMessage(ctx context.Context, req *MessageRequest) 
 			Timestamp: time.Now(),
 		}
 
-		// Send the prompt and handle response
+		// Send the prompt - real responses will come via SessionUpdate
 		_, promptErr := conn.Prompt(streamCtx, acp.PromptRequest{
-			SessionId: sessionResp.SessionId,
+			SessionId: acp.SessionId(sessionID),
 			Prompt:    []acp.ContentBlock{acp.TextBlock(req.Message)},
 		})
 		if promptErr != nil {
@@ -346,13 +380,8 @@ func (c *KiroACPClient) StreamMessage(ctx context.Context, req *MessageRequest) 
 			return
 		}
 
-		// In a real implementation, streaming responses would come via SessionUpdate callbacks
-		// For now, send a simple completion message
-		respChan <- &StreamingResponse{
-			Type:      "text",
-			Content:   "Prompt sent successfully. Real-time responses will come via session updates.",
-			Timestamp: time.Now(),
-		}
+		// Wait briefly for responses to come via SessionUpdate
+		time.Sleep(100 * time.Millisecond)
 
 		// Send completion signal
 		respChan <- &StreamingResponse{
@@ -363,52 +392,6 @@ func (c *KiroACPClient) StreamMessage(ctx context.Context, req *MessageRequest) 
 	}()
 
 	return respChan, nil
-}
-
-// ListAgents returns a list of available agents
-func (c *KiroACPClient) ListAgents(ctx context.Context) ([]AgentInfo, error) {
-	c.mu.RLock()
-	if !c.connected || c.conn == nil {
-		c.mu.RUnlock()
-		return nil, ErrNotConnected
-	}
-	c.mu.RUnlock()
-
-	// For now, return mock agent info since the ACP protocol
-	// doesn't have a direct "list agents" command.
-	// In a real implementation, this would query the agent registry.
-	agents := []AgentInfo{
-		{
-			Name:         "kiro-agent",
-			Description:  "Kiro CLI Agent via ACP",
-			Status:       "available",
-			Capabilities: []string{"chat", "code_generation", "file_operations"},
-			Model:        "claude-sonnet-4",
-			Available:    true,
-		},
-	}
-
-	return agents, nil
-}
-
-// GetAgent returns information about a specific agent
-func (c *KiroACPClient) GetAgent(ctx context.Context, name string) (*AgentInfo, error) {
-	if name == "" {
-		return nil, ErrMissingAgent
-	}
-
-	agents, err := c.ListAgents(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, agent := range agents {
-		if agent.Name == name {
-			return &agent, nil
-		}
-	}
-
-	return nil, ErrAgentNotFound
 }
 
 // Close closes the client and cleans up resources

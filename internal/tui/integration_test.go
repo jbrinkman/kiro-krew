@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -244,7 +245,7 @@ func TestTask8Integration(t *testing.T) {
 		theme = &config.Theme{}
 		theme.Colors.Primary = "#00AAFF"
 		theme.Colors.Success = "#00AA00"
-		theme.Colors.Warning = "#FFAA00" 
+		theme.Colors.Warning = "#FFAA00"
 		theme.Colors.Error = "#FF0000"
 		theme.Colors.TextPrimary = "#FFFFFF"
 		theme.Colors.TextSecondary = "#CCCCCC"
@@ -266,7 +267,7 @@ func TestTask8Integration(t *testing.T) {
 		tabManager := NewTabManager()
 
 		// Test planning tab creation with session management
-		planningTab, err := tabManager.CreatePlanningTabWithSession(
+		planningTab, err := tabManager.CreateAndAddPlanningTab(
 			styles,
 			contextTracker,
 			sessionManager,
@@ -276,8 +277,43 @@ func TestTask8Integration(t *testing.T) {
 			// This is expected to fail in test environment without ACP
 			if !strings.Contains(err.Error(), "ACP") && !strings.Contains(err.Error(), "kiro-cli") {
 				t.Errorf("Unexpected error creating planning tab: %v", err)
+				return
 			}
 			t.Logf("Expected ACP connection error in test environment: %v", err)
+
+			// Create planning tab directly without ACP connection for testing
+			planningTab := NewPlanningTabWithSession("test-plan-1", "Test Plan", styles, contextTracker, sessionManager)
+			if planningTab == nil {
+				t.Error("Direct planning tab creation failed")
+				return
+			}
+
+			// Continue with testing tab behavior independently
+			// Test tab properties
+			if planningTab.Type() != TabTypePlanning {
+				t.Error("Expected TabTypePlanning")
+			}
+
+			if !strings.Contains(planningTab.Title(), "Plan") {
+				t.Error("Expected planning tab title to contain 'Plan'")
+			}
+
+			// Test initial state
+			if planningTab.GetMessageCount() != 0 {
+				t.Error("Expected new planning tab to have no messages")
+			}
+
+			// Test adding messages
+			planningTab.AddMessage("user", "Test message")
+			if planningTab.GetMessageCount() != 1 {
+				t.Error("Expected 1 message after adding user message")
+			}
+
+			// Test graceful degradation
+			planningTab.SetReadOnly()
+			if planningTab.IsActive() {
+				t.Error("Expected tab to not be active in read-only mode")
+			}
 			return
 		}
 
@@ -356,7 +392,7 @@ func TestTask8Integration(t *testing.T) {
 
 		// Test tab limit enforcement
 		for i := 0; i < MaxPlanningTabs+1; i++ {
-			_, err := tabManager.CreatePlanningTabWithSession(
+			_, err := tabManager.CreateAndAddPlanningTab(
 				styles,
 				NewContextTracker(),
 				createTestSessionManager(),
@@ -404,7 +440,7 @@ func TestTask8Integration(t *testing.T) {
 		if err != nil && !strings.Contains(err.Error(), "no sessions") {
 			t.Errorf("Unexpected error listing sessions: %v", err)
 		}
-		
+
 		// Should have no sessions in clean test environment
 		if len(sessions) > 0 {
 			t.Logf("Found %d existing sessions in test environment", len(sessions))
@@ -437,5 +473,10 @@ func TestTask8Integration(t *testing.T) {
 
 // Helper function to create a test session manager
 func createTestSessionManager() *session.SessionManager {
-	return session.NewSessionManager()
+	dir, err := os.MkdirTemp("", "kiro-krew-test-sessions-*")
+	if err != nil {
+		// Fallback to default if temp dir creation fails
+		return session.NewSessionManager()
+	}
+	return session.NewSessionManagerWithDir(dir)
 }

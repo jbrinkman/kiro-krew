@@ -6,6 +6,7 @@ require (
 	charm.land/bubbles/v2 v2.1.0
 	charm.land/bubbletea/v2 v2.0.6
 	charm.land/lipgloss/v2 v2.0.3
+	github.com/coder/acp-go-sdk v0.13.5
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/spf13/cobra v1.8.1
 	github.com/stretchr/testify v1.11.1
@@ -16,7 +17,6 @@ require (
 require (
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/coder/acp-go-sdk v0.13.5 // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect

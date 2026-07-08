@@ -350,19 +350,19 @@ func (ps *PlanningSession) SaveState() error {
 
 // Cleanup performs comprehensive cleanup of session resources
 func (ps *PlanningSession) Cleanup() error {
-	var errors []string
+	var cleanupErrs []string
 
 	// Save final state
 	if ps.State != nil && ps.Manager != nil {
 		if err := ps.SaveState(); err != nil {
-			errors = append(errors, fmt.Sprintf("failed to save state: %v", err))
+			cleanupErrs = append(cleanupErrs, fmt.Sprintf("failed to save state: %v", err))
 		}
 	}
 
 	// Stop the process
 	if ps.Process != nil {
 		if err := ps.Process.Stop(); err != nil {
-			errors = append(errors, fmt.Sprintf("failed to stop process: %v", err))
+			cleanupErrs = append(cleanupErrs, fmt.Sprintf("failed to stop process: %v", err))
 		}
 	}
 
@@ -370,8 +370,8 @@ func (ps *PlanningSession) Cleanup() error {
 	ps.Process = nil
 	ps.State = nil
 
-	if len(errors) > 0 {
-		return fmt.Errorf("cleanup errors: %v", errors)
+	if len(cleanupErrs) > 0 {
+		return fmt.Errorf("cleanup errors: %v", cleanupErrs)
 	}
 
 	return nil

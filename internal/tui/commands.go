@@ -2,18 +2,20 @@ package tui
 
 import (
 	"fmt"
+	"log"
+	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+
 	"github.com/jbrinkman/kiro-krew/internal/agent"
 	"github.com/jbrinkman/kiro-krew/internal/config"
 	"github.com/jbrinkman/kiro-krew/internal/github"
 	"github.com/jbrinkman/kiro-krew/internal/incidents"
 	"github.com/jbrinkman/kiro-krew/internal/session"
-	"log"
 )
 
 type runningWatcher interface {
@@ -235,7 +237,7 @@ func (m model) handlePlan(description string) (model, tea.Cmd) {
 	}
 
 	// Create ACP-based planning tab with comprehensive error handling
-	planningTab, err := m.tabManager.CreatePlanningTabWithSession(
+	planningTab, err := m.tabManager.CreateAndAddPlanningTab(
 		m.styles,
 		m.footerManager.GetContextTracker(),
 		m.sessionManager,
@@ -280,8 +282,7 @@ func (m model) handlePlan(description string) (model, tea.Cmd) {
 		// Continue without context tracking if it fails
 	}
 
-	// Add the tab and switch to it
-	m.tabManager.AddTab(planningTab)
+	// Switch to the newly created tab (already added by CreateAndAddPlanningTab)
 	m.tabManager.SetActiveTab(len(m.tabManager.GetTabs()) - 1)
 
 	// Add initial message with connection status feedback
@@ -320,6 +321,7 @@ func (m model) handlePlanSubprocess(description string) (model, tea.Cmd) {
 	m.consoleState.inputValue = m.input.Value()
 	m.consoleState.activityLines = make([]string, len(m.activityLines))
 	copy(m.consoleState.activityLines, m.activityLines)
+	m.consoleState.activeTabIndex = m.tabManager.GetActiveTabIndex()
 
 	// Check for existing planning sessions with error recovery
 	sessions, err := m.sessionManager.List()
@@ -377,7 +379,15 @@ func (m model) handlePlanSubprocess(description string) (model, tea.Cmd) {
 	m.currentMode = session.Planning
 	m.input.Blur()
 
-	return m, tea.ClearScreen
+	// Execute the kiro-cli subprocess for classic planning
+	cmd := exec.Command("kiro-cli", "chat", "--agent", "planner")
+	if description != "" {
+		cmd = exec.Command("kiro-cli", "chat", "--agent", "planner", description)
+	}
+
+	return m, tea.ExecProcess(cmd, func(err error) tea.Msg {
+		return execDoneMsg{err: err}
+	})
 }
 
 type execDoneMsg struct {
@@ -504,6 +514,7 @@ func (m model) switchToPlanningMode() (model, tea.Cmd) {
 	m.consoleState.inputValue = m.input.Value()
 	m.consoleState.activityLines = make([]string, len(m.activityLines))
 	copy(m.consoleState.activityLines, m.activityLines)
+	m.consoleState.activeTabIndex = m.tabManager.GetActiveTabIndex()
 
 	// Check if there are any active planning tabs first
 	activePlanningTabs := 0
@@ -623,11 +634,16 @@ func (m model) switchToConsoleMode() (model, tea.Cmd) {
 	m.currentMode = session.Console
 	m = m.restoreConsoleState()
 
-	// Switch to main tab
-	for i, tab := range m.tabManager.GetTabs() {
-		if tab.Type() == TabTypeMain {
-			m.tabManager.SetActiveTab(i)
-			break
+	// Restore previously active tab
+	if m.consoleState != nil && m.consoleState.activeTabIndex < len(m.tabManager.GetTabs()) {
+		m.tabManager.SetActiveTab(m.consoleState.activeTabIndex)
+	} else {
+		// Fallback to main tab if saved index is invalid
+		for i, tab := range m.tabManager.GetTabs() {
+			if tab.Type() == TabTypeMain {
+				m.tabManager.SetActiveTab(i)
+				break
+			}
 		}
 	}
 

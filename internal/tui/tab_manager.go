@@ -1,11 +1,13 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/jbrinkman/kiro-krew/internal/acp"
 	"github.com/jbrinkman/kiro-krew/internal/agent"
 	"github.com/jbrinkman/kiro-krew/internal/session"
 )
@@ -23,6 +25,9 @@ type TabManager struct {
 
 	// Session management
 	sessionManager *session.SessionManager
+
+	// Shared ACP client
+	acpClient *acp.KiroACPClient
 }
 
 // NewTabManager creates a new tab manager
@@ -33,7 +38,27 @@ func NewTabManager() *TabManager {
 		hoveredTab:         -1,
 		planningTabCounter: 0,
 		sessionManager:     session.NewSessionManager(),
+		acpClient:          nil,
 	}
+}
+
+// GetOrCreateACPClient returns the shared ACP client, creating it if necessary
+func (tm *TabManager) GetOrCreateACPClient() (*acp.KiroACPClient, error) {
+	if tm.acpClient == nil {
+		tm.acpClient = acp.NewClient(acp.DefaultConnectionConfig())
+	}
+
+	// Connect if not already connected
+	if !tm.acpClient.IsConnected() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		if err := tm.acpClient.Connect(ctx); err != nil {
+			return nil, fmt.Errorf("failed to connect ACP client: %w", err)
+		}
+	}
+
+	return tm.acpClient, nil
 }
 
 // AddTab adds a new tab to the manager
@@ -336,11 +361,11 @@ func (tm *TabManager) CanCreatePlanningTab() bool {
 
 // CreatePlanningTab creates a new planning tab if within limits
 func (tm *TabManager) CreatePlanningTab(styles *Styles, contextTracker *ContextTracker) (*PlanningTab, error) {
-	return tm.CreatePlanningTabWithSession(styles, contextTracker, nil)
+	return tm.CreateAndAddPlanningTab(styles, contextTracker, nil)
 }
 
-// CreatePlanningTabWithSession creates a new planning tab with session management if within limits
-func (tm *TabManager) CreatePlanningTabWithSession(styles *Styles, contextTracker *ContextTracker, sessionManager *session.SessionManager) (*PlanningTab, error) {
+// CreateAndAddPlanningTab creates a new planning tab with session management if within limits
+func (tm *TabManager) CreateAndAddPlanningTab(styles *Styles, contextTracker *ContextTracker, sessionManager *session.SessionManager) (*PlanningTab, error) {
 	if !tm.CanCreatePlanningTab() {
 		return nil, fmt.Errorf("maximum %d concurrent planning tabs reached", MaxPlanningTabs)
 	}
@@ -350,13 +375,22 @@ func (tm *TabManager) CreatePlanningTabWithSession(styles *Styles, contextTracke
 		sessionManager = tm.sessionManager
 	}
 
+	// Get shared ACP client
+	acpClient, err := tm.GetOrCreateACPClient()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get ACP client: %w", err)
+	}
+
 	// Generate unique ID and title
 	tm.planningTabCounter++
 	id := fmt.Sprintf("planning-%d-%d", tm.planningTabCounter, time.Now().Unix())
 	title := fmt.Sprintf("Plan %d", tm.planningTabCounter)
 
-	// Create the planning tab with comprehensive session management
+	// Create the planning tab with comprehensive session management and shared client
 	planningTab := NewPlanningTabWithSession(id, title, styles, contextTracker, sessionManager)
+	if planningTab != nil {
+		planningTab.SetACPClient(acpClient)
+	}
 
 	// Verify tab creation was successful
 	if planningTab == nil {
@@ -373,7 +407,7 @@ func (tm *TabManager) CreatePlanningTabWithSession(styles *Styles, contextTracke
 func (tm *TabManager) ForceNewPlanningTab(styles *Styles, contextTracker *ContextTracker) (*PlanningTab, error) {
 	// First try normal creation
 	if tm.CanCreatePlanningTab() {
-		planningTab, err := tm.CreatePlanningTabWithSession(styles, contextTracker, tm.sessionManager)
+		planningTab, err := tm.CreateAndAddPlanningTab(styles, contextTracker, tm.sessionManager)
 		if err != nil {
 			return nil, err
 		}
@@ -397,7 +431,7 @@ func (tm *TabManager) ForceNewPlanningTab(styles *Styles, contextTracker *Contex
 	}
 
 	// Now create the new tab
-	planningTab, err := tm.CreatePlanningTabWithSession(styles, contextTracker, tm.sessionManager)
+	planningTab, err := tm.CreateAndAddPlanningTab(styles, contextTracker, tm.sessionManager)
 	if err != nil {
 		return nil, err
 	}

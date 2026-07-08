@@ -52,8 +52,9 @@ type overlayContent struct {
 }
 
 type consoleState struct {
-	inputValue    string
-	activityLines []string
+	inputValue     string
+	activityLines  []string
+	activeTabIndex int
 }
 
 type model struct {

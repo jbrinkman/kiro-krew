@@ -431,7 +431,7 @@ func (pt *PlanningTab) sendMessage(message string) tea.Cmd {
 		}
 
 		// Return a command that will start listening to the stream
-		return pt.listenToStream(streamChan)
+		return pt.listenToStream(streamChan)()
 	}
 }
 
@@ -495,8 +495,7 @@ func (pt *PlanningTab) View() string {
 	// Render separator with width adjustment for responsive design
 	separatorStyle := pt.styles.Separator
 	if pt.width < 60 {
-		// Use simpler separator for narrow terminals
-		separatorStyle = separatorStyle.Copy()
+		// Use simpler separator for narrow terminals - styles are value types in lipgloss v2
 	}
 
 	separator := separatorStyle.
@@ -782,7 +781,6 @@ func (pt *PlanningTab) Resize(width, height int) {
 }
 
 // SetCompleted sets the tab to completed state (successful GitHub issue creation)
-// SetCompleted sets the tab to completed state (successful GitHub issue creation)
 func (pt *PlanningTab) SetCompleted() {
 	pt.state = session.PlanningStateCompleted
 	pt.focusInput = false
@@ -852,6 +850,14 @@ func (pt *PlanningTab) UpdateContextUsage(used int) {
 		}
 	}
 	pt.UpdateSessionContext(used, total)
+}
+
+// SetACPClient sets the ACP client for this planning tab
+func (pt *PlanningTab) SetACPClient(client *acp.KiroACPClient) {
+	if pt.acpClient != nil && pt.acpClient != client {
+		pt.acpClient.Close()
+	}
+	pt.acpClient = client
 }
 
 // GetMessageCount returns the number of messages in the conversation

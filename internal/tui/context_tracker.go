@@ -25,6 +25,8 @@ type ContextTracker struct {
 	planningContext *PlanningContext
 	lastUpdate      time.Time
 	updateInterval  time.Duration
+	// contextLimitOverride allows ACP session metadata to override hardcoded limits
+	contextLimitOverride int
 }
 
 // NewContextTracker creates a new context tracker with default settings
@@ -185,6 +187,9 @@ func (ct *ContextTracker) formatTokenCount(count int) string {
 
 // getModelContextLimit returns the context limit for a given model
 func (ct *ContextTracker) getModelContextLimit(model string) int {
+	if ct.contextLimitOverride > 0 {
+		return ct.contextLimitOverride
+	}
 	// Default context limits for common models
 	// These can be updated as new models are supported
 	switch model {
@@ -206,6 +211,11 @@ func (ct *ContextTracker) getModelContextLimit(model string) int {
 		// Default fallback
 		return 128000
 	}
+}
+
+// SetContextLimit sets an override for the model context limit from ACP session metadata
+func (ct *ContextTracker) SetContextLimit(limit int) {
+	ct.contextLimitOverride = limit
 }
 
 // GetUsage returns the current context usage (used, total)
