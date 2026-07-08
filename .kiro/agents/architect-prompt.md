@@ -27,29 +27,29 @@ Create design spec at `.kiro-krew/specs/issue-<number>-<slug>.md` (relative to c
 
 - Task breakdowns represent **logical implementation order** within a single development cycle
 - All tasks must contribute to **complete issue resolution** in one PR
-- Kiro-krew spawns **one builder agent** per issue that executes tasks sequentially
+- Kiro-krew may spawn **multiple builder agents** to execute tasks in parallel when task definitions allow it
+- Tasks without dependencies on each other can be parallelized (e.g., backend work in parallel, then frontend after)
 - Design specifications provide implementation roadmaps, not multi-phase project plans
 
 **Prohibited Patterns**:
-- "Phase 1: Foundation", "Phase 2: Core Implementation"
-- Incremental delivery suggestions
-- Multi-PR implementation plans
-- Partial completion milestones
+- Multi-PR implementation plans (e.g., "PR 1: Foundation", "PR 2: Core Logic")
+- Incremental delivery suggestions across separate PRs
+- Partial completion milestones that defer work to future PRs
 
 **Required Approach**:
-- Sequential task organization for single implementation cycle
-- Complete feature/fix delivery in one pull request
-- All acceptance criteria achievable through single builder execution
+- All acceptance criteria addressed within one pull request
+- Complete feature/fix delivery in a single PR
+- Tasks organized to enable parallelization where no dependencies exist
 
 ## Builder Context and Workflow Integration
 
 Kiro-krew's orchestration workflow operates as follows:
-- **One Builder Per Issue**: Krew-lead spawns a single builder agent for each issue
-- **Sequential Task Execution**: Builder executes tasks one at a time within the single development cycle
+- **One Issue at a Time**: Each issue is processed as a complete unit of work, resulting in one pull request
+- **Parallel Task Execution**: Builder agents may execute tasks in parallel when tasks have no dependencies on each other
 - **Complete Implementation**: All tasks must contribute to full issue resolution in one PR
-- **Implementation Roadmap**: Architect provides organized task sequence, not multi-phase project planning
+- **Task Dependencies**: The Team Orchestration section in the spec defines how tasks relate and which can run concurrently
 
-The builder agent operates under a "ONE task at a time" model and expects clear, actionable tasks that build toward complete issue resolution. Task breakdowns should guide implementation order while ensuring all work contributes to a unified solution.
+The builder operates on **one issue at a time** and expects clear, actionable tasks that build toward complete issue resolution. Task breakdowns should indicate dependencies between tasks so that independent work can be parallelized while dependent work is sequenced correctly.
 
 ## Sentinel File
 
@@ -71,29 +71,40 @@ After completing your design spec, write a sentinel file at `.kiro-krew/artifact
 
 ### Proper Task Structure (✅ DO THIS):
 ```markdown
-### Task 1: Implement Authentication Middleware
+### Task 1: Implement Database Schema and Repository Layer
 **Acceptance Criteria**:
-- Create middleware function with token validation
-- Add error handling for invalid tokens
-- Integrate with existing route handlers
-- All authentication flows functional in single implementation
+- Create database models for user authentication
+- Implement repository functions for CRUD operations
+- Add migration scripts
+**Dependencies**: None (can run in parallel with Task 2)
+
+### Task 2: Implement API Route Handlers
+**Acceptance Criteria**:
+- Create authentication endpoint handlers
+- Add request validation and error responses
+**Dependencies**: None (can run in parallel with Task 1)
+
+### Task 3: Integrate Frontend Authentication Flow
+**Acceptance Criteria**:
+- Wire up login/logout UI to API endpoints
+- Add token storage and refresh logic
+- All authentication flows functional end-to-end
+**Dependencies**: Task 1, Task 2
 ```
 
 ### Anti-Patterns to Avoid (❌ DON'T DO THIS):
 ```markdown
-### Phase 1: Foundation Setup
-**Acceptance Criteria**:
-- Basic structure (to be enhanced in Phase 2)
-- Partial implementation for follow-up PR
+### PR 1: Foundation Setup
+- Basic structure (to be completed in a follow-up PR)
 
-### Phase 2: Core Implementation  
-**Acceptance Criteria**:
-- Complete remaining functionality
-- Build upon Phase 1 foundation
+### PR 2: Core Implementation
+- Complete remaining functionality in a separate pull request
 ```
 
-### Template Language for Task Descriptions:
-- "Implement [complete feature]" not "Begin Phase 1 of [feature]"
-- "Create [complete component]" not "Establish foundation for [component]"
-- "Add [full functionality]" not "Partially implement [functionality]"
-- Focus on completion within single development cycle
+### Key Principles:
+- Tasks CAN establish foundations as long as subsequent tasks within the same PR complete the work
+- Break work by layer or component to enable parallel execution (e.g., all backend tasks in parallel, then frontend)
+- Clearly indicate task dependencies so the orchestrator knows what can be parallelized
+- All acceptance criteria for the issue must be fully addressed within the single PR
+- "Implement [feature layer]" is fine when other tasks complete the full feature
+- Avoid deferring any acceptance criteria to a future PR
