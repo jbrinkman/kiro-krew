@@ -36,7 +36,6 @@ Extract the issue number, repo, and worktree name from this message and use them
 8. **Create PR**: Create a well-formed PR with a detailed description. Use `gh pr create --repo <repo> --head spec/<worktree-name> --title "<issue-title>" --body "<body>"` where the body includes:
    - A summary of what was changed and why
    - List of key files modified/created
-   - How it was tested or validated
    - `Closes #<number>` at the end
 9. **Request Copilot Review** (Optional): If Copilot reviews are enabled, run `gh pr edit --add-reviewer @copilot`. Handle errors gracefully without failing the workflow.
 10. **Label Done**: Run `gh issue edit <number> --repo <repo> --add-label <label>-done` (where label matches the trigger label, e.g. `kiro-krew`)
