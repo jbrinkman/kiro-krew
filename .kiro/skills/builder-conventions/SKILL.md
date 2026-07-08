@@ -88,15 +88,6 @@ Include sync verification status in sentinel files:
 - `cp .kiro/agents/builder.json cmd/kiro-krew/templates/kiro/agents/`
 ```
 
-### When Sync is NOT Required
-
-Skip sync for:
-- Project-specific files (non-template)
-- Skills ending in `-conventions`
-- Build artifacts and generated files
-- Documentation in `docs/` or `app_docs/`
-- Source code in `cmd/`, `pkg/`, etc.
-
 ## Implementation Patterns
 
 ### Quality Assurance
