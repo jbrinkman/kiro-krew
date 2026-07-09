@@ -61,7 +61,7 @@ func (fm *FooterManager) RenderFooter(activeTabType TabType) FooterContent {
 	}
 }
 
-// renderInputRow creates the command entry row (Row 1: input only, no theme label)
+// renderInputRow creates the command entry row
 func (fm *FooterManager) renderInputRow() string {
 	if fm.autocompleteInput == nil {
 		return ""
@@ -89,18 +89,28 @@ func (fm *FooterManager) renderStatusRow(activeTabType TabType) string {
 	// Base information shown on all tabs
 	baseInfo := fm.renderBaseInfo()
 
-	// Additional information for planning tabs
+	// Enhanced information for planning tabs
 	if activeTabType == TabTypePlanning {
 		planningInfo := fm.renderPlanningInfo()
 		planningStatusInfo := fm.renderPlanningStatusInfo()
+		planningACPInfo := fm.renderPlanningACPInfo()
 
-		// Combine all planning information
+		// Combine all planning information with priority ordering
 		var planningInfoParts []string
-		if planningInfo != "" {
-			planningInfoParts = append(planningInfoParts, planningInfo)
-		}
+
+		// Priority 1: Session status (most important)
 		if planningStatusInfo != "" {
 			planningInfoParts = append(planningInfoParts, planningStatusInfo)
+		}
+
+		// Priority 2: ACP connection and model info
+		if planningACPInfo != "" {
+			planningInfoParts = append(planningInfoParts, planningACPInfo)
+		}
+
+		// Priority 3: Context and directory info
+		if planningInfo != "" {
+			planningInfoParts = append(planningInfoParts, planningInfo)
 		}
 
 		if len(planningInfoParts) > 0 {
@@ -117,7 +127,7 @@ func (fm *FooterManager) renderBaseInfo() string {
 	return fmt.Sprintf("theme: %s", fm.config.Theme)
 }
 
-// renderPlanningInfo renders additional information for planning tabs
+// renderPlanningInfo renders context usage and directory information for planning tabs
 func (fm *FooterManager) renderPlanningInfo() string {
 	// Only show context info if context tracker is active
 	if !fm.contextTracker.IsActive() {
@@ -131,19 +141,26 @@ func (fm *FooterManager) renderPlanningInfo() string {
 
 	var parts []string
 
-	// Context usage
+	// Context usage with visual indicator
 	if contextUsage := fm.contextTracker.FormatContextUsage(); contextUsage != "" {
 		parts = append(parts, contextUsage)
+
+		// Add usage warning as separate segment for clean visual separation
+		used, total := fm.contextTracker.GetUsage()
+		if total > 0 {
+			percentage := (used * 100) / total
+			if percentage > 90 {
+				parts = append(parts, "🔥 critical usage")
+			} else if percentage > 75 {
+				parts = append(parts, "⚠️ high usage")
+			}
+		}
 	}
 
-	// Model information
-	if planningContext.Model != "" {
-		parts = append(parts, fmt.Sprintf("model: %s", planningContext.Model))
-	}
-
-	// Directory information with folder icon
+	// Directory information with improved formatting
 	if planningContext.Directory != "" {
-		parts = append(parts, fmt.Sprintf("📁 %s", planningContext.Directory))
+		dirInfo := fmt.Sprintf("📁 %s", planningContext.Directory)
+		parts = append(parts, dirInfo)
 	}
 
 	return strings.Join(parts, " | ")
@@ -195,6 +212,34 @@ func (fm *FooterManager) renderPlanningStatusInfo() string {
 	}
 
 	return statusText
+}
+
+// renderPlanningACPInfo renders ACP connection and model information for planning tabs
+func (fm *FooterManager) renderPlanningACPInfo() string {
+	var parts []string
+
+	// Get model information from context tracker if available
+	if fm.contextTracker.IsActive() {
+		if planningContext := fm.contextTracker.GetPlanningContext(); planningContext != nil {
+			if planningContext.Model != "" {
+				parts = append(parts, fmt.Sprintf("model: %s", planningContext.Model))
+			}
+		}
+	}
+
+	// Get active planning tab connection status
+	if fm.tabManager != nil {
+		if activeTab := fm.tabManager.GetActiveTab(); activeTab != nil && activeTab.Type() == TabTypePlanning {
+			if planningTab, ok := activeTab.(*PlanningTab); ok {
+				// Add processing status indicator
+				if planningTab.IsActive() {
+					parts = append(parts, "● active")
+				}
+			}
+		}
+	}
+
+	return strings.Join(parts, " | ")
 }
 
 // joinStatusInfo combines base and additional status information

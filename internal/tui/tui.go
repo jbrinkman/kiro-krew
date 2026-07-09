@@ -188,8 +188,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.consoleViewport.SetWidth(msg.Width)
 		m.consoleViewport.SetHeight(activityHeight)
 
-		// Forward to tab manager
-		m.tabManager.Resize(msg.Width, msg.Height)
+		// Forward to tab manager with footer-aware resizing
+		m.tabManager.ResizeForFooter(msg.Width, msg.Height, footerHeight)
 
 		// Recalculate overlay dimensions on resize
 		if m.activeOverlay != overlayNone {
@@ -586,17 +586,17 @@ func (m model) renderBaseView() string {
 	m.consoleViewport.SetHeight(activityHeight)
 	activity := m.consoleViewport.View()
 
+	// Use unified rendering system for consistent footer display
+	return m.renderTabContentWithFooter(m.styles.Activity.Render(activity), TabTypeMain)
+}
+
+// renderTabContentWithFooter creates a unified rendering method that combines tab content with footer
+func (m model) renderTabContentWithFooter(tabContent string, tabType TabType) string {
 	// Render footer using the footer system
-	activeTab := m.tabManager.GetActiveTab()
-	activeTabType := TabTypeMain
-	if activeTab != nil {
-		activeTabType = activeTab.Type()
-	}
+	footerWithDropdown, _ := m.footerManager.RenderDropdownWithFooter(tabType)
 
-	footerWithDropdown, _ := m.footerManager.RenderDropdownWithFooter(activeTabType)
-
-	// Compose the complete base view
-	return m.styles.Activity.Render(activity) + "\n" + footerWithDropdown
+	// Compose the complete view with tab content and footer
+	return tabContent + "\n" + footerWithDropdown
 }
 
 func (m model) View() tea.View {
@@ -617,15 +617,16 @@ func (m model) View() tea.View {
 	// Render tab headers at the top
 	tabHeaders := m.tabManager.RenderTabHeaders(m.width, m.styles)
 
-	base := m.renderBaseView()
-
-	// Render active tab content (use base view directly for main tab)
+	// Render active tab content using unified rendering system
 	var content string
 	activeTab := m.tabManager.GetActiveTab()
 	if activeTab != nil && activeTab.Type() != TabTypeMain {
-		content = activeTab.View()
+		// For non-main tabs, get their content and apply unified rendering with footer
+		tabContent := activeTab.View()
+		content = m.renderTabContentWithFooter(tabContent, activeTab.Type())
 	} else {
-		content = base
+		// For main tab, use the existing base view (which now uses unified rendering internally)
+		content = m.renderBaseView()
 	}
 
 	// Combine tab headers with content
