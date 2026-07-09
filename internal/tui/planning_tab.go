@@ -93,7 +93,7 @@ func NewPlanningTabWithSession(id, title string, styles *Styles, contextTracker 
 	ta.Placeholder = "Type your message here..."
 	ta.ShowLineNumbers = false
 	ta.CharLimit = 4000 // Reasonable message limit
-	ta.SetWidth(78)     // Leave room for borders
+	ta.SetWidth(80)     // Initial width, will be updated during resize
 	ta.SetHeight(3)     // Multi-line input
 
 	// Configure textarea keybindings
@@ -108,7 +108,7 @@ func NewPlanningTabWithSession(id, title string, styles *Styles, contextTracker 
 		messages:       make([]PlanningMessage, 0),
 		styles:         styles,
 		focusInput:     true,
-		inputHeight:    5, // Input area + border + padding
+		inputHeight:    5, // Input area + padding
 		contextTracker: contextTracker,
 		sessionManager: sessionManager,
 	}
@@ -505,23 +505,17 @@ func (pt *PlanningTab) View() string {
 		messageHeight = pt.height - inputHeight - separatorHeight
 	}
 
-	// Update viewport dimensions with responsive border adjustments
-	viewportWidth := pt.width - 2 // Default border width
+	// Update viewport dimensions to use full available width
+	viewportWidth := pt.width
 	if pt.width < 60 {
-		viewportWidth = pt.width - 1 // Narrow terminal adjustment
+		viewportWidth = pt.width // Use full width even for narrow terminals
 	}
 
 	pt.viewport.SetWidth(viewportWidth)
 	pt.viewport.SetHeight(messageHeight)
 
-	// Get responsive border style
-	borderStyle := pt.styles.GetPlanningBorderStyle(pt.width)
-
-	// Render message history with responsive container
-	messageArea := borderStyle.
-		Width(pt.width - 2).
-		Height(messageHeight).
-		Render(pt.viewport.View())
+	// Render message history directly without border container
+	messageArea := pt.viewport.View()
 
 	// Render input area with responsive styling
 	inputArea := pt.renderInputArea()
@@ -549,9 +543,9 @@ func (pt *PlanningTab) View() string {
 // renderInputArea renders the embedded message input area with responsive styling
 func (pt *PlanningTab) renderInputArea() string {
 	// Update textarea dimensions with responsive adjustments
-	availableWidth := pt.width - 4 // Account for borders and padding
+	availableWidth := pt.width
 	if pt.width < 60 {
-		availableWidth = pt.width - 2 // Less padding for narrow terminals
+		availableWidth = pt.width // Use full width even for narrow terminals
 	}
 	pt.textarea.SetWidth(availableWidth)
 
@@ -599,7 +593,7 @@ func (pt *PlanningTab) renderInputArea() string {
 	input := styledPrompt + contextInfo + "\n" + pt.textarea.View()
 
 	// Apply responsive container styling
-	containerWidth := pt.width - 2
+	containerWidth := pt.width
 	containerHeight := pt.inputHeight - 2
 
 	if pt.width < 60 {
@@ -774,8 +768,8 @@ func (pt *PlanningTab) Resize(width, height int) {
 
 	// Update component dimensions with footer space already excluded from height
 	if width > 4 {
-		pt.textarea.SetWidth(width - 4)
-		pt.viewport.SetWidth(width - 2)
+		pt.textarea.SetWidth(width)
+		pt.viewport.SetWidth(width)
 	}
 
 	// Recalculate message area height using the footer-aware height
