@@ -118,7 +118,7 @@ func newModel(w *watcher.Watcher, m *agent.Manager, cfg *config.Config, logFile 
 	tabManager.AddTab(mainTab)
 
 	// Initialize footer system
-	footerManager := NewFooterManager(styles, cfg, autocompleteInput)
+	footerManager := NewFooterManager(styles, cfg, autocompleteInput, tabManager)
 
 	return model{
 		watcher:          w,
