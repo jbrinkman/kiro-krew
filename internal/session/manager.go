@@ -132,11 +132,13 @@ func (sm *SessionManager) Load(id string) (*SessionState, error) {
 		return nil, fmt.Errorf("failed to deserialize session (corruption detected): %w", err)
 	}
 
-	// Validate and repair session integrity
+	// Repair session integrity before validation so fixable fields
+	// (e.g. empty TabID, missing ACP defaults) don't cause rejection.
+	sm.RepairSession(id, state)
+
 	if err := sm.ValidateSession(id, state); err != nil {
 		return nil, fmt.Errorf("session validation failed: %w", err)
 	}
-	sm.RepairSession(id, state)
 
 	return state, nil
 }
@@ -398,30 +400,36 @@ func (sm *SessionManager) RepairSession(id string, state *SessionState) {
 				state.PlanningData.LastActivity = now
 			}
 
-			// Fix ACP connection defaults
+			// Fix ACP connection defaults from canonical source
+			defaults := DefaultACPConnectionMetadata()
 			if state.PlanningData.ACPConnection.Agent == "" {
-				state.PlanningData.ACPConnection.Agent = "kiro-agent"
+				state.PlanningData.ACPConnection.Agent = defaults.Agent
 			}
 
 			if state.PlanningData.ACPConnection.Model == "" {
-				state.PlanningData.ACPConnection.Model = "claude-sonnet-4"
+				state.PlanningData.ACPConnection.Model = defaults.Model
 			}
 
 			if state.PlanningData.ACPConnection.Timeout == 0 {
-				state.PlanningData.ACPConnection.Timeout = 60 * time.Second
+				state.PlanningData.ACPConnection.Timeout = defaults.Timeout
 			}
 
 			if state.PlanningData.ACPConnection.ResponseFormat == "" {
-				state.PlanningData.ACPConnection.ResponseFormat = "text"
+				state.PlanningData.ACPConnection.ResponseFormat = defaults.ResponseFormat
+			}
+
+			if !state.PlanningData.ACPConnection.Streaming {
+				state.PlanningData.ACPConnection.Streaming = defaults.Streaming
 			}
 
 			if state.PlanningData.ACPConnection.LastActivity.IsZero() {
 				state.PlanningData.ACPConnection.LastActivity = now
 			}
 
-			// Fix context usage defaults
+			// Fix context usage defaults from canonical source
+			ctxDefaults := DefaultContextUsage()
 			if state.PlanningData.ContextUsage.Total <= 0 {
-				state.PlanningData.ContextUsage.Total = 200000
+				state.PlanningData.ContextUsage.Total = ctxDefaults.Total
 			}
 
 			if state.PlanningData.ContextUsage.Used < 0 {
