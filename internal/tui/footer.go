@@ -180,12 +180,11 @@ func (fm *FooterManager) renderPlanningStatusInfo() string {
 	// Add message count if there are messages
 	messageCount := planningTab.GetMessageCount()
 	if messageCount > 0 {
-		statusText += fmt.Sprintf(" (%d msg%s)", messageCount, func() string {
-			if messageCount != 1 {
-				return "s"
-			}
-			return ""
-		}())
+		plural := ""
+		if messageCount != 1 {
+			plural = "s"
+		}
+		statusText += fmt.Sprintf(" (%d msg%s)", messageCount, plural)
 	}
 
 	return statusText
