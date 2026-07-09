@@ -506,12 +506,7 @@ func (pt *PlanningTab) View() string {
 	}
 
 	// Update viewport dimensions to use full available width
-	viewportWidth := pt.width
-	if pt.width < 60 {
-		viewportWidth = pt.width // Use full width even for narrow terminals
-	}
-
-	pt.viewport.SetWidth(viewportWidth)
+	pt.viewport.SetWidth(pt.width)
 	pt.viewport.SetHeight(messageHeight)
 
 	// Render message history directly without border container
@@ -520,13 +515,8 @@ func (pt *PlanningTab) View() string {
 	// Render input area with responsive styling
 	inputArea := pt.renderInputArea()
 
-	// Render separator with width adjustment for responsive design
-	separatorStyle := pt.styles.Separator
-	if pt.width < 60 {
-		// Use simpler separator for narrow terminals - styles are value types in lipgloss v2
-	}
-
-	separator := separatorStyle.
+	// Render separator
+	separator := pt.styles.Separator.
 		Width(pt.width).
 		Render(strings.Repeat("─", pt.width))
 
@@ -542,12 +532,8 @@ func (pt *PlanningTab) View() string {
 
 // renderInputArea renders the embedded message input area with responsive styling
 func (pt *PlanningTab) renderInputArea() string {
-	// Update textarea dimensions with responsive adjustments
-	availableWidth := pt.width
-	if pt.width < 60 {
-		availableWidth = pt.width // Use full width even for narrow terminals
-	}
-	pt.textarea.SetWidth(availableWidth)
+	// Update textarea dimensions
+	pt.textarea.SetWidth(pt.width)
 
 	// Get responsive input style
 	inputStyle := pt.styles.GetPlanningInputStyle(pt.focusInput && pt.state != session.PlanningStateReadOnly, pt.width)
