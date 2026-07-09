@@ -231,9 +231,9 @@ func (fm *FooterManager) renderPlanningACPInfo() string {
 	if fm.tabManager != nil {
 		if activeTab := fm.tabManager.GetActiveTab(); activeTab != nil && activeTab.Type() == TabTypePlanning {
 			if planningTab, ok := activeTab.(*PlanningTab); ok {
-				// Add ACP connection status indicator
+				// Add processing status indicator
 				if planningTab.IsActive() {
-					parts = append(parts, "🔗 connected")
+					parts = append(parts, "● active")
 				}
 			}
 		}

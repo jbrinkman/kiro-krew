@@ -12,11 +12,12 @@ import (
 
 // TabManager manages the lifecycle and state of all tabs
 type TabManager struct {
-	tabs       []Tab
-	activeTab  int
-	hoveredTab int
-	width      int
-	height     int
+	tabs          []Tab
+	activeTab     int
+	hoveredTab    int
+	width         int
+	height        int
+	contentHeight int // height allocated to tab content (excludes footer + header)
 
 	// Planning tab management
 	planningTabCounter int // Counter for unique planning tab IDs
@@ -39,7 +40,9 @@ func NewTabManager() *TabManager {
 // AddTab adds a new tab to the manager
 func (tm *TabManager) AddTab(tab Tab) {
 	tm.tabs = append(tm.tabs, tab)
-	if tm.width > 0 && tm.height > 0 {
+	if tm.width > 0 && tm.contentHeight > 0 {
+		tab.Resize(tm.width, tm.contentHeight)
+	} else if tm.width > 0 && tm.height > 0 {
 		tab.Resize(tm.width, tm.height)
 	}
 	// If this is the first tab, set it as active
@@ -103,6 +106,7 @@ func (tm *TabManager) ResizeForFooter(width, height int, footerHeight int) {
 	if contentHeight < 1 {
 		contentHeight = 1
 	}
+	tm.contentHeight = contentHeight
 
 	// Resize tabs with adjusted content height
 	for _, tab := range tm.tabs {
