@@ -533,57 +533,13 @@ func (pt *PlanningTab) View() string {
 		Width(pt.width).
 		Render(strings.Repeat("─", pt.width))
 
-	// Add status bar for wide terminals
-	var statusBar string
-	if pt.width > 100 && pt.contextTracker != nil {
-		used, total := pt.contextTracker.GetUsage()
-		model := pt.contextTracker.GetCurrentModel()
-
-		statusInfo := fmt.Sprintf("Context: %d/%d", used, total)
-		if model != "" {
-			statusInfo += fmt.Sprintf(" | Model: %s", model)
-		}
-		statusInfo += fmt.Sprintf(" | State: %s", pt.getStateDisplay())
-
-		statusBar = pt.styles.PlanningTimestamp.
-			Width(pt.width).
-			AlignHorizontal(lipgloss.Right).
-			Render(statusInfo)
-	}
-
 	// Combine all parts with responsive layout
-	if statusBar != "" {
-		return lipgloss.JoinVertical(
-			lipgloss.Left,
-			statusBar,
-			messageArea,
-			separator,
-			inputArea,
-		)
-	}
-
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
 		messageArea,
 		separator,
 		inputArea,
 	)
-}
-
-// getStateDisplay returns a human-readable state string for status display
-func (pt *PlanningTab) getStateDisplay() string {
-	switch pt.state {
-	case session.PlanningStateActive:
-		return "Processing"
-	case session.PlanningStateCompleted:
-		return "Completed"
-	case session.PlanningStateFailed:
-		return "Failed"
-	case session.PlanningStateReadOnly:
-		return "Read Only"
-	default:
-		return "Idle"
-	}
 }
 
 // renderInputArea renders the embedded message input area with responsive styling
