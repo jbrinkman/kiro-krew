@@ -98,8 +98,25 @@ func (tm *TabManager) Update(msg tea.Msg) tea.Cmd {
 func (tm *TabManager) Resize(width, height int) {
 	tm.width = width
 	tm.height = height
+	// Pass full dimensions to tabs - they will be adjusted by unified rendering system
 	for _, tab := range tm.tabs {
 		tab.Resize(width, height)
+	}
+}
+
+// ResizeForFooter resizes all tabs accounting for footer height
+func (tm *TabManager) ResizeForFooter(width, height int, footerHeight int) {
+	tm.width = width
+	tm.height = height
+	// Calculate content area height excluding tab header and footer
+	contentHeight := height - footerHeight - tabHeaderHeight
+	if contentHeight < 1 {
+		contentHeight = 1
+	}
+
+	// Resize tabs with adjusted content height
+	for _, tab := range tm.tabs {
+		tab.Resize(width, contentHeight)
 	}
 }
 

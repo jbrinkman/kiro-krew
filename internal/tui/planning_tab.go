@@ -483,14 +483,18 @@ func (pt *PlanningTab) listenToStream() tea.Cmd {
 }
 
 // View renders the planning tab content with responsive styling
+// This method renders only the tab's content area - the unified rendering system
+// in tui.go will add the footer below this content
 func (pt *PlanningTab) View() string {
 	if pt.height == 0 || pt.width == 0 {
 		return ""
 	}
 
-	// Calculate dimensions with responsive adjustments
+	// Calculate dimensions for the tab's content area only
+	// The unified rendering system handles footer space allocation
 	separatorHeight := 1
-	messageHeight := pt.height - pt.inputHeight - separatorHeight
+	availableContentHeight := pt.height
+	messageHeight := availableContentHeight - pt.inputHeight - separatorHeight
 	if messageHeight < 1 {
 		messageHeight = 1
 	}
@@ -499,7 +503,7 @@ func (pt *PlanningTab) View() string {
 	inputHeight := pt.inputHeight
 	if pt.width < 60 {
 		inputHeight = pt.inputHeight - 1
-		messageHeight = pt.height - inputHeight - separatorHeight
+		messageHeight = availableContentHeight - inputHeight - separatorHeight
 	}
 
 	// Update viewport dimensions with responsive border adjustments
@@ -534,6 +538,7 @@ func (pt *PlanningTab) View() string {
 		Render(strings.Repeat("─", pt.width))
 
 	// Combine all parts with responsive layout
+	// The unified rendering system in tui.go will add the footer below this content
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
 		messageArea,
@@ -762,18 +767,19 @@ func (pt *PlanningTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 	return pt, tea.Batch(cmds...)
 }
 
-// Resize updates the tab dimensions
+// Resize updates the tab dimensions with footer-aware height calculation
+// The height parameter represents the available space for the tab content only (footer excluded)
 func (pt *PlanningTab) Resize(width, height int) {
 	pt.width = width
 	pt.height = height
 
-	// Update component dimensions
+	// Update component dimensions with footer space already excluded from height
 	if width > 4 {
 		pt.textarea.SetWidth(width - 4)
 		pt.viewport.SetWidth(width - 2)
 	}
 
-	// Recalculate message area height
+	// Recalculate message area height using the footer-aware height
 	messageHeight := height - pt.inputHeight - 1
 	if messageHeight > 0 {
 		pt.viewport.SetHeight(messageHeight)
