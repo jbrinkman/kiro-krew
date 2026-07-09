@@ -282,7 +282,7 @@ func TestTask8Integration(t *testing.T) {
 			t.Logf("Expected ACP connection error in test environment: %v", err)
 
 			// Create planning tab directly without ACP connection for testing
-			planningTab := NewPlanningTabWithSession("test-plan-1", "Test Plan", styles, contextTracker, sessionManager)
+			planningTab := NewPlanningTabWithSession("test-plan-1", "Test Plan", styles, contextTracker, sessionManager, nil)
 			if planningTab == nil {
 				t.Error("Direct planning tab creation failed")
 				return

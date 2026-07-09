@@ -2,6 +2,7 @@ package session
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 )
 
@@ -43,6 +44,59 @@ const (
 	PlanningStateFailed
 	PlanningStateReadOnly
 )
+
+// String returns the string representation of PlanningTabState
+func (s PlanningTabState) String() string {
+	switch s {
+	case PlanningStateIdle:
+		return "idle"
+	case PlanningStateActive:
+		return "active"
+	case PlanningStateCompleted:
+		return "completed"
+	case PlanningStateFailed:
+		return "failed"
+	case PlanningStateReadOnly:
+		return "read_only"
+	default:
+		return "idle"
+	}
+}
+
+// MarshalJSON implements json.Marshaler for PlanningTabState
+func (s PlanningTabState) MarshalJSON() ([]byte, error) {
+	return json.Marshal(s.String())
+}
+
+// UnmarshalJSON implements json.Unmarshaler for PlanningTabState
+func (s *PlanningTabState) UnmarshalJSON(data []byte) error {
+	var str string
+	if err := json.Unmarshal(data, &str); err != nil {
+		// Try unmarshaling as int for backward compatibility
+		var num int
+		if numErr := json.Unmarshal(data, &num); numErr != nil {
+			return fmt.Errorf("PlanningTabState must be a string or int: %w", err)
+		}
+		*s = PlanningTabState(num)
+		return nil
+	}
+
+	switch str {
+	case "idle":
+		*s = PlanningStateIdle
+	case "active":
+		*s = PlanningStateActive
+	case "completed":
+		*s = PlanningStateCompleted
+	case "failed":
+		*s = PlanningStateFailed
+	case "read_only":
+		*s = PlanningStateReadOnly
+	default:
+		*s = PlanningStateIdle
+	}
+	return nil
+}
 
 // Message represents a single conversation message
 type Message struct {

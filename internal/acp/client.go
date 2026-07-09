@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os/exec"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/coder/acp-go-sdk"
@@ -30,25 +31,17 @@ type KiroClient struct {
 
 // RequestPermission handles permission requests from agents
 func (k *KiroClient) RequestPermission(ctx context.Context, params acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
-	if k.autoApprove {
-		// Auto-approve - choose first allow option or first available option
-		for _, opt := range params.Options {
-			if opt.Kind == "allow" {
-				return acp.RequestPermissionResponse{
-					Outcome: acp.RequestPermissionOutcome{
-						Selected: &acp.RequestPermissionOutcomeSelected{
-							OptionId: opt.OptionId,
-							Outcome:  "selected",
-						},
-					},
-				}, nil
-			}
-		}
-		if len(params.Options) > 0 {
+	if len(params.Options) == 0 {
+		return acp.RequestPermissionResponse{}, fmt.Errorf("no permission options available")
+	}
+
+	// Auto-approve: prefer "allow" option, fall back to first available
+	for _, opt := range params.Options {
+		if opt.Kind == "allow" {
 			return acp.RequestPermissionResponse{
 				Outcome: acp.RequestPermissionOutcome{
 					Selected: &acp.RequestPermissionOutcomeSelected{
-						OptionId: params.Options[0].OptionId,
+						OptionId: opt.OptionId,
 						Outcome:  "selected",
 					},
 				},
@@ -56,19 +49,15 @@ func (k *KiroClient) RequestPermission(ctx context.Context, params acp.RequestPe
 		}
 	}
 
-	// For now, auto-approve for planning mode - choose first option if available
-	if len(params.Options) > 0 {
-		return acp.RequestPermissionResponse{
-			Outcome: acp.RequestPermissionOutcome{
-				Selected: &acp.RequestPermissionOutcomeSelected{
-					OptionId: params.Options[0].OptionId,
-					Outcome:  "selected",
-				},
+	// No "allow" option found, use first available
+	return acp.RequestPermissionResponse{
+		Outcome: acp.RequestPermissionOutcome{
+			Selected: &acp.RequestPermissionOutcomeSelected{
+				OptionId: params.Options[0].OptionId,
+				Outcome:  "selected",
 			},
-		}, nil
-	}
-
-	return acp.RequestPermissionResponse{}, fmt.Errorf("no permission options available")
+		},
+	}, nil
 }
 
 // ReadTextFile handles file read requests
@@ -202,8 +191,7 @@ func (c *KiroACPClient) Connect(ctx context.Context) error {
 		},
 	})
 	if err != nil {
-		stdin.Close()
-		stdout.Close()
+		// Kill the process and wait - this also closes the pipes
 		cmd.Process.Kill()
 		cmd.Wait()
 		return fmt.Errorf("failed to initialize ACP connection: %w", err)
@@ -226,8 +214,24 @@ func (c *KiroACPClient) Disconnect() error {
 	}
 
 	if c.cmd != nil && c.cmd.Process != nil {
-		c.cmd.Process.Kill()
-		c.cmd.Wait()
+		// Attempt graceful shutdown with SIGTERM
+		c.cmd.Process.Signal(syscall.SIGTERM)
+
+		// Wait up to 3 seconds for graceful exit
+		done := make(chan error, 1)
+		go func() {
+			done <- c.cmd.Wait()
+		}()
+
+		select {
+		case <-done:
+			// Process exited gracefully
+		case <-time.After(3 * time.Second):
+			// Force kill after timeout
+			c.cmd.Process.Kill()
+			<-done
+		}
+
 		c.cmd = nil
 	}
 

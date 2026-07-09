@@ -186,6 +186,10 @@ func (ct *ContextTracker) formatTokenCount(count int) string {
 }
 
 // getModelContextLimit returns the context limit for a given model
+// getModelContextLimit returns the context limit for a given model.
+// TODO: Once ACP session metadata provides context limits, use contextLimitOverride
+// (set via SetContextLimit) as the primary source and only fall back to this
+// hardcoded map when the override isn't set.
 func (ct *ContextTracker) getModelContextLimit(model string) int {
 	if ct.contextLimitOverride > 0 {
 		return ct.contextLimitOverride

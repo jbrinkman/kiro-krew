@@ -6,7 +6,6 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/jbrinkman/kiro-krew/internal/acp"
 	"github.com/jbrinkman/kiro-krew/internal/agent"
 	"github.com/jbrinkman/kiro-krew/internal/session"
 )
@@ -356,21 +355,13 @@ func (tm *TabManager) CreateAndAddPlanningTab(styles *Styles, contextTracker *Co
 		sessionManager = tm.sessionManager
 	}
 
-	// Create a dedicated ACP client for this tab. Each planning tab gets its own
-	// kiro-cli subprocess and session to avoid cross-contamination of sessionID
-	// and streaming response channels between concurrent tabs.
-	acpClient := acp.NewClient(acp.DefaultConnectionConfig())
-
 	// Generate unique ID and title
 	tm.planningTabCounter++
 	id := fmt.Sprintf("planning-%d-%d", tm.planningTabCounter, time.Now().Unix())
 	title := fmt.Sprintf("Plan %d", tm.planningTabCounter)
 
-	// Create the planning tab with its own ACP client
-	planningTab := NewPlanningTabWithSession(id, title, styles, contextTracker, sessionManager)
-	if planningTab != nil {
-		planningTab.SetACPClient(acpClient)
-	}
+	// Create the planning tab (constructor creates ACP client internally)
+	planningTab := NewPlanningTabWithSession(id, title, styles, contextTracker, sessionManager, nil)
 
 	// Verify tab creation was successful
 	if planningTab == nil {

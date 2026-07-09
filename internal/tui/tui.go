@@ -52,9 +52,9 @@ type overlayContent struct {
 }
 
 type consoleState struct {
-	inputValue     string
-	activityLines  []string
-	activeTabIndex int
+	inputValue    string
+	activityLines []string
+	activeTabID   string
 }
 
 type model struct {
@@ -879,6 +879,24 @@ func (m model) performExitCleanup() model {
 	return m
 }
 
+// switchActiveTab switches to a tab by index and updates context tracking
+func (m model) switchActiveTab(index int) model {
+	m.tabManager.SetActiveTab(index)
+	// Update context tracker based on active tab type
+	if activeTab := m.tabManager.GetActiveTab(); activeTab != nil {
+		if activeTab.Type() == TabTypePlanning {
+			if !m.footerManager.GetContextTracker().IsActive() {
+				m.footerManager.GetContextTracker().StartPlanningSession("claude-sonnet-4")
+			}
+		} else {
+			if m.footerManager.GetContextTracker().IsActive() {
+				m.footerManager.GetContextTracker().StopPlanningSession()
+			}
+		}
+	}
+	return m
+}
+
 func (m model) executeCommand(input string) (model, tea.Cmd) {
 	parts := strings.Fields(input)
 	cmd := parts[0]
@@ -960,45 +978,6 @@ func (m model) updateAgentTabs() model {
 	}
 
 	return m
-}
-
-// testACPConnection tests the ACP connection for a planning tab
-func (m model) testACPConnection(planningTab Tab) error {
-	if planningTab == nil {
-		return fmt.Errorf("planning tab is nil")
-	}
-
-	// Ensure this is actually a planning tab
-	if planningTab.Type() != TabTypePlanning {
-		return fmt.Errorf("tab is not a planning tab")
-	}
-
-	// This is a placeholder for ACP connection testing
-	// In a real implementation, this would attempt to establish an ACP connection
-	// and verify that kiro-cli is accessible
-	return nil
-}
-
-// hasACPWarnings checks if a planning tab has ACP-related warnings
-func (m model) hasACPWarnings(planningTab Tab) bool {
-	if planningTab == nil || planningTab.Type() != TabTypePlanning {
-		return true
-	}
-
-	// Cast to PlanningTab to access planning-specific methods
-	if pt, ok := planningTab.(*PlanningTab); ok {
-		// Check if the planning tab has any system messages indicating warnings
-		if pt.GetMessageCount() == 0 {
-			return false
-		}
-
-		lastMessage := pt.GetLastMessage()
-		if lastMessage != nil && lastMessage.Role == "system" {
-			return strings.Contains(lastMessage.Content, "⚠️") || strings.Contains(lastMessage.Content, "warning")
-		}
-	}
-
-	return false
 }
 
 func Run(w *watcher.Watcher, m *agent.Manager, cfg *config.Config) error {

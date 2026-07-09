@@ -36,7 +36,7 @@ type PlanningTab struct {
 	messages []PlanningMessage
 
 	// ACP integration
-	acpClient *acp.KiroACPClient
+	acpClient acp.Client
 
 	// UI state
 	styles      *Styles
@@ -48,6 +48,10 @@ type PlanningTab struct {
 	currentResponse   strings.Builder
 	streamChan        <-chan *acp.StreamingResponse
 	streamCancel      context.CancelFunc
+
+	// Lifecycle context - cancelled when tab is closed
+	lifecycleCtx    context.Context
+	lifecycleCancel context.CancelFunc
 
 	// Context tracking
 	contextTracker *ContextTracker
@@ -68,13 +72,18 @@ type planningStreamMsg struct {
 	response *acp.StreamingResponse
 }
 
+type planningStreamStartMsg struct {
+	streamChan   <-chan *acp.StreamingResponse
+	streamCancel context.CancelFunc
+}
+
 // NewPlanningTab creates a new planning tab
 func NewPlanningTab(id, title string, styles *Styles, contextTracker *ContextTracker) *PlanningTab {
-	return NewPlanningTabWithSession(id, title, styles, contextTracker, nil)
+	return NewPlanningTabWithSession(id, title, styles, contextTracker, nil, nil)
 }
 
 // NewPlanningTabWithSession creates a new planning tab with session management
-func NewPlanningTabWithSession(id, title string, styles *Styles, contextTracker *ContextTracker, sessionManager *session.SessionManager) *PlanningTab {
+func NewPlanningTabWithSession(id, title string, styles *Styles, contextTracker *ContextTracker, sessionManager *session.SessionManager, acpClient acp.Client) *PlanningTab {
 	// Create viewport for message history
 	vp := viewport.New(viewport.WithWidth(80), viewport.WithHeight(20))
 	vp.KeyMap = viewport.KeyMap{} // Disable built-in keybindings - we'll handle them
@@ -104,13 +113,20 @@ func NewPlanningTabWithSession(id, title string, styles *Styles, contextTracker 
 		sessionManager: sessionManager,
 	}
 
-	// Initialize ACP client
-	pt.acpClient = acp.NewClient(acp.DefaultConnectionConfig())
+	// Initialize ACP client with provided client or create default
+	if acpClient == nil {
+		acpClient = acp.NewClient(acp.DefaultConnectionConfig())
+	}
+	pt.acpClient = acpClient
 
 	// Create or load session if session manager is provided
 	if sessionManager != nil {
 		pt.initializeSession()
 	}
+
+	lifecycleCtx, lifecycleCancel := context.WithCancel(context.Background())
+	pt.lifecycleCtx = lifecycleCtx
+	pt.lifecycleCancel = lifecycleCancel
 
 	return pt
 }
@@ -398,7 +414,7 @@ func (pt *PlanningTab) updateViewportContent() {
 // sendMessage sends a message to the agent via ACP
 func (pt *PlanningTab) sendMessage(message string) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		ctx, cancel := context.WithTimeout(pt.lifecycleCtx, 60*time.Second)
 
 		// Ensure ACP connection
 		if !pt.acpClient.IsConnected() {
@@ -432,13 +448,11 @@ func (pt *PlanningTab) sendMessage(message string) tea.Cmd {
 			}
 		}
 
-		// Store stream lifecycle on the tab for continuation and cleanup
-		pt.streamChan = streamChan
-		pt.streamCancel = cancel
-
-		// Read the first message from the stream immediately.
-		// Subsequent reads are issued by the Update handler via listenToStream().
-		return pt.listenToStream()()
+		// Return streaming start message instead of storing directly
+		return planningStreamStartMsg{
+			streamChan:   streamChan,
+			streamCancel: cancel,
+		}
 	}
 }
 
@@ -723,6 +737,12 @@ func (pt *PlanningTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 			}
 		}
 
+	case planningStreamStartMsg:
+		pt.streamChan = msg.streamChan
+		pt.streamCancel = msg.streamCancel
+		// Start listening to the stream
+		cmds = append(cmds, pt.listenToStream())
+
 	case planningStreamMsg:
 		// Handle streaming response
 		response := msg.response
@@ -759,7 +779,7 @@ func (pt *PlanningTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 		case "done":
 			// Complete the response
 			pt.streamingResponse = false
-			pt.state = session.PlanningStateCompleted
+			pt.state = session.PlanningStateIdle
 			pt.cancelStream()
 
 			// Finalize the assistant message
@@ -852,6 +872,7 @@ func (pt *PlanningTab) Reset() {
 
 // Close cleans up resources when the tab is closed
 func (pt *PlanningTab) Close() {
+	pt.lifecycleCancel()
 	pt.cancelStream()
 
 	if pt.acpClient != nil {
@@ -888,7 +909,7 @@ func (pt *PlanningTab) UpdateContextUsage(used int) {
 }
 
 // SetACPClient sets the ACP client for this planning tab
-func (pt *PlanningTab) SetACPClient(client *acp.KiroACPClient) {
+func (pt *PlanningTab) SetACPClient(client acp.Client) {
 	if pt.acpClient != nil && pt.acpClient != client {
 		pt.acpClient.Close()
 	}

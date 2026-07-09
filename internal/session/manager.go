@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -352,24 +353,28 @@ func (sm *SessionManager) RepairSession(id string, state *SessionState) {
 	}
 
 	if state.History == nil {
+		log.Printf("session %s: repaired nil history", id)
 		state.History = make([]Message, 0)
 	}
 
 	// Fix zero timestamps in message history
 	for i := range state.History {
 		if state.History[i].Timestamp.IsZero() {
+			log.Printf("session %s: repaired zero timestamp in message %d", id, i)
 			state.History[i].Timestamp = time.Now()
 		}
 	}
 
 	// Trim excessive history (memory protection)
 	if len(state.History) > 10000 {
+		log.Printf("session %s: truncated history from %d to 5000 messages", id, len(state.History))
 		state.History = state.History[len(state.History)-5000:]
 	}
 
 	// Repair planning-specific data
 	if state.Type == Planning {
 		if state.PlanningData == nil {
+			log.Printf("session %s: repaired missing planning data", id)
 			// Reconstruct planning data with defaults if missing
 			now := time.Now()
 			state.PlanningData = &PlanningSessionData{
@@ -384,55 +389,67 @@ func (sm *SessionManager) RepairSession(id string, state *SessionState) {
 		} else {
 			// Fix individual fields in existing planning data
 			if state.PlanningData.TabID == "" {
+				log.Printf("session %s: repaired empty tab ID", id)
 				state.PlanningData.TabID = "recovered-" + id
 			}
 
 			if state.PlanningData.Title == "" {
+				log.Printf("session %s: repaired empty title", id)
 				state.PlanningData.Title = "Recovered Planning Tab"
 			}
 
 			now := time.Now()
 			if state.PlanningData.CreatedAt.IsZero() {
+				log.Printf("session %s: repaired zero CreatedAt", id)
 				state.PlanningData.CreatedAt = now
 			}
 
 			if state.PlanningData.LastActivity.IsZero() {
+				log.Printf("session %s: repaired zero LastActivity", id)
 				state.PlanningData.LastActivity = now
 			}
 
 			// Fix ACP connection defaults from canonical source
 			defaults := DefaultACPConnectionMetadata()
 			if state.PlanningData.ACPConnection.Agent == "" {
+				log.Printf("session %s: repaired empty ACP agent", id)
 				state.PlanningData.ACPConnection.Agent = defaults.Agent
 			}
 
 			if state.PlanningData.ACPConnection.Model == "" {
+				log.Printf("session %s: repaired empty ACP model", id)
 				state.PlanningData.ACPConnection.Model = defaults.Model
 			}
 
 			if state.PlanningData.ACPConnection.Timeout == 0 {
+				log.Printf("session %s: repaired zero ACP timeout", id)
 				state.PlanningData.ACPConnection.Timeout = defaults.Timeout
 			}
 
 			if state.PlanningData.ACPConnection.ResponseFormat == "" {
+				log.Printf("session %s: repaired empty ACP response format", id)
 				state.PlanningData.ACPConnection.ResponseFormat = defaults.ResponseFormat
 			}
 
 			if !state.PlanningData.ACPConnection.Streaming {
+				log.Printf("session %s: repaired ACP streaming flag", id)
 				state.PlanningData.ACPConnection.Streaming = defaults.Streaming
 			}
 
 			if state.PlanningData.ACPConnection.LastActivity.IsZero() {
+				log.Printf("session %s: repaired zero ACP last activity", id)
 				state.PlanningData.ACPConnection.LastActivity = now
 			}
 
 			// Fix context usage defaults from canonical source
 			ctxDefaults := DefaultContextUsage()
 			if state.PlanningData.ContextUsage.Total <= 0 {
+				log.Printf("session %s: repaired invalid context total", id)
 				state.PlanningData.ContextUsage.Total = ctxDefaults.Total
 			}
 
 			if state.PlanningData.ContextUsage.Used < 0 {
+				log.Printf("session %s: repaired negative context used", id)
 				state.PlanningData.ContextUsage.Used = 0
 			}
 		}

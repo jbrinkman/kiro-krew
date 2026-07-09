@@ -330,17 +330,14 @@ func TestRapidModeSwitchingNoDataLoss(t *testing.T) {
 		t.Errorf("Input value lost after rapid switching: got %q, want %q", m.consoleState.inputValue, testInput)
 	}
 
-	// Activity lines should contain the original lines (mode switch messages may be appended)
-	for _, expected := range testActivity {
-		found := false
-		for _, line := range m.activityLines {
-			if strings.Contains(line, expected) {
-				found = true
-				break
-			}
+	// Activity lines should contain the original lines in order at the beginning
+	for i, expected := range testActivity {
+		if i >= len(m.activityLines) {
+			t.Errorf("Activity lines truncated: missing line %d %q", i, expected)
+			break
 		}
-		if !found {
-			t.Errorf("Original activity line %q not found after rapid switching", expected)
+		if m.activityLines[i] != expected {
+			t.Errorf("Activity line %d out of order or modified: got %q, want %q", i, m.activityLines[i], expected)
 		}
 	}
 

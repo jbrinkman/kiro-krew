@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"charm.land/lipgloss/v2"
 	"github.com/jbrinkman/kiro-krew/internal/config"
 )
 
@@ -59,49 +58,20 @@ func (fm *FooterManager) RenderFooter(activeTabType TabType) FooterContent {
 	}
 }
 
-// renderInputRow creates the command entry row with responsive sizing
+// renderInputRow creates the command entry row (Row 1: input only, no theme label)
 func (fm *FooterManager) renderInputRow() string {
 	if fm.autocompleteInput == nil {
 		return ""
 	}
 
-	// Get theme label for width calculations
-	themeLabel := fm.styles.ThemeLabel.Render(fmt.Sprintf("theme: %s", fm.config.Theme))
-	themeLabelWidth := lipgloss.Width(themeLabel)
-
-	// Calculate responsive sizing
-	// If terminal is too narrow for both prompt + theme label, hide theme label
-	var promptWidth int
-	var showThemeLabel bool
-
-	if fm.width > 0 && themeLabelWidth+20 > fm.width {
-		// Terminal too narrow - hide theme label and use full width for prompt
-		promptWidth = fm.width
-		showThemeLabel = false
-	} else {
-		// Normal sizing - reserve space for theme label
-		promptWidth = fm.width - themeLabelWidth
-		showThemeLabel = true
-
-		// Ensure minimum prompt width
-		if fm.width >= 20 && promptWidth < 20 {
-			promptWidth = 20
-		}
-		if promptWidth < 1 {
-			promptWidth = 1
-		}
+	// Use full width for the prompt input
+	promptWidth := fm.width
+	if promptWidth < 1 {
+		promptWidth = 1
 	}
 
-	// Create prompt with responsive width
 	promptInput := fm.autocompleteInput.View()
-	prompt := fm.styles.Prompt.Width(promptWidth).Render(promptInput)
-
-	// Join prompt with theme label if there's space
-	if showThemeLabel {
-		return lipgloss.JoinHorizontal(lipgloss.Top, prompt, themeLabel)
-	}
-
-	return prompt
+	return fm.styles.Prompt.Width(promptWidth).Render(promptInput)
 }
 
 // renderStatusRow creates the contextual information row based on tab type
