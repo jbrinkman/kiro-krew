@@ -17,6 +17,7 @@ cmd/kiro-krew/kiro-krew
 /test-build
 .kiro-krew/sessions/
 .kiro-krew/artifacts/
+**/.kiro-krew/sessions/
 coverage.out
 coverage.html
 *_coverage.out

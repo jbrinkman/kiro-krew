@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -10,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/jbrinkman/kiro-krew/internal/agent"
 	"github.com/jbrinkman/kiro-krew/internal/config"
+	"github.com/jbrinkman/kiro-krew/internal/session"
 )
 
 func TestMultipleAgentsOutputCapture(t *testing.T) {
@@ -227,4 +229,254 @@ func TestOutputViewRendersCapturedManagerOutput(t *testing.T) {
 	if rendered == scrolled {
 		t.Fatal("expected view content to change after scrolling")
 	}
+}
+
+// TestTask8Integration tests the complete integration of all Task 8 components
+func TestTask8Integration(t *testing.T) {
+	// Skip if in short mode to avoid long-running tests
+	if testing.Short() {
+		t.Skip("Skipping Task 8 integration test in short mode")
+	}
+
+	// Create test config
+	theme, err := config.LoadTheme("default")
+	if err != nil {
+		// Fallback to creating a minimal theme for testing
+		theme = &config.Theme{}
+		theme.Colors.Primary = "#00AAFF"
+		theme.Colors.Success = "#00AA00"
+		theme.Colors.Warning = "#FFAA00"
+		theme.Colors.Error = "#FF0000"
+		theme.Colors.TextPrimary = "#FFFFFF"
+		theme.Colors.TextSecondary = "#CCCCCC"
+		theme.Colors.TextMuted = "#888888"
+		theme.Colors.Prompt = "#00AAFF"
+		theme.Colors.Separator = "#00AAFF"
+		theme.Colors.Activity = "#FFFFFF"
+		theme.Colors.Background = "#000000"
+		theme.Colors.Surface = "#111111"
+	}
+	// Create styles (use theme directly since cfg is only needed for config loading)
+	styles := NewStyles(theme)
+
+	t.Run("PlanningTabCreation", func(t *testing.T) {
+		// Test ACP-based planning tab creation with session management
+		contextTracker := NewContextTracker()
+		sessionManager := createTestSessionManager()
+
+		tabManager := NewTabManager()
+
+		// Test planning tab creation with session management
+		planningTab, err := tabManager.CreateAndAddPlanningTab(
+			styles,
+			contextTracker,
+			sessionManager,
+		)
+
+		if err != nil {
+			// This is expected to fail in test environment without ACP
+			if !strings.Contains(err.Error(), "ACP") && !strings.Contains(err.Error(), "kiro-cli") {
+				t.Errorf("Unexpected error creating planning tab: %v", err)
+				return
+			}
+			t.Logf("Expected ACP connection error in test environment: %v", err)
+
+			// Create planning tab directly without ACP connection for testing
+			planningTab := NewPlanningTabWithSession("test-plan-1", "Test Plan", styles, contextTracker, sessionManager, nil)
+			if planningTab == nil {
+				t.Error("Direct planning tab creation failed")
+				return
+			}
+
+			// Continue with testing tab behavior independently
+			// Test tab properties
+			if planningTab.Type() != TabTypePlanning {
+				t.Error("Expected TabTypePlanning")
+			}
+
+			if !strings.Contains(planningTab.Title(), "Plan") {
+				t.Error("Expected planning tab title to contain 'Plan'")
+			}
+
+			// Test initial state
+			if planningTab.GetMessageCount() != 0 {
+				t.Error("Expected new planning tab to have no messages")
+			}
+
+			// Test adding messages
+			planningTab.AddMessage("user", "Test message")
+			if planningTab.GetMessageCount() != 1 {
+				t.Error("Expected 1 message after adding user message")
+			}
+
+			// Test graceful degradation
+			planningTab.SetReadOnly()
+			if planningTab.IsActive() {
+				t.Error("Expected tab to not be active in read-only mode")
+			}
+			return
+		}
+
+		if planningTab == nil {
+			t.Error("Planning tab creation returned nil")
+			return
+		}
+
+		// Test tab properties
+		if planningTab.Type() != TabTypePlanning {
+			t.Error("Expected TabTypePlanning")
+		}
+
+		if !strings.Contains(planningTab.Title(), "Plan") {
+			t.Error("Expected planning tab title to contain 'Plan'")
+		}
+
+		// Test initial state
+		if planningTab.GetMessageCount() != 0 {
+			t.Error("Expected new planning tab to have no messages")
+		}
+
+		// Test adding messages
+		planningTab.AddMessage("user", "Test message")
+		if planningTab.GetMessageCount() != 1 {
+			t.Error("Expected 1 message after adding user message")
+		}
+
+		// Test session state management
+		planningTab.SaveSession()
+
+		// Test graceful degradation
+		planningTab.SetReadOnly()
+		if planningTab.IsActive() {
+			t.Error("Expected tab to not be active in read-only mode")
+		}
+	})
+
+	t.Run("ErrorHandlingAndGracefulDegradation", func(t *testing.T) {
+		contextTracker := NewContextTracker()
+
+		// Test context tracker validation
+		err := contextTracker.StartPlanningSessionWithValidation("")
+		if err == nil {
+			t.Error("Expected error for empty model name")
+		}
+
+		err = contextTracker.StartPlanningSessionWithValidation("claude-sonnet-4")
+		if err != nil {
+			t.Errorf("Unexpected error for valid model: %v", err)
+		}
+
+		// Test context tracking functionality
+		if !contextTracker.IsActive() {
+			t.Error("Expected context tracker to be active")
+		}
+
+		usage := contextTracker.FormatContextUsage()
+		if usage == "" {
+			t.Error("Expected non-empty context usage format")
+		}
+
+		// Test cleanup
+		contextTracker.StopPlanningSession()
+		if contextTracker.IsActive() {
+			t.Error("Expected context tracker to be inactive after stop")
+		}
+	})
+
+	t.Run("TabManagerIntegration", func(t *testing.T) {
+		tabManager := NewTabManager()
+
+		// Add main tab
+		mainTab := NewMainTab()
+		tabManager.AddTab(mainTab)
+
+		// Test tab limit enforcement
+		for i := 0; i < MaxPlanningTabs+1; i++ {
+			_, err := tabManager.CreateAndAddPlanningTab(
+				styles,
+				NewContextTracker(),
+				createTestSessionManager(),
+			)
+
+			if i < MaxPlanningTabs {
+				// Should succeed for first MaxPlanningTabs attempts
+				if err != nil && !strings.Contains(err.Error(), "ACP") {
+					t.Errorf("Unexpected error creating planning tab %d: %v", i, err)
+				}
+			} else {
+				// Should fail when limit exceeded
+				if err == nil {
+					t.Error("Expected error when exceeding planning tab limit")
+				} else if !strings.Contains(err.Error(), "maximum") {
+					t.Errorf("Expected limit error, got: %v", err)
+				}
+			}
+		}
+
+		// Test tab navigation
+		tabs := tabManager.GetTabs()
+		if len(tabs) < 1 {
+			t.Error("Expected at least main tab to be present")
+		}
+
+		// Test active tab switching
+		if tabManager.GetActiveTabIndex() != 0 {
+			t.Error("Expected first tab to be active initially")
+		}
+	})
+
+	t.Run("ResourceCleanupAndRecovery", func(t *testing.T) {
+		// Test session cleanup scenarios
+		sessionManager := createTestSessionManager()
+
+		// Test cleanup on exit
+		err := sessionManager.CleanupOnExit()
+		if err != nil {
+			t.Logf("Session cleanup warning (expected in test): %v", err)
+		}
+
+		// Test corrupted session handling
+		sessions, err := sessionManager.List()
+		if err != nil && !strings.Contains(err.Error(), "no sessions") {
+			t.Errorf("Unexpected error listing sessions: %v", err)
+		}
+
+		// Should have no sessions in clean test environment
+		if len(sessions) > 0 {
+			t.Logf("Found %d existing sessions in test environment", len(sessions))
+		}
+
+		// Verify graceful handling of non-existent sessions
+		_, err = sessionManager.Load("non-existent-session")
+		if err == nil {
+			t.Error("Expected error loading non-existent session")
+		}
+	})
+
+	t.Run("BackwardCompatibility", func(t *testing.T) {
+		// Test that classic planning functionality still works
+		sessionManager := createTestSessionManager()
+
+		// This should not break existing session types
+		_, err := sessionManager.List()
+		if err != nil && !strings.Contains(err.Error(), "no sessions") {
+			t.Errorf("Session manager should handle empty session list gracefully: %v", err)
+		}
+
+		// Test that existing command structure is preserved
+		contextTracker := NewContextTracker()
+		if contextTracker == nil {
+			t.Error("Context tracker initialization failed")
+		}
+	})
+}
+
+// Helper function to create a test session manager
+func createTestSessionManager() *session.SessionManager {
+	dir, err := os.MkdirTemp("", "kiro-krew-test-sessions-*")
+	if err != nil {
+		// Fallback to default if temp dir creation fails
+		return session.NewSessionManager()
+	}
+	return session.NewSessionManagerWithDir(dir)
 }

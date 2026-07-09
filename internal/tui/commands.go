@@ -2,14 +2,15 @@ package tui
 
 import (
 	"fmt"
+	"log"
 	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
-	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+
 	"github.com/jbrinkman/kiro-krew/internal/agent"
 	"github.com/jbrinkman/kiro-krew/internal/config"
 	"github.com/jbrinkman/kiro-krew/internal/github"
@@ -189,7 +190,8 @@ func (m model) handleHelp() (model, tea.Cmd) {
 		"  watch stop     - Stop watching",
 		"  status         - List all agents with details",
 		"  stop <issue>   - Stop agent for specific issue number",
-		"  plan [desc]    - Start interactive planning session",
+		"  plan [desc]    - Create new ACP-based Planning tab",
+		"  plan classic [desc] - Start legacy subprocess planning session",
 		"  logs           - View incident logs",
 		"  theme          - Show current theme",
 		"  theme <name>   - Switch to theme",
@@ -207,23 +209,120 @@ func (m model) handleHelp() (model, tea.Cmd) {
 }
 
 func (m model) handlePlan(description string) (model, tea.Cmd) {
-	// Suspend agent output capture before starting planning mode
+	// Check tab limit before creating new planning tab
+	if !m.tabManager.CanCreatePlanningTab() {
+		m = m.appendActivity(m.styles.Error.Render(fmt.Sprintf("Maximum %d concurrent planning tabs reached", MaxPlanningTabs)))
+		return m, nil
+	}
+
+	// Generate tab title based on description or use default
+	var tabTitle string
+	if description != "" {
+		// Use first few words of description as title
+		words := strings.Fields(description)
+		if len(words) > 3 {
+			tabTitle = strings.Join(words[:3], " ") + "..."
+		} else {
+			tabTitle = description
+		}
+	} else {
+		// Count existing planning tabs for naming
+		existingCount := 0
+		for _, tab := range m.tabManager.GetTabs() {
+			if tab.Type() == TabTypePlanning {
+				existingCount++
+			}
+		}
+		tabTitle = fmt.Sprintf("Planning %d", existingCount+1)
+	}
+
+	// Create ACP-based planning tab with comprehensive error handling
+	planningTab, err := m.tabManager.CreateAndAddPlanningTab(
+		m.styles,
+		m.footerManager.GetContextTracker(),
+		m.sessionManager,
+	)
+	if err != nil {
+		// Provide detailed error message based on error type
+		var errorMsg string
+		if strings.Contains(err.Error(), "ACP") {
+			errorMsg = fmt.Sprintf("ACP connection failed: %v\nNote: Kiro CLI must be installed and accessible for ACP-based planning.", err)
+		} else if strings.Contains(err.Error(), "session") {
+			errorMsg = fmt.Sprintf("Session management failed: %v\nPlanning tab may not persist across restarts.", err)
+		} else {
+			errorMsg = fmt.Sprintf("Failed to create planning tab: %v", err)
+		}
+
+		m = m.appendActivity(m.styles.Error.Render(errorMsg))
+
+		// Offer fallback to classic planning if ACP is unavailable
+		if strings.Contains(err.Error(), "ACP") || strings.Contains(err.Error(), "kiro-cli") {
+			m = m.appendActivity(m.styles.Warning.Render("Consider using 'plan classic [description]' for subprocess-based planning"))
+		}
+		return m, nil
+	}
+
+	// Set the tab title if description was provided
+	if description != "" {
+		planningTab.SetTitle(tabTitle)
+	}
+
+	// Start context tracking for the new planning session with error handling
+	// NOTE: Tab switch will handle context tracking automatically
+
+	// Switch to the newly created tab (already added by CreateAndAddPlanningTab)
+	m = m.switchActiveTab(len(m.tabManager.GetTabs()) - 1)
+
+	// Add initial message with connection status feedback
+	if description != "" {
+		planningTab.AddMessage("user", description)
+		planningTab.AddMessage("system", "💡 Planning tab ready. ACP connection will be established when you send your first message.")
+	} else {
+		planningTab.AddMessage("system", "🚀 ACP-based Planning Tab ready. Type your message to start planning.")
+		planningTab.AddMessage("system", "📝 Use Tab to switch focus between message history and input area.")
+	}
+
+	// Update session with initial state
+	planningTab.SaveSession()
+
+	m = m.appendActivity(m.styles.Success.Render(fmt.Sprintf("✅ Created planning tab: %s", planningTab.Title())))
+
+	return m, nil
+}
+
+func (m model) handlePlanClassic(description string) (model, tea.Cmd) {
+	// Use the legacy subprocess-based planning functionality
+	return m.handlePlanSubprocess(description)
+}
+
+func (m model) handlePlanSubprocess(description string) (model, tea.Cmd) {
+	// Suspend agent output capture before entering planning mode
 	m.manager.SuspendOutputCapture()
 
-	// Check for existing planning sessions
+	// Preserve current console state
+	m.consoleState.inputValue = m.input.Value()
+	m.consoleState.activityLines = make([]string, len(m.activityLines))
+	copy(m.consoleState.activityLines, m.activityLines)
+	if activeTab := m.tabManager.GetActiveTab(); activeTab != nil {
+		m.consoleState.activeTabID = activeTab.ID()
+	}
+
+	// Check for existing planning sessions with error recovery
 	sessions, err := m.sessionManager.List()
 	if err != nil {
 		m = m.appendActivity(m.styles.Error.Render(fmt.Sprintf("Failed to check sessions: %v", err)))
 		return m, nil
 	}
 
-	// Look for existing planning sessions
+	// Look for existing planning session with corruption handling
 	var planningSessionID string
 	for _, sessionID := range sessions {
 		state, err := m.sessionManager.Load(sessionID)
 		if err != nil {
-			// Log corrupted session but continue
-			m = m.appendActivity(m.styles.Warning.Render(fmt.Sprintf("Skipping corrupted session %s", sessionID[:8])))
+			if strings.Contains(err.Error(), "corruption") {
+				m = m.appendActivity(m.styles.Warning.Render(fmt.Sprintf("Removing corrupted session %s", sessionID[:8])))
+				_ = m.sessionManager.Delete(sessionID)
+			}
 			continue
 		}
 		if state.Type == session.Planning {
@@ -232,24 +331,25 @@ func (m model) handlePlan(description string) (model, tea.Cmd) {
 		}
 	}
 
-	if planningSessionID != "" {
-		// Resume existing session
-		m = m.appendActivity(m.styles.Success.Render(fmt.Sprintf("Resuming planning session %s...", planningSessionID[:8])))
+	var sessionMsg string
+	if planningSessionID == "" {
+		sessionMsg = "Starting new classic planning session"
 	} else {
-		// Create new session
-		sessionID, err := m.sessionManager.Create(session.Planning)
-		if err != nil {
-			m = m.appendActivity(m.styles.Error.Render(fmt.Sprintf("Failed to create session: %v", err)))
-			return m, nil
-		}
-		m = m.appendActivity(m.styles.Success.Render(fmt.Sprintf("Created new planning session %s", sessionID[:8])))
+		sessionMsg = fmt.Sprintf("Resuming planning session %s...", planningSessionID[:8])
 	}
 
+	// Start context tracking for planning mode with default model
+	m.footerManager.GetContextTracker().StartPlanningSession("claude-sonnet-4")
+
+	m = m.appendActivity(m.styles.Success.Render(sessionMsg))
+	m.currentMode = session.Planning
+	m.input.Blur()
+
+	// Execute the kiro-cli subprocess for classic planning with shell wrapper
 	args := []string{"chat", "--classic", "--agent", "planner"}
 	if description != "" {
 		args = append(args, description)
 	}
-	m.input.Blur()
 
 	// Wrap in shell with clear and centered ASCII art banner
 	banner := `cols=$(tput cols 2>/dev/null || echo 80)
@@ -268,10 +368,10 @@ pad "$art5"
 echo ""`
 	script := "clear && " + banner + " && exec kiro-cli \"$@\""
 	cmd := exec.Command("sh", append([]string{"-c", script, "sh"}, args...)...)
-	c := tea.ExecProcess(cmd, func(err error) tea.Msg {
+
+	return m, tea.ExecProcess(cmd, func(err error) tea.Msg {
 		return execDoneMsg{err: err}
 	})
-	return m, c
 }
 
 type execDoneMsg struct {
@@ -382,6 +482,8 @@ func getTabTypeName(tabType TabType) string {
 		return "Main Console"
 	case TabTypeAgent:
 		return "Agent Output"
+	case TabTypePlanning:
+		return "Planning"
 	default:
 		return "Unknown"
 	}
@@ -396,11 +498,51 @@ func (m model) switchToPlanningMode() (model, tea.Cmd) {
 	m.consoleState.inputValue = m.input.Value()
 	m.consoleState.activityLines = make([]string, len(m.activityLines))
 	copy(m.consoleState.activityLines, m.activityLines)
+	if activeTab := m.tabManager.GetActiveTab(); activeTab != nil {
+		m.consoleState.activeTabID = activeTab.ID()
+	}
+
+	// Check if there are any active planning tabs first
+	activePlanningTabs := 0
+	var lastPlanningTab *PlanningTab
+	for _, tab := range m.tabManager.GetTabs() {
+		if tab.Type() == TabTypePlanning {
+			activePlanningTabs++
+			if planningTab, ok := tab.(*PlanningTab); ok {
+				lastPlanningTab = planningTab
+			}
+		}
+	}
+
+	// If there are active planning tabs, switch to the most recent one
+	if activePlanningTabs > 0 && lastPlanningTab != nil {
+		// Find the index of the last planning tab and switch to it
+		for i, tab := range m.tabManager.GetTabs() {
+			if tab == lastPlanningTab {
+				m.tabManager.SetActiveTab(i)
+				break
+			}
+		}
+
+		// Start context tracking if not already active
+		if !m.footerManager.GetContextTracker().IsActive() {
+			if err := m.footerManager.GetContextTracker().StartPlanningSessionWithValidation("claude-sonnet-4"); err != nil {
+				m = m.appendActivity(m.styles.Warning.Render(fmt.Sprintf("Context tracking warning: %v", err)))
+			}
+		}
+
+		m = m.appendActivity(m.styles.Success.Render(fmt.Sprintf("Switched to active planning tab (found %d planning tabs)", activePlanningTabs)))
+		m.currentMode = session.Planning
+		m.input.Blur()
+		return m, tea.ClearScreen
+	}
 
 	// Check for existing planning sessions with error recovery
 	sessions, err := m.sessionManager.List()
 	if err != nil {
 		m = m.appendActivity(m.styles.Error.Render(fmt.Sprintf("Failed to check sessions: %v", err)))
+		// Resume output capture on failure
+		m.manager.ResumeOutputCapture()
 		return m, nil
 	}
 
@@ -423,10 +565,18 @@ func (m model) switchToPlanningMode() (model, tea.Cmd) {
 
 	var sessionMsg string
 	if planningSessionID == "" {
-		m = m.appendActivity(m.styles.Warning.Render("No active planning session"))
+		m = m.appendActivity(m.styles.Warning.Render("No active planning session or tabs"))
+		m = m.appendActivity(m.styles.Warning.Render("Use 'plan [description]' to create a new planning tab"))
+		// Resume output capture on failure
+		m.manager.ResumeOutputCapture()
 		return m, nil
 	}
 	sessionMsg = fmt.Sprintf("Resuming planning session %s...", planningSessionID[:8])
+
+	// Start context tracking for planning mode with default model
+	if err := m.footerManager.GetContextTracker().StartPlanningSessionWithValidation("claude-sonnet-4"); err != nil {
+		m = m.appendActivity(m.styles.Warning.Render(fmt.Sprintf("Context tracking warning: %v", err)))
+	}
 
 	m = m.appendActivity(m.styles.Success.Render(sessionMsg))
 	m.currentMode = session.Planning
@@ -437,16 +587,31 @@ func (m model) switchToPlanningMode() (model, tea.Cmd) {
 
 // switchToConsoleMode switches from planning to console mode while preserving planning state
 func (m model) switchToConsoleMode() (model, tea.Cmd) {
+	// Save any active planning tab states
+	activePlanningTabs := 0
+	for _, tab := range m.tabManager.GetTabs() {
+		if planningTab, ok := tab.(*PlanningTab); ok && planningTab.Type() == TabTypePlanning {
+			activePlanningTabs++
+			// Force save session state when switching away
+			planningTab.SaveSession()
+		}
+	}
+
+	// Handle legacy planning session cleanup
 	if m.activePlanningSession != nil {
 		// Suspend and preserve planning session state with error handling
 		if err := m.activePlanningSession.SuspendAndDetach(); err != nil {
 			m = m.appendActivity(m.styles.Error.Render(fmt.Sprintf("Failed to suspend planning session: %v", err)))
+			log.Printf("Planning session suspend error: %v", err)
 			// Continue anyway, don't block mode switch
 		} else {
-			m = m.appendActivity(m.styles.Success.Render("Planning session suspended, switching to console mode"))
+			m = m.appendActivity(m.styles.Success.Render("Planning session suspended"))
 		}
 		m.activePlanningSession = nil
 	}
+
+	// Stop context tracking when exiting planning mode
+	m.footerManager.GetContextTracker().StopPlanningSession()
 
 	// Resume agent output capture when returning to console mode
 	m.manager.ResumeOutputCapture()
@@ -454,9 +619,38 @@ func (m model) switchToConsoleMode() (model, tea.Cmd) {
 	// Switch to console mode and restore console state
 	m.currentMode = session.Console
 	m = m.restoreConsoleState()
+
+	// Restore previously active tab by ID
+	restored := false
+	if m.consoleState.activeTabID != "" {
+		for i, tab := range m.tabManager.GetTabs() {
+			if tab.ID() == m.consoleState.activeTabID {
+				m = m.switchActiveTab(i)
+				restored = true
+				break
+			}
+		}
+	}
+	if !restored {
+		// Fallback to main tab
+		for i, tab := range m.tabManager.GetTabs() {
+			if tab.Type() == TabTypeMain {
+				m = m.switchActiveTab(i)
+				break
+			}
+		}
+	}
+
 	m.input.Focus()
 
-	return m, tea.Batch(textinput.Blink, tea.ClearScreen)
+	// Provide user feedback about mode switch
+	if activePlanningTabs > 0 {
+		m = m.appendActivity(m.styles.Success.Render(fmt.Sprintf("Switched to console mode (%d planning tabs preserved)", activePlanningTabs)))
+	} else {
+		m = m.appendActivity(m.styles.Success.Render("Switched to console mode"))
+	}
+
+	return m, tea.Batch(m.input.Focus(), tea.ClearScreen)
 }
 
 // restoreConsoleState restores the console state after returning from planning mode

@@ -1,10 +1,13 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/jbrinkman/kiro-krew/internal/agent"
+	"github.com/jbrinkman/kiro-krew/internal/session"
 )
 
 // TabManager manages the lifecycle and state of all tabs
@@ -14,14 +17,22 @@ type TabManager struct {
 	hoveredTab int
 	width      int
 	height     int
+
+	// Planning tab management
+	planningTabCounter int // Counter for unique planning tab IDs
+
+	// Session management
+	sessionManager *session.SessionManager
 }
 
 // NewTabManager creates a new tab manager
 func NewTabManager() *TabManager {
 	return &TabManager{
-		tabs:       make([]Tab, 0),
-		activeTab:  0,
-		hoveredTab: -1,
+		tabs:               make([]Tab, 0),
+		activeTab:          0,
+		hoveredTab:         -1,
+		planningTabCounter: 0,
+		sessionManager:     session.NewSessionManager(),
 	}
 }
 
@@ -128,6 +139,11 @@ func (tm *TabManager) FindTabByAgentID(agentID string) int {
 func (tm *TabManager) CloseTab(index int) bool {
 	if index < 0 || index >= len(tm.tabs) || !tm.tabs[index].IsClosable() {
 		return false
+	}
+
+	// Clean up resources for planning tabs before removing
+	if planningTab, ok := tm.tabs[index].(*PlanningTab); ok {
+		planningTab.Close()
 	}
 
 	tm.tabs = append(tm.tabs[:index], tm.tabs[index+1:]...)
@@ -243,9 +259,27 @@ func (tm *TabManager) RenderTabHeaders(width int, styles *Styles) string {
 		// Render tab title with style, close button rendered separately to preserve its color
 		var styledTab string
 		if i == tm.activeTab {
-			styledTab = styles.TabActive.Render(title)
+			// Use tab-specific active styles
+			if tab.Type() == TabTypePlanning {
+				if planningTab, ok := tab.(*PlanningTab); ok {
+					styledTab = styles.GetPlanningTabStyle(planningTab.GetState(), true, false).Render(title)
+				} else {
+					styledTab = styles.TabActive.Render(title)
+				}
+			} else {
+				styledTab = styles.TabActive.Render(title)
+			}
 		} else if i == tm.hoveredTab {
-			styledTab = styles.TabInactiveHover.Render(title)
+			// Use tab-specific hover styles
+			if tab.Type() == TabTypePlanning {
+				if planningTab, ok := tab.(*PlanningTab); ok {
+					styledTab = styles.GetPlanningTabStyle(planningTab.GetState(), false, true).Render(title)
+				} else {
+					styledTab = styles.TabInactiveHover.Render(title)
+				}
+			} else {
+				styledTab = styles.TabInactiveHover.Render(title)
+			}
 		} else {
 			// For agent tabs, use status-based coloring
 			if tab.Type() == TabTypeAgent {
@@ -258,6 +292,13 @@ func (tm *TabManager) RenderTabHeaders(width int, styles *Styles) string {
 					default:
 						styledTab = styles.TabInactive.Render(title)
 					}
+				} else {
+					styledTab = styles.TabInactive.Render(title)
+				}
+			} else if tab.Type() == TabTypePlanning {
+				// For planning tabs, use enhanced state-based coloring
+				if planningTab, ok := tab.(*PlanningTab); ok {
+					styledTab = styles.GetPlanningTabStyle(planningTab.GetState(), false, i == tm.hoveredTab).Render(title)
 				} else {
 					styledTab = styles.TabInactive.Render(title)
 				}
@@ -275,6 +316,219 @@ func (tm *TabManager) RenderTabHeaders(width int, styles *Styles) string {
 	}
 
 	return strings.Join(tabHeaders, styles.Separator.Render("│"))
+}
+
+// Planning Tab Management
+
+// MaxPlanningTabs defines the maximum concurrent planning tabs allowed
+const MaxPlanningTabs = 10
+
+// GetPlanningTabCount returns the current number of planning tabs
+func (tm *TabManager) GetPlanningTabCount() int {
+	count := 0
+	for _, tab := range tm.tabs {
+		if tab.Type() == TabTypePlanning {
+			count++
+		}
+	}
+	return count
+}
+
+// CanCreatePlanningTab checks if a new planning tab can be created
+func (tm *TabManager) CanCreatePlanningTab() bool {
+	return tm.GetPlanningTabCount() < MaxPlanningTabs
+}
+
+// CreatePlanningTab creates a new planning tab if within limits
+func (tm *TabManager) CreatePlanningTab(styles *Styles, contextTracker *ContextTracker) (*PlanningTab, error) {
+	return tm.CreateAndAddPlanningTab(styles, contextTracker, nil)
+}
+
+// CreateAndAddPlanningTab creates a new planning tab with session management if within limits
+func (tm *TabManager) CreateAndAddPlanningTab(styles *Styles, contextTracker *ContextTracker, sessionManager *session.SessionManager) (*PlanningTab, error) {
+	if !tm.CanCreatePlanningTab() {
+		return nil, fmt.Errorf("maximum %d concurrent planning tabs reached", MaxPlanningTabs)
+	}
+
+	// Use provided session manager or fallback to tab manager's session manager
+	if sessionManager == nil {
+		sessionManager = tm.sessionManager
+	}
+
+	// Generate unique ID and title
+	tm.planningTabCounter++
+	id := fmt.Sprintf("planning-%d-%d", tm.planningTabCounter, time.Now().Unix())
+	title := fmt.Sprintf("Plan %d", tm.planningTabCounter)
+
+	// Create the planning tab (constructor creates ACP client internally)
+	planningTab := NewPlanningTabWithSession(id, title, styles, contextTracker, sessionManager, nil)
+
+	// Verify tab creation was successful
+	if planningTab == nil {
+		return nil, fmt.Errorf("failed to create planning tab instance")
+	}
+
+	// Add to manager (don't set as active here - let the caller decide)
+	tm.AddTab(planningTab)
+
+	return planningTab, nil
+}
+
+// ForceNewPlanningTab creates a new planning tab for subsequent sessions after completion
+func (tm *TabManager) ForceNewPlanningTab(styles *Styles, contextTracker *ContextTracker) (*PlanningTab, error) {
+	// First try normal creation
+	if tm.CanCreatePlanningTab() {
+		planningTab, err := tm.CreateAndAddPlanningTab(styles, contextTracker, tm.sessionManager)
+		if err != nil {
+			return nil, err
+		}
+		// Set as active tab for forced creation
+		tm.SetActiveTab(len(tm.tabs) - 1)
+		return planningTab, nil
+	}
+
+	// Find and close a completed or failed planning tab to make room
+	for i := len(tm.tabs) - 1; i >= 0; i-- {
+		if tab := tm.tabs[i]; tab.Type() == TabTypePlanning {
+			if planningTab, ok := tab.(*PlanningTab); ok {
+				state := planningTab.GetState()
+				if state == session.PlanningStateCompleted || state == session.PlanningStateFailed || state == session.PlanningStateReadOnly {
+					// Close this tab to make room
+					tm.CloseTab(i)
+					break
+				}
+			}
+		}
+	}
+
+	// Now create the new tab
+	planningTab, err := tm.CreateAndAddPlanningTab(styles, contextTracker, tm.sessionManager)
+	if err != nil {
+		return nil, err
+	}
+
+	// Set as active tab for forced creation
+	tm.SetActiveTab(len(tm.tabs) - 1)
+	return planningTab, nil
+}
+
+// Session Management Methods
+
+// CleanupSessionsOnExit performs session cleanup when the application exits
+func (tm *TabManager) CleanupSessionsOnExit() error {
+	// Get list of active planning tab IDs
+	activeTabIDs := make([]string, 0)
+	for _, tab := range tm.tabs {
+		if tab.Type() == TabTypePlanning {
+			if planningTab, ok := tab.(*PlanningTab); ok {
+				if planningTab.sessionID != "" {
+					activeTabIDs = append(activeTabIDs, planningTab.id)
+				}
+			}
+		}
+	}
+
+	// Cleanup orphaned sessions
+	orphanedCount, err := tm.sessionManager.CleanupOrphanedPlanningSessions(activeTabIDs)
+	if err != nil {
+		return fmt.Errorf("failed to cleanup orphaned planning sessions: %w", err)
+	}
+
+	// Cleanup old completed sessions (older than 7 days)
+	completedCount, err := tm.sessionManager.CleanupCompletedPlanningSessions(7 * 24 * time.Hour)
+	if err != nil {
+		return fmt.Errorf("failed to cleanup completed planning sessions: %w", err)
+	}
+
+	// General session cleanup
+	if err := tm.sessionManager.CleanupOnExit(); err != nil {
+		return fmt.Errorf("failed to perform general session cleanup: %w", err)
+	}
+
+	if orphanedCount > 0 || completedCount > 0 {
+		// Session cleanup occurred
+	}
+
+	return nil
+}
+
+// GetPlanningTabByID finds a planning tab by ID
+func (tm *TabManager) GetPlanningTabByID(id string) *PlanningTab {
+	for _, tab := range tm.tabs {
+		if tab.Type() == TabTypePlanning && tab.ID() == id {
+			if planningTab, ok := tab.(*PlanningTab); ok {
+				return planningTab
+			}
+		}
+	}
+	return nil
+}
+
+// GetActivePlanningTabs returns all planning tabs that are currently active (processing)
+func (tm *TabManager) GetActivePlanningTabs() []*PlanningTab {
+	var activeTabs []*PlanningTab
+	for _, tab := range tm.tabs {
+		if tab.Type() == TabTypePlanning {
+			if planningTab, ok := tab.(*PlanningTab); ok {
+				if planningTab.GetState() == session.PlanningStateActive {
+					activeTabs = append(activeTabs, planningTab)
+				}
+			}
+		}
+	}
+	return activeTabs
+}
+
+// MarkPlanningTabCompleted marks a planning tab as completed (successful GitHub issue creation)
+func (tm *TabManager) MarkPlanningTabCompleted(tabID string) bool {
+	if planningTab := tm.GetPlanningTabByID(tabID); planningTab != nil {
+		// Set to read-only state to prevent further interaction
+		planningTab.SetReadOnly()
+		// Note: The color will be handled by RenderTabHeaders based on state
+		return true
+	}
+	return false
+}
+
+// MarkPlanningTabFailed marks a planning tab as failed
+func (tm *TabManager) MarkPlanningTabFailed(tabID string) bool {
+	if planningTab := tm.GetPlanningTabByID(tabID); planningTab != nil {
+		planningTab.SetFailed()
+		return true
+	}
+	return false
+}
+
+// CleanupCompletedPlanningTabs removes completed/failed planning tabs to free up slots
+func (tm *TabManager) CleanupCompletedPlanningTabs() int {
+	cleaned := 0
+	for i := len(tm.tabs) - 1; i >= 0; i-- {
+		if tab := tm.tabs[i]; tab.Type() == TabTypePlanning {
+			if planningTab, ok := tab.(*PlanningTab); ok {
+				state := planningTab.GetState()
+				if state == session.PlanningStateCompleted || state == session.PlanningStateFailed {
+					if tm.CloseTab(i) {
+						cleaned++
+					}
+				}
+			}
+		}
+	}
+	return cleaned
+}
+
+// HasReadOnlyPlanningTabs checks if there are any read-only planning tabs
+func (tm *TabManager) HasReadOnlyPlanningTabs() bool {
+	for _, tab := range tm.tabs {
+		if tab.Type() == TabTypePlanning {
+			if planningTab, ok := tab.(*PlanningTab); ok {
+				if planningTab.GetState() == session.PlanningStateReadOnly {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 // RestoreOrFocusAgentTab creates a new agent tab if one doesn't exist, or focuses existing tab
