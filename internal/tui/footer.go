@@ -61,7 +61,7 @@ func (fm *FooterManager) RenderFooter(activeTabType TabType) FooterContent {
 	}
 }
 
-// renderInputRow creates the command entry row with tab-specific context
+// renderInputRow creates the command entry row
 func (fm *FooterManager) renderInputRow() string {
 	if fm.autocompleteInput == nil {
 		return ""
@@ -73,26 +73,8 @@ func (fm *FooterManager) renderInputRow() string {
 		promptWidth = 1
 	}
 
-	// Get the current prompt view from autocomplete input
 	promptInput := fm.autocompleteInput.View()
-
-	// Apply context-specific styling based on active tab type
-	activeTabType := TabTypeMain // default
-	if fm.tabManager != nil {
-		if activeTab := fm.tabManager.GetActiveTab(); activeTab != nil {
-			activeTabType = activeTab.Type()
-		}
-	}
-
-	// Use appropriate styling for planning vs. console context
-	if activeTabType == TabTypePlanning {
-		// Planning context uses standard prompt styling
-		// The input placeholder and behavior are handled by AutocompleteInput itself
-		return fm.styles.Prompt.Width(promptWidth).Render(promptInput)
-	} else {
-		// Console context uses standard prompt styling
-		return fm.styles.Prompt.Width(promptWidth).Render(promptInput)
-	}
+	return fm.styles.Prompt.Width(promptWidth).Render(promptInput)
 }
 
 // renderStatusRow creates the contextual information row based on tab type
@@ -161,17 +143,18 @@ func (fm *FooterManager) renderPlanningInfo() string {
 
 	// Context usage with visual indicator
 	if contextUsage := fm.contextTracker.FormatContextUsage(); contextUsage != "" {
-		// Add usage warning indicators for high usage
+		parts = append(parts, contextUsage)
+
+		// Add usage warning as separate segment for clean visual separation
 		used, total := fm.contextTracker.GetUsage()
 		if total > 0 {
 			percentage := (used * 100) / total
 			if percentage > 90 {
-				contextUsage += " 🔥" // Critical usage warning
+				parts = append(parts, "🔥 critical usage")
 			} else if percentage > 75 {
-				contextUsage += " ⚠️" // High usage warning
+				parts = append(parts, "⚠️ high usage")
 			}
 		}
-		parts = append(parts, contextUsage)
 	}
 
 	// Directory information with improved formatting

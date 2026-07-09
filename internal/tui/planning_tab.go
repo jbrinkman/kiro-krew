@@ -493,8 +493,7 @@ func (pt *PlanningTab) View() string {
 	// Calculate dimensions for the tab's content area only
 	// The unified rendering system handles footer space allocation
 	separatorHeight := 1
-	availableContentHeight := pt.height
-	messageHeight := availableContentHeight - pt.inputHeight - separatorHeight
+	messageHeight := pt.height - pt.inputHeight - separatorHeight
 	if messageHeight < 1 {
 		messageHeight = 1
 	}
@@ -503,7 +502,7 @@ func (pt *PlanningTab) View() string {
 	inputHeight := pt.inputHeight
 	if pt.width < 60 {
 		inputHeight = pt.inputHeight - 1
-		messageHeight = availableContentHeight - inputHeight - separatorHeight
+		messageHeight = pt.height - inputHeight - separatorHeight
 	}
 
 	// Update viewport dimensions with responsive border adjustments

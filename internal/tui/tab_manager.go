@@ -94,16 +94,6 @@ func (tm *TabManager) Update(msg tea.Msg) tea.Cmd {
 	return nil
 }
 
-// Resize resizes all tabs
-func (tm *TabManager) Resize(width, height int) {
-	tm.width = width
-	tm.height = height
-	// Pass full dimensions to tabs - they will be adjusted by unified rendering system
-	for _, tab := range tm.tabs {
-		tab.Resize(width, height)
-	}
-}
-
 // ResizeForFooter resizes all tabs accounting for footer height
 func (tm *TabManager) ResizeForFooter(width, height int, footerHeight int) {
 	tm.width = width
