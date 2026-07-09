@@ -108,7 +108,7 @@ func NewPlanningTabWithSession(id, title string, styles *Styles, contextTracker 
 		messages:       make([]PlanningMessage, 0),
 		styles:         styles,
 		focusInput:     true,
-		inputHeight:    5, // Input area + border + padding
+		inputHeight:    5, // Input area + padding + margin
 		contextTracker: contextTracker,
 		sessionManager: sessionManager,
 	}
@@ -533,10 +533,10 @@ func (pt *PlanningTab) View() string {
 // renderInputArea renders the embedded message input area with responsive styling
 func (pt *PlanningTab) renderInputArea() string {
 	// Update textarea dimensions
-	// Account for input container border (2) + padding (2) = 4 horizontal chars
-	textareaWidth := pt.width - 4
+	// Account for input container padding (1 each side = 2 horizontal chars)
+	textareaWidth := pt.width - 2
 	if pt.width < 60 {
-		textareaWidth = pt.width - 4 // Narrow terminals have reduced padding but still have border
+		textareaWidth = pt.width - 2 // Narrow terminals also have padding
 	}
 	if textareaWidth < 1 {
 		textareaWidth = 1
@@ -762,7 +762,7 @@ func (pt *PlanningTab) Resize(width, height int) {
 
 	// Update component dimensions with footer space already excluded from height
 	if width > 4 {
-		pt.textarea.SetWidth(width - 4) // Account for input container border + padding
+		pt.textarea.SetWidth(width - 2) // Account for input container padding
 		pt.viewport.SetWidth(width)
 	}
 
