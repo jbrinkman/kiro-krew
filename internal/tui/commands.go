@@ -349,25 +349,7 @@ func (m model) handlePlanSubprocess(description string) (model, tea.Cmd) {
 
 	var sessionMsg string
 	if planningSessionID == "" {
-		// Create new subprocess-based planning session
-		planningSession, err := session.NewPlanningSession(m.sessionManager)
-		if err != nil {
-			m = m.appendActivity(m.styles.Error.Render(fmt.Sprintf("Failed to start planning session: %v", err)))
-			// Resume output capture on failure
-			m.manager.ResumeOutputCapture()
-			return m, nil
-		}
-
-		// Add initial message if provided
-		if description != "" {
-			if err := planningSession.SendMessage(description); err != nil {
-				m = m.appendActivity(m.styles.Warning.Render(fmt.Sprintf("Failed to send initial message: %v", err)))
-			}
-		}
-
-		planningSessionID = planningSession.ID
-		m.activePlanningSession = planningSession
-		sessionMsg = fmt.Sprintf("Started new planning session %s", planningSessionID[:8])
+		sessionMsg = "Starting new classic planning session"
 	} else {
 		sessionMsg = fmt.Sprintf("Resuming planning session %s...", planningSessionID[:8])
 	}

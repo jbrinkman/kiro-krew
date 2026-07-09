@@ -142,6 +142,11 @@ func (tm *TabManager) CloseTab(index int) bool {
 		return false
 	}
 
+	// Clean up resources for planning tabs before removing
+	if planningTab, ok := tm.tabs[index].(*PlanningTab); ok {
+		planningTab.Close()
+	}
+
 	tm.tabs = append(tm.tabs[:index], tm.tabs[index+1:]...)
 	tm.ClearHover()
 

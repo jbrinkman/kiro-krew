@@ -727,6 +727,12 @@ func (pt *PlanningTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 		// Handle streaming response
 		response := msg.response
 		switch response.Type {
+		case "start":
+			// Stream started — issue continuation to read the first real chunk
+			if pt.streamingResponse {
+				cmds = append(cmds, pt.listenToStream())
+			}
+
 		case "text":
 			// Append text to current response
 			pt.currentResponse.WriteString(response.Content)
