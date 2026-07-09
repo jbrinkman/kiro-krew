@@ -79,6 +79,13 @@ func (fm *FooterManager) renderInputRow() string {
 
 // renderStatusRow creates the contextual information row based on tab type
 func (fm *FooterManager) renderStatusRow(activeTabType TabType) string {
+	// Prefer tab manager as source of truth for active tab type when available
+	if fm.tabManager != nil {
+		if activeTab := fm.tabManager.GetActiveTab(); activeTab != nil {
+			activeTabType = activeTab.Type()
+		}
+	}
+
 	// Base information shown on all tabs
 	baseInfo := fm.renderBaseInfo()
 
