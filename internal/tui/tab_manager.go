@@ -224,7 +224,8 @@ const closeBtnText = " ×"
 
 // RenderTabHeaders renders visual tab headers showing all tabs with active highlighting and close buttons.
 // The width parameter controls overflow — tabs exceeding width are truncated with an indicator.
-func (tm *TabManager) RenderTabHeaders(width int, styles *Styles) string {
+// The statusInfo parameter is optional status text to display on the right side for wide terminals.
+func (tm *TabManager) RenderTabHeaders(width int, styles *Styles, statusInfo string) string {
 	if len(tm.tabs) == 0 {
 		return ""
 	}
@@ -232,6 +233,12 @@ func (tm *TabManager) RenderTabHeaders(width int, styles *Styles) string {
 	var tabHeaders []string
 	usedWidth := 0
 	separatorWidth := 1 // "│"
+
+	// Reserve space for status info on wide terminals (>100 chars)
+	statusWidth := 0
+	if width > 100 && statusInfo != "" {
+		statusWidth = len(statusInfo) + 3 // Add padding between tabs and status
+	}
 
 	for i, tab := range tm.tabs {
 		title := tab.Title()
@@ -247,12 +254,13 @@ func (tm *TabManager) RenderTabHeaders(width int, styles *Styles) string {
 			renderedWidth += len(closeBtnText)
 		}
 
-		// Check if adding this tab would overflow terminal width
+		// Check if adding this tab would overflow terminal width (accounting for status)
 		needed := renderedWidth
 		if len(tabHeaders) > 0 {
 			needed += separatorWidth
 		}
-		if width > 0 && usedWidth+needed > width {
+		availableWidth := width - statusWidth
+		if width > 0 && usedWidth+needed > availableWidth {
 			break
 		}
 
@@ -315,7 +323,37 @@ func (tm *TabManager) RenderTabHeaders(width int, styles *Styles) string {
 		usedWidth += needed
 	}
 
-	return strings.Join(tabHeaders, styles.Separator.Render("│"))
+	// Join tab headers
+	tabHeadersStr := strings.Join(tabHeaders, styles.Separator.Render("│"))
+
+	// Add status info if available and terminal is wide enough
+	if width > 100 && statusInfo != "" {
+		// Calculate padding between tabs and status
+		tabsWidth := usedWidth
+		padding := width - tabsWidth - len(statusInfo)
+		if padding < 3 {
+			// Not enough space, truncate status info
+			maxStatusLength := width - tabsWidth - 3
+			if maxStatusLength > 0 {
+				if len(statusInfo) > maxStatusLength {
+					statusInfo = statusInfo[:maxStatusLength-3] + "..."
+				}
+				padding = 3
+			} else {
+				// No space for status at all
+				statusInfo = ""
+				padding = 0
+			}
+		}
+
+		if statusInfo != "" {
+			styledStatus := styles.PlanningTimestamp.Render(statusInfo)
+			paddingStr := strings.Repeat(" ", padding)
+			return tabHeadersStr + paddingStr + styledStatus
+		}
+	}
+
+	return tabHeadersStr
 }
 
 // Planning Tab Management

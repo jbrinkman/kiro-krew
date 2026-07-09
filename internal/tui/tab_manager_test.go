@@ -201,7 +201,7 @@ func TestRenderTabHeaders(t *testing.T) {
 	styles := NewStyles(theme)
 
 	// Test empty tab manager
-	result := tm.RenderTabHeaders(80, styles)
+	result := tm.RenderTabHeaders(80, styles, "")
 	if result != "" {
 		t.Errorf("Expected empty string for no tabs, got '%s'", result)
 	}
@@ -210,7 +210,7 @@ func TestRenderTabHeaders(t *testing.T) {
 	mainTab := NewMainTab()
 	tm.AddTab(mainTab)
 
-	result = tm.RenderTabHeaders(80, styles)
+	result = tm.RenderTabHeaders(80, styles, "")
 	if !strings.Contains(result, "Main TUI") {
 		t.Errorf("Expected tab header to contain 'Main TUI', got '%s'", result)
 	}
@@ -219,7 +219,7 @@ func TestRenderTabHeaders(t *testing.T) {
 	mockAgent := &mockAgentTab{id: "agent-test", agentID: "test"}
 	tm.AddTab(mockAgent)
 
-	result = tm.RenderTabHeaders(80, styles)
+	result = tm.RenderTabHeaders(80, styles, "")
 	if !strings.Contains(result, "Main TUI") {
 		t.Errorf("Expected tab header to contain 'Main TUI', got '%s'", result)
 	}
@@ -234,17 +234,30 @@ func TestRenderTabHeaders(t *testing.T) {
 	longTitleTab := &mockAgentTab{id: "agent-long", agentID: "verylongagentname"}
 	tm.AddTab(longTitleTab)
 
-	result = tm.RenderTabHeaders(80, styles)
+	result = tm.RenderTabHeaders(80, styles, "")
 	// Should truncate long titles
 	if strings.Contains(result, "verylongagentname") {
 		t.Errorf("Expected long title to be truncated, got '%s'", result)
 	}
 
 	// Test width overflow — narrow terminal should not render all tabs
-	result = tm.RenderTabHeaders(20, styles)
+	result = tm.RenderTabHeaders(20, styles, "")
 	// With 20 chars, only the first tab (8 + 2 padding = 10) should fit
 	if strings.Contains(result, "Agent test") {
 		t.Errorf("Expected narrow width to omit later tabs, got '%s'", result)
+	}
+
+	// Test status integration on wide terminals
+	statusText := "Context: 450/500 | Model: claude-sonnet-4"
+	result = tm.RenderTabHeaders(120, styles, statusText)
+	if !strings.Contains(result, "Context: 450/500") {
+		t.Errorf("Expected wide terminal to include status info, got '%s'", result)
+	}
+
+	// Test status omitted on narrow terminals
+	result = tm.RenderTabHeaders(80, styles, statusText)
+	if strings.Contains(result, "Context: 450/500") {
+		t.Errorf("Expected narrow terminal to omit status info, got '%s'", result)
 	}
 }
 

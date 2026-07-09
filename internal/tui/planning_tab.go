@@ -482,6 +482,24 @@ func (pt *PlanningTab) listenToStream() tea.Cmd {
 	}
 }
 
+// GetStatusInfo returns formatted status information for header integration
+func (pt *PlanningTab) GetStatusInfo() string {
+	if pt.contextTracker == nil {
+		return ""
+	}
+
+	used, total := pt.contextTracker.GetUsage()
+	model := pt.contextTracker.GetCurrentModel()
+
+	statusInfo := fmt.Sprintf("Context: %d/%d", used, total)
+	if model != "" {
+		statusInfo += fmt.Sprintf(" | Model: %s", model)
+	}
+	statusInfo += fmt.Sprintf(" | State: %s", pt.getStateDisplay())
+
+	return statusInfo
+}
+
 // View renders the planning tab content with responsive styling
 func (pt *PlanningTab) View() string {
 	if pt.height == 0 || pt.width == 0 {
@@ -533,35 +551,7 @@ func (pt *PlanningTab) View() string {
 		Width(pt.width).
 		Render(strings.Repeat("─", pt.width))
 
-	// Add status bar for wide terminals
-	var statusBar string
-	if pt.width > 100 && pt.contextTracker != nil {
-		used, total := pt.contextTracker.GetUsage()
-		model := pt.contextTracker.GetCurrentModel()
-
-		statusInfo := fmt.Sprintf("Context: %d/%d", used, total)
-		if model != "" {
-			statusInfo += fmt.Sprintf(" | Model: %s", model)
-		}
-		statusInfo += fmt.Sprintf(" | State: %s", pt.getStateDisplay())
-
-		statusBar = pt.styles.PlanningTimestamp.
-			Width(pt.width).
-			AlignHorizontal(lipgloss.Right).
-			Render(statusInfo)
-	}
-
-	// Combine all parts with responsive layout
-	if statusBar != "" {
-		return lipgloss.JoinVertical(
-			lipgloss.Left,
-			statusBar,
-			messageArea,
-			separator,
-			inputArea,
-		)
-	}
-
+	// Return only content area (message + separator + input) - status handled by header system
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
 		messageArea,

@@ -614,8 +614,19 @@ func (m model) View() tea.View {
 		return v
 	}
 
-	// Render tab headers at the top
-	tabHeaders := m.tabManager.RenderTabHeaders(m.width, m.styles)
+	// Collect status info from active planning tab (if any)
+	var statusInfo string
+	if m.width > 100 {
+		activeTab := m.tabManager.GetActiveTab()
+		if activeTab != nil && activeTab.Type() == TabTypePlanning {
+			if planningTab, ok := activeTab.(*PlanningTab); ok {
+				statusInfo = planningTab.GetStatusInfo()
+			}
+		}
+	}
+
+	// Render tab headers at the top with optional status info
+	tabHeaders := m.tabManager.RenderTabHeaders(m.width, m.styles, statusInfo)
 
 	base := m.renderBaseView()
 
