@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/jbrinkman/kiro-krew/internal/config"
+	"github.com/jbrinkman/kiro-krew/internal/session"
 )
 
 // FooterManager manages the two-row footer display system
@@ -13,6 +14,7 @@ type FooterManager struct {
 	config            *config.Config
 	contextTracker    *ContextTracker
 	autocompleteInput *AutocompleteInput
+	tabManager        *TabManager
 	width             int
 	height            int
 }
@@ -24,12 +26,13 @@ type FooterContent struct {
 }
 
 // NewFooterManager creates a new footer manager
-func NewFooterManager(styles *Styles, config *config.Config, autocompleteInput *AutocompleteInput) *FooterManager {
+func NewFooterManager(styles *Styles, config *config.Config, autocompleteInput *AutocompleteInput, tabManager *TabManager) *FooterManager {
 	return &FooterManager{
 		styles:            styles,
 		config:            config,
 		contextTracker:    NewContextTracker(),
 		autocompleteInput: autocompleteInput,
+		tabManager:        tabManager,
 	}
 }
 
@@ -76,14 +79,33 @@ func (fm *FooterManager) renderInputRow() string {
 
 // renderStatusRow creates the contextual information row based on tab type
 func (fm *FooterManager) renderStatusRow(activeTabType TabType) string {
+	// Prefer tab manager as source of truth for active tab type when available
+	if fm.tabManager != nil {
+		if activeTab := fm.tabManager.GetActiveTab(); activeTab != nil {
+			activeTabType = activeTab.Type()
+		}
+	}
+
 	// Base information shown on all tabs
 	baseInfo := fm.renderBaseInfo()
 
 	// Additional information for planning tabs
-	if activeTabType == TabTypePlanning && fm.contextTracker.IsActive() {
+	if activeTabType == TabTypePlanning {
 		planningInfo := fm.renderPlanningInfo()
+		planningStatusInfo := fm.renderPlanningStatusInfo()
+
+		// Combine all planning information
+		var planningInfoParts []string
 		if planningInfo != "" {
-			return fm.joinStatusInfo(baseInfo, planningInfo)
+			planningInfoParts = append(planningInfoParts, planningInfo)
+		}
+		if planningStatusInfo != "" {
+			planningInfoParts = append(planningInfoParts, planningStatusInfo)
+		}
+
+		if len(planningInfoParts) > 0 {
+			combinedPlanningInfo := strings.Join(planningInfoParts, " | ")
+			return fm.joinStatusInfo(baseInfo, combinedPlanningInfo)
 		}
 	}
 
@@ -97,6 +119,11 @@ func (fm *FooterManager) renderBaseInfo() string {
 
 // renderPlanningInfo renders additional information for planning tabs
 func (fm *FooterManager) renderPlanningInfo() string {
+	// Only show context info if context tracker is active
+	if !fm.contextTracker.IsActive() {
+		return ""
+	}
+
 	planningContext := fm.contextTracker.GetPlanningContext()
 	if planningContext == nil {
 		return ""
@@ -120,6 +147,54 @@ func (fm *FooterManager) renderPlanningInfo() string {
 	}
 
 	return strings.Join(parts, " | ")
+}
+
+// renderPlanningStatusInfo renders the status of the active planning tab
+func (fm *FooterManager) renderPlanningStatusInfo() string {
+	if fm.tabManager == nil {
+		return ""
+	}
+
+	activeTab := fm.tabManager.GetActiveTab()
+	if activeTab == nil || activeTab.Type() != TabTypePlanning {
+		return ""
+	}
+
+	planningTab, ok := activeTab.(*PlanningTab)
+	if !ok {
+		return ""
+	}
+
+	state := planningTab.GetState()
+
+	// Format status with appropriate visual indicator
+	var statusText string
+	switch state {
+	case session.PlanningStateIdle:
+		statusText = "status: ready"
+	case session.PlanningStateActive:
+		statusText = "status: ● processing"
+	case session.PlanningStateCompleted:
+		statusText = "status: ✓ completed"
+	case session.PlanningStateFailed:
+		statusText = "status: ✗ failed"
+	case session.PlanningStateReadOnly:
+		statusText = "status: 🔒 read-only"
+	default:
+		statusText = "status: ready"
+	}
+
+	// Add message count if there are messages
+	messageCount := planningTab.GetMessageCount()
+	if messageCount > 0 {
+		plural := ""
+		if messageCount != 1 {
+			plural = "s"
+		}
+		statusText += fmt.Sprintf(" (%d msg%s)", messageCount, plural)
+	}
+
+	return statusText
 }
 
 // joinStatusInfo combines base and additional status information

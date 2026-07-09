@@ -256,55 +256,14 @@ func (tm *TabManager) RenderTabHeaders(width int, styles *Styles) string {
 			break
 		}
 
-		// Render tab title with style, close button rendered separately to preserve its color
+		// Render tab title with unified style logic - no tab-type-specific conditional branching
 		var styledTab string
 		if i == tm.activeTab {
-			// Use tab-specific active styles
-			if tab.Type() == TabTypePlanning {
-				if planningTab, ok := tab.(*PlanningTab); ok {
-					styledTab = styles.GetPlanningTabStyle(planningTab.GetState(), true, false).Render(title)
-				} else {
-					styledTab = styles.TabActive.Render(title)
-				}
-			} else {
-				styledTab = styles.TabActive.Render(title)
-			}
+			styledTab = styles.TabActive.Render(title)
 		} else if i == tm.hoveredTab {
-			// Use tab-specific hover styles
-			if tab.Type() == TabTypePlanning {
-				if planningTab, ok := tab.(*PlanningTab); ok {
-					styledTab = styles.GetPlanningTabStyle(planningTab.GetState(), false, true).Render(title)
-				} else {
-					styledTab = styles.TabInactiveHover.Render(title)
-				}
-			} else {
-				styledTab = styles.TabInactiveHover.Render(title)
-			}
+			styledTab = styles.TabInactiveHover.Render(title)
 		} else {
-			// For agent tabs, use status-based coloring
-			if tab.Type() == TabTypeAgent {
-				if agentTab, ok := tab.(*AgentTab); ok {
-					switch agentTab.GetStatus() {
-					case agent.StatusCompleted:
-						styledTab = styles.AgentSuccess.Render(title)
-					case agent.StatusFailed:
-						styledTab = styles.AgentFail.Render(title)
-					default:
-						styledTab = styles.TabInactive.Render(title)
-					}
-				} else {
-					styledTab = styles.TabInactive.Render(title)
-				}
-			} else if tab.Type() == TabTypePlanning {
-				// For planning tabs, use enhanced state-based coloring
-				if planningTab, ok := tab.(*PlanningTab); ok {
-					styledTab = styles.GetPlanningTabStyle(planningTab.GetState(), false, i == tm.hoveredTab).Render(title)
-				} else {
-					styledTab = styles.TabInactive.Render(title)
-				}
-			} else {
-				styledTab = styles.TabInactive.Render(title)
-			}
+			styledTab = styles.TabInactive.Render(title)
 		}
 
 		if tab.IsClosable() {

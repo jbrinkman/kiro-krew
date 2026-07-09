@@ -564,13 +564,13 @@ func (pt *PlanningTab) renderInputArea() string {
 		promptStyle = pt.styles.PlanningStreamingIndicator
 	case session.PlanningStateReadOnly:
 		prompt = "🔒 "
-		promptStyle = pt.styles.PlanningTabReadOnly
+		promptStyle = pt.styles.Warning // Use warning style for read-only state
 	case session.PlanningStateCompleted:
 		prompt = "✓ "
-		promptStyle = pt.styles.PlanningTabCompleted
+		promptStyle = pt.styles.Success // Use success style for completed state
 	case session.PlanningStateFailed:
 		prompt = "✗ "
-		promptStyle = pt.styles.PlanningTabFailed
+		promptStyle = pt.styles.Error // Use error style for failed state
 	default:
 		prompt = "▶ "
 		promptStyle = pt.styles.PlanningPrompt
