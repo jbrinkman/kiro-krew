@@ -46,7 +46,6 @@ type Styles struct {
 	AutocompleteError    lipgloss.Style
 
 	// Planning tab styles
-	PlanningBorder             lipgloss.Style
 	PlanningUser               lipgloss.Style
 	PlanningAssistant          lipgloss.Style
 	PlanningInputActive        lipgloss.Style
@@ -121,10 +120,6 @@ func NewStyles(theme *config.Theme) *Styles {
 			Bold(true),
 
 		// Planning tab styles - comprehensive styling for all states and elements
-		PlanningBorder: lipgloss.NewStyle().
-			Border(lipgloss.NormalBorder()).
-			BorderForeground(lipgloss.Color(getColorOrFallback(theme.Colors.Primary, theme.Colors.TextMuted))).
-			Background(lipgloss.Color(theme.Colors.Background)),
 		PlanningUser: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(theme.Colors.Primary)).
 			Bold(true).
@@ -133,14 +128,10 @@ func NewStyles(theme *config.Theme) *Styles {
 			Foreground(lipgloss.Color(theme.Colors.TextPrimary)).
 			MarginBottom(1),
 		PlanningInputActive: lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color(theme.Colors.Primary)).
 			Background(lipgloss.Color(getColorOrFallback(theme.Colors.Surface, theme.Colors.Background))).
 			Padding(1).
 			MarginTop(1),
 		PlanningInputInactive: lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color(theme.Colors.TextMuted)).
 			Background(lipgloss.Color(getColorOrFallback(theme.Colors.Surface, theme.Colors.Background))).
 			Padding(1).
 			MarginTop(1),
@@ -181,22 +172,10 @@ func (s *Styles) GetPlanningInputStyle(focused bool, width int) lipgloss.Style {
 	if width < 60 {
 		return baseStyle.
 			Padding(0, 1). // Reduce padding on narrow screens
-			MaxWidth(width - 4)
+			MaxWidth(width - 2)
 	}
 
 	return baseStyle
-}
-
-// GetPlanningBorderStyle returns appropriate border style based on terminal width
-func (s *Styles) GetPlanningBorderStyle(width int) lipgloss.Style {
-	if width < 60 {
-		// Use simpler border for narrow terminals
-		return s.PlanningBorder.
-			Border(lipgloss.NormalBorder()).
-			Padding(0)
-	}
-
-	return s.PlanningBorder
 }
 
 // GetPlanningMessageStyle returns appropriate message style with responsive adjustments
