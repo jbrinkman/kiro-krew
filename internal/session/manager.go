@@ -371,23 +371,13 @@ func (sm *SessionManager) RepairSession(id string, state *SessionState) {
 			// Reconstruct planning data with defaults if missing
 			now := time.Now()
 			state.PlanningData = &PlanningSessionData{
-				TabID:        "recovered-" + id,
-				Title:        "Recovered Planning Tab",
-				State:        PlanningStateIdle,
-				CreatedAt:    now,
-				LastActivity: now,
-				ACPConnection: ACPConnectionMetadata{
-					Agent:          "kiro-agent",
-					Model:          "claude-sonnet-4",
-					Connected:      false,
-					Timeout:        60 * time.Second,
-					ResponseFormat: "text",
-					Streaming:      true,
-				},
-				ContextUsage: ContextUsage{
-					Used:  0,
-					Total: 200000,
-				},
+				TabID:         "recovered-" + id,
+				Title:         "Recovered Planning Tab",
+				State:         PlanningStateIdle,
+				CreatedAt:     now,
+				LastActivity:  now,
+				ACPConnection: DefaultACPConnectionMetadata(),
+				ContextUsage:  DefaultContextUsage(),
 			}
 		} else {
 			// Fix individual fields in existing planning data
@@ -546,23 +536,6 @@ func (sm *SessionManager) ListPlanningSessions() (map[string]*SessionState, erro
 	}
 
 	return planningSessions, nil
-}
-
-// RestorablePlanningSessions returns planning sessions that can be restored on startup
-func (sm *SessionManager) RestorablePlanningSessions() (map[string]*SessionState, error) {
-	allSessions, err := sm.ListPlanningSessions()
-	if err != nil {
-		return nil, err
-	}
-
-	restorable := make(map[string]*SessionState)
-	for sessionID, state := range allSessions {
-		if state.CanRestore() {
-			restorable[sessionID] = state
-		}
-	}
-
-	return restorable, nil
 }
 
 // UpdatePlanningSessionState updates the state of a planning session

@@ -443,48 +443,6 @@ func (tm *TabManager) ForceNewPlanningTab(styles *Styles, contextTracker *Contex
 
 // Session Management Methods
 
-// RestorePlanningSessions restores planning tab sessions from persistent storage on startup
-func (tm *TabManager) RestorePlanningSessions(styles *Styles, contextTracker *ContextTracker) (int, error) {
-	restorableSessions, err := tm.sessionManager.RestorablePlanningSessions()
-	if err != nil {
-		return 0, fmt.Errorf("failed to list restorable planning sessions: %w", err)
-	}
-
-	restored := 0
-	for sessionID, sessionState := range restorableSessions {
-		if !sessionState.IsPlanning() {
-			continue
-		}
-
-		// Create planning tab with existing session data
-		planningData := sessionState.PlanningData
-		planningTab := NewPlanningTabWithSession(planningData.TabID, planningData.Title, styles, contextTracker, tm.sessionManager)
-
-		// Override the session ID to use existing session
-		planningTab.sessionID = sessionID
-
-		// Load session state into the tab
-		planningTab.loadSessionState(sessionState)
-
-		// Add to manager
-		tm.AddTab(planningTab)
-		restored++
-
-		// Update counter to avoid ID conflicts
-		if strings.HasPrefix(planningData.TabID, "planning-") {
-			// Extract counter from existing tab ID
-			var counter int
-			if n, err := fmt.Sscanf(planningData.TabID, "planning-%d", &counter); n == 1 && err == nil {
-				if counter >= tm.planningTabCounter {
-					tm.planningTabCounter = counter
-				}
-			}
-		}
-	}
-
-	return restored, nil
-}
-
 // CleanupSessionsOnExit performs session cleanup when the application exits
 func (tm *TabManager) CleanupSessionsOnExit() error {
 	// Get list of active planning tab IDs
@@ -564,8 +522,7 @@ func (tm *TabManager) MarkPlanningTabCompleted(tabID string) bool {
 // MarkPlanningTabFailed marks a planning tab as failed
 func (tm *TabManager) MarkPlanningTabFailed(tabID string) bool {
 	if planningTab := tm.GetPlanningTabByID(tabID); planningTab != nil {
-		// Set state to failed (planning tab should handle this internally)
-		// Note: The color will be handled by RenderTabHeaders based on state
+		planningTab.SetFailed()
 		return true
 	}
 	return false

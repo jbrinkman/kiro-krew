@@ -853,6 +853,11 @@ func (m model) performExitCleanup() model {
 		}
 	}
 
+	// Cleanup planning sessions (remove orphaned/completed)
+	if err := m.tabManager.CleanupSessionsOnExit(); err != nil {
+		cleanupErrors = append(cleanupErrors, fmt.Sprintf("Planning session cleanup warning: %v", err))
+	}
+
 	// Stop context tracking
 	if m.footerManager != nil && m.footerManager.GetContextTracker() != nil {
 		m.footerManager.GetContextTracker().StopPlanningSession()

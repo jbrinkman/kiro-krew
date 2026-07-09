@@ -5,6 +5,26 @@ import (
 	"time"
 )
 
+// DefaultACPConnectionMetadata returns the default ACP connection metadata
+func DefaultACPConnectionMetadata() ACPConnectionMetadata {
+	return ACPConnectionMetadata{
+		Agent:          "kiro-agent",
+		Model:          "claude-sonnet-4",
+		Connected:      false,
+		Timeout:        60 * time.Second,
+		ResponseFormat: "text",
+		Streaming:      true,
+	}
+}
+
+// DefaultContextUsage returns the default context usage
+func DefaultContextUsage() ContextUsage {
+	return ContextUsage{
+		Used:  0,
+		Total: 200000,
+	}
+}
+
 // SessionType represents the type of session mode
 type SessionType string
 
@@ -83,23 +103,13 @@ func NewPlanningSessionState(tabID, title string) *SessionState {
 		Type:    Planning,
 		History: make([]Message, 0),
 		PlanningData: &PlanningSessionData{
-			TabID:        tabID,
-			Title:        title,
-			State:        PlanningStateIdle,
-			CreatedAt:    now,
-			LastActivity: now,
-			ACPConnection: ACPConnectionMetadata{
-				Agent:          "kiro-agent",
-				Model:          "claude-sonnet-4",
-				Connected:      false,
-				Timeout:        60 * time.Second,
-				ResponseFormat: "text",
-				Streaming:      true,
-			},
-			ContextUsage: ContextUsage{
-				Used:  0,
-				Total: 200000, // Default Claude context limit
-			},
+			TabID:         tabID,
+			Title:         title,
+			State:         PlanningStateIdle,
+			CreatedAt:     now,
+			LastActivity:  now,
+			ACPConnection: DefaultACPConnectionMetadata(),
+			ContextUsage:  DefaultContextUsage(),
 		},
 	}
 }
@@ -173,19 +183,6 @@ func (s *SessionState) GetPlanningState() PlanningTabState {
 		return s.PlanningData.State
 	}
 	return PlanningStateIdle
-}
-
-// CanRestore returns true if this planning session can be restored (not in active state)
-func (s *SessionState) CanRestore() bool {
-	if !s.IsPlanning() {
-		return false
-	}
-	// Sessions without planning data cannot be restored as planning tabs
-	if s.PlanningData == nil {
-		return false
-	}
-	state := s.PlanningData.State
-	return state != PlanningStateActive && state != PlanningStateReadOnly
 }
 
 // ToJSON serializes the session state to JSON

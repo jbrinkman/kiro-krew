@@ -46,6 +46,8 @@ type PlanningTab struct {
 	// Streaming state
 	streamingResponse bool
 	currentResponse   strings.Builder
+	streamChan        <-chan *acp.StreamingResponse
+	streamCancel      context.CancelFunc
 
 	// Context tracking
 	contextTracker *ContextTracker
@@ -214,13 +216,8 @@ func (pt *PlanningTab) loadSessionState(state *session.SessionState) {
 	}
 }
 
-// saveSessionState persists current tab state to session
-func (pt *PlanningTab) saveSessionState() {
-	if pt.sessionManager == nil || pt.sessionID == "" {
-		return
-	}
-
-	// Convert messages to session format
+// toSessionMessages converts internal PlanningMessage slice to session.Message format
+func (pt *PlanningTab) toSessionMessages() []session.Message {
 	messages := make([]session.Message, 0, len(pt.messages))
 	for _, msg := range pt.messages {
 		messages = append(messages, session.Message{
@@ -229,6 +226,17 @@ func (pt *PlanningTab) saveSessionState() {
 			Timestamp: msg.Timestamp,
 		})
 	}
+	return messages
+}
+
+// saveSessionState persists current tab state to session
+func (pt *PlanningTab) saveSessionState() {
+	if pt.sessionManager == nil || pt.sessionID == "" {
+		return
+	}
+
+	// Convert messages to session format
+	messages := pt.toSessionMessages()
 
 	// Load current session state
 	state, err := pt.sessionManager.LoadPlanningSession(pt.sessionID)
@@ -257,14 +265,7 @@ func (pt *PlanningTab) SaveSession() {
 	}
 
 	// Convert and update messages
-	messages := make([]session.Message, 0, len(pt.messages))
-	for _, msg := range pt.messages {
-		messages = append(messages, session.Message{
-			Role:      msg.Role,
-			Content:   msg.Content,
-			Timestamp: msg.Timestamp,
-		})
-	}
+	messages := pt.toSessionMessages()
 
 	state.History = messages
 	state.PlanningData.Title = pt.title
@@ -398,11 +399,11 @@ func (pt *PlanningTab) updateViewportContent() {
 func (pt *PlanningTab) sendMessage(message string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		defer cancel()
 
 		// Ensure ACP connection
 		if !pt.acpClient.IsConnected() {
 			if err := pt.acpClient.Connect(ctx); err != nil {
+				cancel()
 				return planningResponseMsg{
 					content:    fmt.Sprintf("Failed to connect to agent: %v", err),
 					isError:    true,
@@ -423,6 +424,7 @@ func (pt *PlanningTab) sendMessage(message string) tea.Cmd {
 		// Send streaming request
 		streamChan, err := pt.acpClient.StreamMessage(ctx, req)
 		if err != nil {
+			cancel()
 			return planningResponseMsg{
 				content:    fmt.Sprintf("Failed to send message: %v", err),
 				isError:    true,
@@ -430,24 +432,39 @@ func (pt *PlanningTab) sendMessage(message string) tea.Cmd {
 			}
 		}
 
-		// Return a command that will start listening to the stream
-		return pt.listenToStream(streamChan)()
+		// Store stream lifecycle on the tab for continuation and cleanup
+		pt.streamChan = streamChan
+		pt.streamCancel = cancel
+
+		// Read the first message from the stream immediately.
+		// Subsequent reads are issued by the Update handler via listenToStream().
+		return pt.listenToStream()()
 	}
 }
 
-// listenToStream creates a command that listens to streaming responses
-func (pt *PlanningTab) listenToStream(streamChan <-chan *acp.StreamingResponse) tea.Cmd {
+// listenToStream creates a command that reads the next message from the stream channel.
+// Each invocation reads exactly one message; the Update handler issues continuation
+// commands to read subsequent messages until "done" or "error" arrives.
+func (pt *PlanningTab) listenToStream() tea.Cmd {
+	ch := pt.streamChan
 	return func() tea.Msg {
-		for response := range streamChan {
-			// Send each streaming response as a message
-			return planningStreamMsg{response: response}
+		if ch == nil {
+			return planningResponseMsg{
+				content:    "",
+				isError:    false,
+				isComplete: true,
+			}
 		}
-		// Stream ended
-		return planningResponseMsg{
-			content:    "",
-			isError:    false,
-			isComplete: true,
+		response, ok := <-ch
+		if !ok {
+			// Channel closed — stream ended without explicit done signal
+			return planningResponseMsg{
+				content:    "",
+				isError:    false,
+				isComplete: true,
+			}
 		}
+		return planningStreamMsg{response: response}
 	}
 }
 
@@ -715,16 +732,16 @@ func (pt *PlanningTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 			pt.currentResponse.WriteString(response.Content)
 			pt.updateViewportContent()
 
-			// Continue listening for more stream data
+			// Issue continuation command to read the next chunk
 			if pt.streamingResponse {
-				// Note: In a real implementation, we'd need a way to continue
-				// listening to the stream. For now, we'll handle this in sendMessage.
+				cmds = append(cmds, pt.listenToStream())
 			}
 
 		case "error":
 			// Handle error response
 			pt.streamingResponse = false
 			pt.state = session.PlanningStateFailed
+			pt.cancelStream()
 
 			// Add error message
 			if response.Error != "" {
@@ -737,6 +754,7 @@ func (pt *PlanningTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 			// Complete the response
 			pt.streamingResponse = false
 			pt.state = session.PlanningStateCompleted
+			pt.cancelStream()
 
 			// Finalize the assistant message
 			if pt.currentResponse.Len() > 0 {
@@ -828,12 +846,23 @@ func (pt *PlanningTab) Reset() {
 
 // Close cleans up resources when the tab is closed
 func (pt *PlanningTab) Close() {
+	pt.cancelStream()
+
 	if pt.acpClient != nil {
 		pt.acpClient.Close()
 	}
 
 	// Cleanup session
 	pt.CleanupSession()
+}
+
+// cancelStream cancels the active stream context and clears stream state
+func (pt *PlanningTab) cancelStream() {
+	if pt.streamCancel != nil {
+		pt.streamCancel()
+		pt.streamCancel = nil
+	}
+	pt.streamChan = nil
 }
 
 // UpdateContextUsage updates the context usage for this planning session

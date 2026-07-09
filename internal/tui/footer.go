@@ -110,7 +110,7 @@ func (fm *FooterManager) renderStatusRow(activeTabType TabType) string {
 	baseInfo := fm.renderBaseInfo()
 
 	// Additional information for planning tabs
-	if activeTabType == TabTypeMain && fm.contextTracker.IsActive() {
+	if activeTabType == TabTypePlanning && fm.contextTracker.IsActive() {
 		planningInfo := fm.renderPlanningInfo()
 		if planningInfo != "" {
 			return fm.joinStatusInfo(baseInfo, planningInfo)

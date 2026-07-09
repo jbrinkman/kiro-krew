@@ -25,6 +25,7 @@ type KiroACPClient struct {
 type KiroClient struct {
 	autoApprove bool
 	respChan    chan<- *StreamingResponse
+	mu          sync.Mutex
 }
 
 // RequestPermission handles permission requests from agents
@@ -94,8 +95,11 @@ func (k *KiroClient) SessionUpdate(ctx context.Context, params acp.SessionNotifi
 		content := u.AgentMessageChunk.Content
 		if content.Text != nil {
 			// Forward text content to the response channel if available
-			if k.respChan != nil {
-				k.respChan <- &StreamingResponse{
+			k.mu.Lock()
+			ch := k.respChan
+			k.mu.Unlock()
+			if ch != nil {
+				ch <- &StreamingResponse{
 					Type:      "text",
 					Content:   content.Text.Text,
 					Timestamp: time.Now(),
@@ -192,8 +196,8 @@ func (c *KiroACPClient) Connect(ctx context.Context) error {
 		ProtocolVersion: acp.ProtocolVersionNumber,
 		ClientCapabilities: acp.ClientCapabilities{
 			Fs: acp.FileSystemCapabilities{
-				ReadTextFile:  true,
-				WriteTextFile: true,
+				ReadTextFile:  false,
+				WriteTextFile: false,
 			},
 		},
 	})
@@ -228,6 +232,7 @@ func (c *KiroACPClient) Disconnect() error {
 	}
 
 	c.conn = nil
+	c.sessionID = ""
 	c.connected = false
 	return nil
 }
@@ -353,9 +358,13 @@ func (c *KiroACPClient) StreamMessage(ctx context.Context, req *MessageRequest) 
 
 		// Set the response channel on the client before sending the prompt
 		if kiroClient, ok := c.client.(*KiroClient); ok {
+			kiroClient.mu.Lock()
 			kiroClient.respChan = respChan
+			kiroClient.mu.Unlock()
 			defer func() {
+				kiroClient.mu.Lock()
 				kiroClient.respChan = nil
+				kiroClient.mu.Unlock()
 			}()
 		}
 
@@ -380,10 +389,9 @@ func (c *KiroACPClient) StreamMessage(ctx context.Context, req *MessageRequest) 
 			return
 		}
 
-		// Wait briefly for responses to come via SessionUpdate
-		time.Sleep(100 * time.Millisecond)
-
-		// Send completion signal
+		// The ACP SDK's notification barrier guarantees all SessionUpdate
+		// callbacks (which forward text chunks to respChan) have completed
+		// by the time Prompt() returns. Send the completion signal.
 		respChan <- &StreamingResponse{
 			Type:      "done",
 			Content:   "",

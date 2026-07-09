@@ -175,7 +175,7 @@ echo "plan classic Test classic planning" | ./kiro-krew
 - Use existing Kiro CLI authentication without additional setup
 
 ### UI Layout Reference
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │ [Console] [Planning 1*] [Planning 2] [Agent #123]                          │
 ├─────────────────────────────────────────────────────────────────────────────┤
