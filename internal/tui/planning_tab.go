@@ -542,22 +542,6 @@ func (pt *PlanningTab) View() string {
 	)
 }
 
-// getStateDisplay returns a human-readable state string for status display
-func (pt *PlanningTab) getStateDisplay() string {
-	switch pt.state {
-	case session.PlanningStateActive:
-		return "Processing"
-	case session.PlanningStateCompleted:
-		return "Completed"
-	case session.PlanningStateFailed:
-		return "Failed"
-	case session.PlanningStateReadOnly:
-		return "Read Only"
-	default:
-		return "Idle"
-	}
-}
-
 // renderInputArea renders the embedded message input area with responsive styling
 func (pt *PlanningTab) renderInputArea() string {
 	// Update textarea dimensions with responsive adjustments
