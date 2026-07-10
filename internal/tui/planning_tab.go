@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"charm.land/bubbles/v2/textarea"
+	"charm.land/bubbles/v2/textinput"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -31,9 +31,9 @@ type PlanningTab struct {
 	state  session.PlanningTabState
 
 	// Chat components
-	viewport viewport.Model // Scrollable message history
-	textarea textarea.Model // Embedded message input
-	messages []PlanningMessage
+	viewport  viewport.Model  // Scrollable message history
+	textinput textinput.Model // Simple terminal-style message input
+	messages  []PlanningMessage
 
 	// ACP integration
 	acpClient acp.Client
@@ -88,27 +88,23 @@ func NewPlanningTabWithSession(id, title string, styles *Styles, contextTracker 
 	vp := viewport.New(viewport.WithWidth(80), viewport.WithHeight(20))
 	vp.KeyMap = viewport.KeyMap{} // Disable built-in keybindings - we'll handle them
 
-	// Create textarea for message input
-	ta := textarea.New()
-	ta.Placeholder = "Type your message here..."
-	ta.ShowLineNumbers = false
-	ta.CharLimit = 4000 // Reasonable message limit
-	ta.SetWidth(80)     // Initial width, will be updated during resize
-	ta.SetHeight(3)     // Multi-line input
-
-	// Configure textarea keybindings
-	ta.KeyMap.InsertNewline.SetEnabled(false) // Enter sends message instead
+	// Create simple textinput for message input with terminal prompt style
+	ti := textinput.New()
+	ti.Placeholder = "Type your message here..."
+	ti.Prompt = ""      // We'll render the prompt ourselves for consistent styling
+	ti.CharLimit = 4000 // Reasonable message limit
+	ti.Focus()          // Start focused since focusInput defaults to true
 
 	pt := &PlanningTab{
 		id:             id,
 		title:          title,
 		state:          session.PlanningStateIdle,
 		viewport:       vp,
-		textarea:       ta,
+		textinput:      ti,
 		messages:       make([]PlanningMessage, 0),
 		styles:         styles,
 		focusInput:     true,
-		inputHeight:    5, // Input area + padding + margin
+		inputHeight:    2, // Minimal height: prompt line + separator
 		contextTracker: contextTracker,
 		sessionManager: sessionManager,
 	}
@@ -338,7 +334,7 @@ func (pt *PlanningTab) AddMessage(role, content string) {
 	pt.saveSessionState()
 }
 
-// updateViewportContent rebuilds the viewport content from messages with enhanced styling
+// updateViewportContent rebuilds the viewport content from messages with minimal styling
 func (pt *PlanningTab) updateViewportContent() {
 	var content strings.Builder
 
@@ -347,25 +343,17 @@ func (pt *PlanningTab) updateViewportContent() {
 			content.WriteString("\n")
 		}
 
-		// Get responsive message style
+		// Get minimal message style
 		messageStyle := pt.styles.GetPlanningMessageStyle(msg.Role, pt.width)
 
-		// Format message based on role with enhanced styling
+		// Format message based on role with clean minimal styling
 		if msg.Role == "user" {
-			// User messages with styled prefix and timestamp
+			// User messages with simple prefix
 			prefix := pt.styles.PlanningPrompt.Render("[planner]")
-			timestamp := ""
-			if pt.width > 80 {
-				timestamp = pt.styles.PlanningTimestamp.Render(msg.Timestamp.Format("15:04"))
-			}
-
 			userContent := prefix + " " + msg.Content
-			if timestamp != "" {
-				userContent = lipgloss.JoinHorizontal(lipgloss.Left, userContent, timestamp)
-			}
 			content.WriteString(messageStyle.Render(userContent))
 		} else {
-			// Assistant messages with enhanced formatting
+			// Assistant messages with minimal formatting
 			assistantContent := msg.Content
 
 			// Add error styling for error messages
@@ -377,20 +365,15 @@ func (pt *PlanningTab) updateViewportContent() {
 
 			content.WriteString(assistantContent)
 		}
-
-		// Add spacing between messages (responsive)
-		if pt.width > 60 {
-			content.WriteString("\n")
-		}
 	}
 
-	// Add current streaming response with indicator if active
+	// Add current streaming response with minimal indicator if active
 	if pt.streamingResponse && pt.currentResponse.Len() > 0 {
 		if len(pt.messages) > 0 {
 			content.WriteString("\n")
 		}
 
-		// Streaming indicator with enhanced styling
+		// Minimal streaming indicator
 		streamingText := pt.currentResponse.String()
 		indicator := pt.styles.PlanningStreamingIndicator.Render("● ")
 
@@ -400,13 +383,8 @@ func (pt *PlanningTab) updateViewportContent() {
 
 	pt.viewport.SetContent(content.String())
 
-	// Auto-scroll to bottom for new messages with improved logic
-	scrollThreshold := 0.85
-	if pt.width < 60 {
-		scrollThreshold = 0.9 // More aggressive scrolling on narrow screens
-	}
-
-	if pt.viewport.ScrollPercent() >= scrollThreshold || len(pt.messages) == 1 {
+	// Auto-scroll to bottom for new messages
+	if pt.viewport.ScrollPercent() >= 0.85 || len(pt.messages) == 1 {
 		pt.viewport.GotoBottom()
 	}
 }
@@ -482,7 +460,7 @@ func (pt *PlanningTab) listenToStream() tea.Cmd {
 	}
 }
 
-// View renders the planning tab content with responsive styling
+// View renders the planning tab content with minimal clean styling
 // This method renders only the tab's content area - the unified rendering system
 // in tui.go will add the footer below this content
 func (pt *PlanningTab) View() string {
@@ -490,37 +468,27 @@ func (pt *PlanningTab) View() string {
 		return ""
 	}
 
-	// Calculate dimensions for the tab's content area only
-	// The unified rendering system handles footer space allocation
+	// Calculate dimensions for clean minimal layout
 	separatorHeight := 1
 	messageHeight := pt.height - pt.inputHeight - separatorHeight
 	if messageHeight < 1 {
 		messageHeight = 1
 	}
 
-	// Adjust input height for narrow terminals
-	inputHeight := pt.inputHeight
-	if pt.width < 60 {
-		inputHeight = pt.inputHeight - 1
-		messageHeight = pt.height - inputHeight - separatorHeight
-	}
-
 	// Update viewport dimensions to use full available width
 	pt.viewport.SetWidth(pt.width)
 	pt.viewport.SetHeight(messageHeight)
 
-	// Render message history directly without border container
+	// Render message history directly without any containers or borders
 	messageArea := pt.viewport.View()
 
-	// Render input area with responsive styling
+	// Render input area with minimal terminal-style prompt
 	inputArea := pt.renderInputArea()
 
-	// Render separator
-	separator := pt.styles.Separator.
-		Width(pt.width).
-		Render(strings.Repeat("─", pt.width))
+	// Render minimal separator - single line only
+	separator := strings.Repeat("─", pt.width)
 
-	// Combine all parts with responsive layout
+	// Combine all parts with minimal clean layout
 	// The unified rendering system in tui.go will add the footer below this content
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
@@ -530,74 +498,39 @@ func (pt *PlanningTab) View() string {
 	)
 }
 
-// renderInputArea renders the embedded message input area with responsive styling
+// renderInputArea renders the clean terminal-style input prompt without borders or padding
 func (pt *PlanningTab) renderInputArea() string {
-	// Update textarea dimensions
-	// Account for input container padding (1 each side = 2 horizontal chars)
-	textareaWidth := pt.width - 2
-	if pt.width < 60 {
-		textareaWidth = pt.width - 2 // Narrow terminals also have padding
-	}
-	if textareaWidth < 1 {
-		textareaWidth = 1
-	}
-	pt.textarea.SetWidth(textareaWidth)
-
-	// Get responsive input style
-	inputStyle := pt.styles.GetPlanningInputStyle(pt.focusInput && pt.state != session.PlanningStateReadOnly, pt.width)
-
-	// Add input prompt and state indicator with styling
+	// Build the minimal terminal-style prompt based on state
 	var prompt string
 	var promptStyle lipgloss.Style
 
 	switch pt.state {
 	case session.PlanningStateActive:
-		prompt = "● "
+		prompt = "[planner] ● "
 		promptStyle = pt.styles.PlanningStreamingIndicator
 	case session.PlanningStateReadOnly:
-		prompt = "🔒 "
-		promptStyle = pt.styles.Warning // Use warning style for read-only state
+		prompt = "[planner] 🔒 "
+		promptStyle = pt.styles.Warning
 	case session.PlanningStateCompleted:
-		prompt = "✓ "
-		promptStyle = pt.styles.Success // Use success style for completed state
+		prompt = "[planner] ✓ "
+		promptStyle = pt.styles.Success
 	case session.PlanningStateFailed:
-		prompt = "✗ "
-		promptStyle = pt.styles.Error // Use error style for failed state
+		prompt = "[planner] ✗ "
+		promptStyle = pt.styles.Error
 	default:
-		prompt = "▶ "
+		prompt = "[planner] > "
 		promptStyle = pt.styles.PlanningPrompt
 	}
 
-	// Add context indicator for narrow screens
-	contextInfo := ""
-	if pt.width < 80 && pt.contextTracker != nil {
-		used, total := pt.contextTracker.GetUsage()
-		if total > 0 {
-			percentage := (used * 100) / total
-			if percentage > 80 {
-				contextInfo = " 🔥" // High usage warning
-			} else if percentage > 60 {
-				contextInfo = " ⚡" // Moderate usage
-			}
-		}
+	// Render clean prompt - no borders, no padding, no background
+	styledPrompt := promptStyle.Render(prompt)
+
+	// Only show textinput if not in read-only state
+	if pt.state == session.PlanningStateReadOnly {
+		return styledPrompt
 	}
 
-	// Combine styled prompt with textarea
-	styledPrompt := promptStyle.Render(prompt + "[planner]")
-	input := styledPrompt + contextInfo + "\n" + pt.textarea.View()
-
-	// Apply responsive container styling
-	containerWidth := pt.width
-	containerHeight := pt.inputHeight - 2
-
-	if pt.width < 60 {
-		containerHeight = pt.inputHeight - 1 // Less height for narrow terminals
-	}
-
-	return inputStyle.
-		Width(containerWidth).
-		Height(containerHeight).
-		Render(input)
+	return styledPrompt + pt.textinput.View()
 }
 
 // Update handles messages for the planning tab
@@ -631,13 +564,13 @@ func (pt *PlanningTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 		case "enter":
 			if pt.focusInput && pt.state != session.PlanningStateActive {
 				// Send message
-				message := strings.TrimSpace(pt.textarea.Value())
+				message := strings.TrimSpace(pt.textinput.Value())
 				if message != "" {
 					// Add user message
 					pt.AddMessage("user", message)
 
 					// Clear input
-					pt.textarea.SetValue("")
+					pt.textinput.SetValue("")
 
 					// Start streaming response
 					pt.state = session.PlanningStateActive
@@ -662,23 +595,32 @@ func (pt *PlanningTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 		case "pgup":
 			pt.viewport.HalfPageUp()
 			pt.focusInput = false
+			pt.textinput.Blur()
 		case "pgdown":
 			pt.viewport.HalfPageDown()
 			pt.focusInput = false
+			pt.textinput.Blur()
 		case "home":
 			pt.viewport.GotoTop()
 			pt.focusInput = false
+			pt.textinput.Blur()
 		case "end":
 			pt.viewport.GotoBottom()
 			pt.focusInput = false
+			pt.textinput.Blur()
 		case "tab":
 			// Toggle focus between viewport and input
 			pt.focusInput = !pt.focusInput
+			if pt.focusInput {
+				cmds = append(cmds, pt.textinput.Focus())
+			} else {
+				pt.textinput.Blur()
+			}
 		default:
 			if pt.focusInput {
-				// Forward to textarea
+				// Forward to textinput
 				var cmd tea.Cmd
-				pt.textarea, cmd = pt.textarea.Update(msg)
+				pt.textinput, cmd = pt.textinput.Update(msg)
 				if cmd != nil {
 					cmds = append(cmds, cmd)
 				}
@@ -762,12 +704,11 @@ func (pt *PlanningTab) Resize(width, height int) {
 
 	// Update component dimensions with footer space already excluded from height
 	if width > 4 {
-		pt.textarea.SetWidth(width - 2) // Account for input container padding
 		pt.viewport.SetWidth(width)
 	}
 
 	// Recalculate message area height using the footer-aware height
-	messageHeight := height - pt.inputHeight - 1
+	messageHeight := height - pt.inputHeight - 1 // 1 for separator
 	if messageHeight > 0 {
 		pt.viewport.SetHeight(messageHeight)
 	}
@@ -813,7 +754,7 @@ func (pt *PlanningTab) Reset() {
 	pt.state = session.PlanningStateIdle
 	pt.streamingResponse = false
 	pt.currentResponse.Reset()
-	pt.textarea.SetValue("")
+	pt.textinput.SetValue("")
 	pt.focusInput = true
 	pt.updateViewportContent()
 	pt.SaveSession() // Persist state reset

@@ -50,8 +50,6 @@ type Styles struct {
 	PlanningAssistant          lipgloss.Style
 	PlanningInputActive        lipgloss.Style
 	PlanningInputInactive      lipgloss.Style
-	PlanningScrollbar          lipgloss.Style
-	PlanningTimestamp          lipgloss.Style
 	PlanningError              lipgloss.Style
 	PlanningStreamingIndicator lipgloss.Style
 	PlanningPrompt             lipgloss.Style
@@ -119,38 +117,20 @@ func NewStyles(theme *config.Theme) *Styles {
 			Foreground(lipgloss.Color(theme.Colors.Error)).
 			Bold(true),
 
-		// Planning tab styles - comprehensive styling for all states and elements
+		// Planning tab styles - minimal terminal aesthetic with clean styling
 		PlanningUser: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(theme.Colors.Primary)).
-			Bold(true).
-			MarginBottom(1),
+			Bold(true),
 		PlanningAssistant: lipgloss.NewStyle().
-			Foreground(lipgloss.Color(theme.Colors.TextPrimary)).
-			MarginBottom(1),
-		PlanningInputActive: lipgloss.NewStyle().
-			Background(lipgloss.Color(getColorOrFallback(theme.Colors.Surface, theme.Colors.Background))).
-			Padding(1).
-			MarginTop(1),
-		PlanningInputInactive: lipgloss.NewStyle().
-			Background(lipgloss.Color(getColorOrFallback(theme.Colors.Surface, theme.Colors.Background))).
-			Padding(1).
-			MarginTop(1),
-		PlanningScrollbar: lipgloss.NewStyle().
-			Foreground(lipgloss.Color(theme.Colors.TextMuted)).
-			Background(lipgloss.Color(getColorOrFallback(theme.Colors.Surface, theme.Colors.Background))),
-		PlanningTimestamp: lipgloss.NewStyle().
-			Foreground(lipgloss.Color(theme.Colors.TextMuted)).
-			Italic(true).
-			MarginLeft(1),
+			Foreground(lipgloss.Color(theme.Colors.TextPrimary)),
+		PlanningInputActive:   lipgloss.NewStyle(), // Minimal style - no borders or padding
+		PlanningInputInactive: lipgloss.NewStyle(), // Minimal style - no borders or padding
 		PlanningError: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(theme.Colors.Error)).
-			Background(lipgloss.Color(getColorOrFallback(theme.Colors.Surface, theme.Colors.Background))).
-			Bold(true).
-			Padding(0, 1),
+			Bold(true),
 		PlanningStreamingIndicator: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(theme.Colors.Warning)).
-			Bold(true).
-			Blink(true),
+			Bold(true),
 		PlanningPrompt: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(theme.Colors.Primary)).
 			Bold(true),
@@ -159,41 +139,16 @@ func NewStyles(theme *config.Theme) *Styles {
 
 // Planning Tab Responsive Styling Methods
 
-// GetPlanningInputStyle returns appropriate input style based on focus and terminal width
+// GetPlanningInputStyle returns minimal input style - clean terminal aesthetic
 func (s *Styles) GetPlanningInputStyle(focused bool, width int) lipgloss.Style {
-	var baseStyle lipgloss.Style
-	if focused {
-		baseStyle = s.PlanningInputActive
-	} else {
-		baseStyle = s.PlanningInputInactive
-	}
-
-	// Responsive adjustments for narrow terminals
-	if width < 60 {
-		return baseStyle.
-			Padding(0, 1). // Reduce padding on narrow screens
-			MaxWidth(width - 2)
-	}
-
-	return baseStyle
+	// Return minimal style regardless of focus or width - no borders, no padding, no backgrounds
+	return lipgloss.NewStyle()
 }
 
-// GetPlanningMessageStyle returns appropriate message style with responsive adjustments
+// GetPlanningMessageStyle returns minimal message style with clean spacing
 func (s *Styles) GetPlanningMessageStyle(role string, width int) lipgloss.Style {
-	var baseStyle lipgloss.Style
-
 	if role == "user" {
-		baseStyle = s.PlanningUser
-	} else {
-		baseStyle = s.PlanningAssistant
+		return s.PlanningUser
 	}
-
-	// Responsive adjustments
-	if width < 60 {
-		return baseStyle.
-			MarginBottom(0). // Reduce spacing on narrow screens
-			MaxWidth(width - 4)
-	}
-
-	return baseStyle
+	return s.PlanningAssistant
 }
