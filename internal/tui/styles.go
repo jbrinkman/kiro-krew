@@ -50,8 +50,6 @@ type Styles struct {
 	PlanningAssistant          lipgloss.Style
 	PlanningInputActive        lipgloss.Style
 	PlanningInputInactive      lipgloss.Style
-	PlanningScrollbar          lipgloss.Style
-	PlanningTimestamp          lipgloss.Style
 	PlanningError              lipgloss.Style
 	PlanningStreamingIndicator lipgloss.Style
 	PlanningPrompt             lipgloss.Style
@@ -127,11 +125,6 @@ func NewStyles(theme *config.Theme) *Styles {
 			Foreground(lipgloss.Color(theme.Colors.TextPrimary)),
 		PlanningInputActive:   lipgloss.NewStyle(), // Minimal style - no borders or padding
 		PlanningInputInactive: lipgloss.NewStyle(), // Minimal style - no borders or padding
-		PlanningScrollbar: lipgloss.NewStyle().
-			Foreground(lipgloss.Color(theme.Colors.TextMuted)),
-		PlanningTimestamp: lipgloss.NewStyle().
-			Foreground(lipgloss.Color(theme.Colors.TextMuted)).
-			Italic(true),
 		PlanningError: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(theme.Colors.Error)).
 			Bold(true),

@@ -91,7 +91,9 @@ func NewPlanningTabWithSession(id, title string, styles *Styles, contextTracker 
 	// Create simple textinput for message input with terminal prompt style
 	ti := textinput.New()
 	ti.Placeholder = "Type your message here..."
-	ti.Prompt = "" // We'll render the prompt ourselves for consistent styling
+	ti.Prompt = ""      // We'll render the prompt ourselves for consistent styling
+	ti.CharLimit = 4000 // Reasonable message limit
+	ti.Focus()          // Start focused since focusInput defaults to true
 
 	pt := &PlanningTab{
 		id:             id,
@@ -528,13 +530,6 @@ func (pt *PlanningTab) renderInputArea() string {
 		return styledPrompt
 	}
 
-	// Give focus to textinput when input area has focus
-	if pt.focusInput {
-		pt.textinput.Focus()
-	} else {
-		pt.textinput.Blur()
-	}
-
 	return styledPrompt + pt.textinput.View()
 }
 
@@ -600,18 +595,27 @@ func (pt *PlanningTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 		case "pgup":
 			pt.viewport.HalfPageUp()
 			pt.focusInput = false
+			pt.textinput.Blur()
 		case "pgdown":
 			pt.viewport.HalfPageDown()
 			pt.focusInput = false
+			pt.textinput.Blur()
 		case "home":
 			pt.viewport.GotoTop()
 			pt.focusInput = false
+			pt.textinput.Blur()
 		case "end":
 			pt.viewport.GotoBottom()
 			pt.focusInput = false
+			pt.textinput.Blur()
 		case "tab":
 			// Toggle focus between viewport and input
 			pt.focusInput = !pt.focusInput
+			if pt.focusInput {
+				cmds = append(cmds, pt.textinput.Focus())
+			} else {
+				pt.textinput.Blur()
+			}
 		default:
 			if pt.focusInput {
 				// Forward to textinput
