@@ -610,6 +610,11 @@ func (m model) renderTabContentWithFooter(tabContent string, tabType TabType) st
 	// Normalize tab content by removing trailing newlines
 	normalizedContent := strings.TrimRight(tabContent, "\n")
 
+	// If content is empty, return footer directly without a leading newline
+	if normalizedContent == "" {
+		return footerWithDropdown
+	}
+
 	// Compose the complete view with consistent newline separation
 	return normalizedContent + "\n" + footerWithDropdown
 }
