@@ -469,8 +469,7 @@ func (pt *PlanningTab) View() string {
 	}
 
 	// Calculate dimensions for clean minimal layout
-	separatorHeight := 1
-	messageHeight := pt.height - pt.inputHeight - separatorHeight
+	messageHeight := pt.height - pt.inputHeight
 	if messageHeight < 1 {
 		messageHeight = 1
 	}
@@ -485,15 +484,11 @@ func (pt *PlanningTab) View() string {
 	// Render input area with minimal terminal-style prompt
 	inputArea := pt.renderInputArea()
 
-	// Render minimal separator - single line only
-	separator := strings.Repeat("─", pt.width)
-
-	// Combine all parts with minimal clean layout
+	// Combine all parts with minimal clean layout - no separator
 	// The unified rendering system in tui.go will add the footer below this content
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
 		messageArea,
-		separator,
 		inputArea,
 	)
 }

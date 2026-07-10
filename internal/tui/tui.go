@@ -506,18 +506,30 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "tab":
-			// Handle tab completion in main tab
+			// Handle tab completion in main tab, forward to other tabs
 			activeTab := m.tabManager.GetActiveTab()
 			if activeTab != nil && activeTab.Type() == TabTypeMain {
 				var cmd tea.Cmd
 				m.input, cmd = m.input.Update(msg)
 				return m, cmd
 			}
+			// Forward to active tab (e.g., planning tab focus switching)
+			if activeTab != nil {
+				if cmd := m.tabManager.Update(msg); cmd != nil {
+					return m, cmd
+				}
+			}
 			return m, nil
 		case "enter":
-			// Only handle enter in main tab (console view)
+			// Handle enter in main tab (console view), forward to other tabs
 			activeTab := m.tabManager.GetActiveTab()
 			if activeTab == nil || activeTab.Type() != TabTypeMain {
+				// Forward to active tab (e.g., planning tab message sending)
+				if activeTab != nil {
+					if cmd := m.tabManager.Update(msg); cmd != nil {
+						return m, cmd
+					}
+				}
 				return m, nil
 			}
 
@@ -533,9 +545,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			return m.executeCommand(input)
 		default:
-			// Forward key messages to active tab
+			// Forward key messages to active tab - removed TabTypeAgent restriction
 			activeTab := m.tabManager.GetActiveTab()
-			if activeTab != nil && activeTab.Type() == TabTypeAgent {
+			if activeTab != nil {
 				if cmd := m.tabManager.Update(msg); cmd != nil {
 					return m, cmd
 				}
@@ -543,9 +555,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Only update input when no overlay is active and in main tab
+	// Update input when no overlay is active - removed TabTypeMain restriction
 	activeTab := m.tabManager.GetActiveTab()
-	if m.activeOverlay == overlayNone && activeTab != nil && activeTab.Type() == TabTypeMain {
+	if m.activeOverlay == overlayNone && activeTab != nil {
 		var cmd tea.Cmd
 		m.input, cmd = m.input.Update(msg)
 		return m, cmd
