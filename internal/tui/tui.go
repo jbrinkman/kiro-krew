@@ -506,18 +506,30 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "tab":
-			// Handle tab completion in main tab
+			// Handle tab completion in main tab, forward to other tabs
 			activeTab := m.tabManager.GetActiveTab()
 			if activeTab != nil && activeTab.Type() == TabTypeMain {
 				var cmd tea.Cmd
 				m.input, cmd = m.input.Update(msg)
 				return m, cmd
 			}
+			// Forward to active tab (e.g., planning tab focus switching)
+			if activeTab != nil {
+				if cmd := m.tabManager.Update(msg); cmd != nil {
+					return m, cmd
+				}
+			}
 			return m, nil
 		case "enter":
-			// Only handle enter in main tab (console view)
+			// Handle enter in main tab (console view), forward to other tabs
 			activeTab := m.tabManager.GetActiveTab()
 			if activeTab == nil || activeTab.Type() != TabTypeMain {
+				// Forward to active tab (e.g., planning tab message sending)
+				if activeTab != nil {
+					if cmd := m.tabManager.Update(msg); cmd != nil {
+						return m, cmd
+					}
+				}
 				return m, nil
 			}
 
