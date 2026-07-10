@@ -607,8 +607,16 @@ func (m model) renderTabContentWithFooter(tabContent string, tabType TabType) st
 	// Render footer using the footer system
 	footerWithDropdown, _ := m.footerManager.RenderDropdownWithFooter(tabType)
 
-	// Compose the complete view with tab content and footer
-	return tabContent + "\n" + footerWithDropdown
+	// Normalize tab content by removing trailing newlines
+	normalizedContent := strings.TrimRight(tabContent, "\n")
+
+	// If content is empty, return footer directly without a leading newline
+	if normalizedContent == "" {
+		return footerWithDropdown
+	}
+
+	// Compose the complete view with consistent newline separation
+	return normalizedContent + "\n" + footerWithDropdown
 }
 
 func (m model) View() tea.View {
