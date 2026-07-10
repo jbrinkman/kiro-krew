@@ -614,18 +614,17 @@ func (pt *PlanningTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 			pt.viewport.GotoBottom()
 			pt.focusInput = false
 			pt.textinput.Blur()
-		case "tab":
-			// Toggle focus between message input and footer input
-			pt.focusInput = !pt.focusInput
+		case "esc":
+			// Transfer focus from message input to footer
 			if pt.focusInput {
-				// Focus on message input, tell parent to blur footer
-				cmds = append(cmds, pt.textinput.Focus())
-				cmds = append(cmds, func() tea.Msg { return focusTransferMsg{target: "message"} })
-			} else {
-				// Focus on footer input, blur message input
+				pt.focusInput = false
 				pt.textinput.Blur()
-				cmds = append(cmds, func() tea.Msg { return focusTransferMsg{target: "footer"} })
+				// Send focus transfer message to coordinate with parent
+				cmds = append(cmds, func() tea.Msg {
+					return focusTransferMsg{target: "footer"}
+				})
 			}
+
 		default:
 			if pt.focusInput {
 				// Forward to textinput

@@ -413,6 +413,27 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		// Priority handling for autocomplete dismissal
+		if msg.String() == "esc" && m.input.IsDropdownVisible() {
+			var cmd tea.Cmd
+			m.input, cmd = m.input.Update(msg)
+			return m, cmd
+		}
+
+		// Priority handling for focus transfer in planning tabs
+		if msg.String() == "esc" {
+			activeTab := m.tabManager.GetActiveTab()
+			if activeTab != nil && activeTab.Type() == TabTypePlanning {
+				// When footer has focus on planning tab and Esc is pressed, transfer focus to message input
+				if m.input.Focused() {
+					m.input.SetFocus(false)
+					return m, func() tea.Msg {
+						return focusTransferMsg{target: "message"}
+					}
+				}
+			}
+		}
+
 		// Handle number key selection in status overlay for agent restoration
 		if m.activeOverlay == overlayStatus {
 			switch msg.String() {
