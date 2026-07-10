@@ -243,6 +243,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.input.Focus()
 		return m, tea.Batch(m.input.Focus(), tea.ClearScreen)
 
+	case focusTransferMsg:
+		// Handle focus coordination between planning tab and footer input
+		activeTab := m.tabManager.GetActiveTab()
+		if activeTab != nil && activeTab.Type() == TabTypePlanning {
+			if msg.target == "footer" {
+				// Focus footer input, blur any tab input
+				m.input.SetFocus(true)
+				return m, m.input.Focus()
+			} else if msg.target == "message" {
+				// Focus message input, blur footer input
+				m.input.SetFocus(false)
+			}
+		}
+		return m, nil
+
 	case updateCheckMsg:
 		updateLines := []string{}
 		if msg.err != nil {

@@ -77,6 +77,11 @@ type planningStreamStartMsg struct {
 	streamCancel context.CancelFunc
 }
 
+// Focus transfer message for coordinating between message input and footer input
+type focusTransferMsg struct {
+	target string // "message" or "footer"
+}
+
 // NewPlanningTab creates a new planning tab
 func NewPlanningTab(id, title string, styles *Styles, contextTracker *ContextTracker) *PlanningTab {
 	return NewPlanningTabWithSession(id, title, styles, contextTracker, nil, nil)
@@ -93,7 +98,13 @@ func NewPlanningTabWithSession(id, title string, styles *Styles, contextTracker 
 	ti.Placeholder = "Type your message here..."
 	ti.Prompt = ""      // We'll render the prompt ourselves for consistent styling
 	ti.CharLimit = 4000 // Reasonable message limit
-	ti.Focus()          // Start focused since focusInput defaults to true
+
+	// Configure solid cursor (non-blinking)
+	currentStyles := ti.Styles()
+	currentStyles.Cursor.Blink = false
+	ti.SetStyles(currentStyles)
+
+	ti.Focus() // Start focused since focusInput defaults to true
 
 	pt := &PlanningTab{
 		id:             id,
@@ -604,12 +615,16 @@ func (pt *PlanningTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 			pt.focusInput = false
 			pt.textinput.Blur()
 		case "tab":
-			// Toggle focus between viewport and input
+			// Toggle focus between message input and footer input
 			pt.focusInput = !pt.focusInput
 			if pt.focusInput {
+				// Focus on message input, tell parent to blur footer
 				cmds = append(cmds, pt.textinput.Focus())
+				cmds = append(cmds, func() tea.Msg { return focusTransferMsg{target: "message"} })
 			} else {
+				// Focus on footer input, blur message input
 				pt.textinput.Blur()
+				cmds = append(cmds, func() tea.Msg { return focusTransferMsg{target: "footer"} })
 			}
 		default:
 			if pt.focusInput {
@@ -822,4 +837,26 @@ func (pt *PlanningTab) SetTitle(title string) {
 // IsActive returns true if the tab is currently processing a request
 func (pt *PlanningTab) IsActive() bool {
 	return pt.state == session.PlanningStateActive
+}
+
+// Focus coordination methods for dual-input cursor management
+
+// MessageInputFocused returns whether the message input currently has focus
+func (pt *PlanningTab) MessageInputFocused() bool {
+	return pt.focusInput
+}
+
+// SetMessageInputFocus sets focus state on the message input
+func (pt *PlanningTab) SetMessageInputFocus(focused bool) {
+	pt.focusInput = focused
+	if focused {
+		pt.textinput.Focus()
+	} else {
+		pt.textinput.Blur()
+	}
+}
+
+// HasFooterInputFocus indicates if focus should be on footer input (opposite of message input)
+func (pt *PlanningTab) HasFooterInputFocus() bool {
+	return !pt.focusInput
 }
