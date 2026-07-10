@@ -515,7 +515,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			}
-			// Forward to tab manager for agent tabs
+			// Forward to tab manager for non-main tabs
+			// But if footer has focus in planning tab, route up/down to footer for dropdown
+			if activeTab != nil && activeTab.Type() == TabTypePlanning && m.input.Focused() {
+				if msg.String() == "up" || msg.String() == "down" {
+					var cmd tea.Cmd
+					m.input, cmd = m.input.Update(msg)
+					return m, cmd
+				}
+			}
 			if cmd := m.tabManager.Update(msg); cmd != nil {
 				return m, cmd
 			}
@@ -539,6 +547,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Handle enter in main tab (console view), forward to other tabs
 			activeTab := m.tabManager.GetActiveTab()
 			if activeTab == nil || activeTab.Type() != TabTypeMain {
+				// If footer has focus in planning tab, route enter to footer for command execution
+				if activeTab != nil && activeTab.Type() == TabTypePlanning && m.input.Focused() {
+					var cmd tea.Cmd
+					m.input, cmd = m.input.Update(msg)
+
+					input := strings.TrimSpace(m.input.Value())
+					m.input.SetValue("")
+					if input == "" {
+						return m, cmd
+					}
+
+					return m.executeCommand(input)
+				}
 				// Forward to active tab (e.g., planning tab message sending)
 				if activeTab != nil {
 					if cmd := m.tabManager.Update(msg); cmd != nil {
@@ -916,10 +937,14 @@ func (m model) switchActiveTab(index int) model {
 			if !m.footerManager.GetContextTracker().IsActive() {
 				m.footerManager.GetContextTracker().StartPlanningSession("claude-sonnet-4")
 			}
+			// Blur footer input so only the planning tab message input shows a cursor
+			m.input.SetFocus(false)
 		} else {
 			if m.footerManager.GetContextTracker().IsActive() {
 				m.footerManager.GetContextTracker().StopPlanningSession()
 			}
+			// Restore footer input focus for non-planning tabs
+			m.input.SetFocus(true)
 		}
 	}
 	return m

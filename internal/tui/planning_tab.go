@@ -838,25 +838,3 @@ func (pt *PlanningTab) SetTitle(title string) {
 func (pt *PlanningTab) IsActive() bool {
 	return pt.state == session.PlanningStateActive
 }
-
-// Focus coordination methods for dual-input cursor management
-
-// MessageInputFocused returns whether the message input currently has focus
-func (pt *PlanningTab) MessageInputFocused() bool {
-	return pt.focusInput
-}
-
-// SetMessageInputFocus sets focus state on the message input
-func (pt *PlanningTab) SetMessageInputFocus(focused bool) {
-	pt.focusInput = focused
-	if focused {
-		pt.textinput.Focus()
-	} else {
-		pt.textinput.Blur()
-	}
-}
-
-// HasFooterInputFocus indicates if focus should be on footer input (opposite of message input)
-func (pt *PlanningTab) HasFooterInputFocus() bool {
-	return !pt.focusInput
-}
