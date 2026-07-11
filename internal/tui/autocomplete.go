@@ -75,6 +75,7 @@ func (a *AutocompleteInput) SetFocus(focused bool) {
 	} else {
 		a.textinput.Blur()
 		a.state.showDropdown = false
+		a.state.ghostText = ""
 	}
 }
 

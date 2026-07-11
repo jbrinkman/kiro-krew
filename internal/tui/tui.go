@@ -254,6 +254,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else if msg.target == "message" {
 				// Focus message input, blur footer input
 				m.input.SetFocus(false)
+				if pt, ok := activeTab.(*PlanningTab); ok {
+					pt.SetFocusInput(true)
+					return m, pt.RestoreFocus()
+				}
 			}
 		}
 		return m, nil
@@ -570,14 +574,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "tab":
-			// Handle tab completion in main tab, forward to other tabs
+			// Handle tab completion in footer input
 			activeTab := m.tabManager.GetActiveTab()
 			if activeTab != nil && activeTab.Type() == TabTypeMain {
 				var cmd tea.Cmd
 				m.input, cmd = m.input.Update(msg)
 				return m, cmd
 			}
-			// Forward to active tab (e.g., planning tab focus switching)
+			// Tab completion also works in footer when planning tab has footer focused
+			if activeTab != nil && activeTab.Type() == TabTypePlanning && m.input.Focused() {
+				var cmd tea.Cmd
+				m.input, cmd = m.input.Update(msg)
+				return m, cmd
+			}
+			// Forward to active tab for other handling
 			if activeTab != nil {
 				if cmd := m.tabManager.Update(msg); cmd != nil {
 					return m, cmd

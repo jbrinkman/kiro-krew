@@ -838,6 +838,11 @@ func (pt *PlanningTab) IsActive() bool {
 	return pt.state == session.PlanningStateActive
 }
 
+// SetFocusInput sets the planning tab's focusInput state.
+func (pt *PlanningTab) SetFocusInput(focused bool) {
+	pt.focusInput = focused
+}
+
 // RestoreFocus re-applies the planning tab's preserved focusInput state.
 // If focusInput is true, the textinput is focused; otherwise it is blurred.
 // Returns a tea.Cmd (non-nil only when focusing).
