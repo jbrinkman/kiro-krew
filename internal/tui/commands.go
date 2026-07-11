@@ -271,7 +271,8 @@ func (m model) handlePlan(description string) (model, tea.Cmd) {
 	// NOTE: Tab switch will handle context tracking automatically
 
 	// Switch to the newly created tab (already added by CreateAndAddPlanningTab)
-	m = m.switchActiveTab(len(m.tabManager.GetTabs()) - 1)
+	var focusCmd tea.Cmd
+	m, focusCmd = m.switchActiveTab(len(m.tabManager.GetTabs()) - 1)
 
 	// Add initial message with connection status feedback
 	if description != "" {
@@ -287,7 +288,7 @@ func (m model) handlePlan(description string) (model, tea.Cmd) {
 
 	m = m.appendActivity(m.styles.Success.Render(fmt.Sprintf("✅ Created planning tab: %s", planningTab.Title())))
 
-	return m, nil
+	return m, focusCmd
 }
 
 func (m model) handlePlanClassic(description string) (model, tea.Cmd) {
@@ -625,7 +626,7 @@ func (m model) switchToConsoleMode() (model, tea.Cmd) {
 	if m.consoleState.activeTabID != "" {
 		for i, tab := range m.tabManager.GetTabs() {
 			if tab.ID() == m.consoleState.activeTabID {
-				m = m.switchActiveTab(i)
+				m, _ = m.switchActiveTab(i)
 				restored = true
 				break
 			}
@@ -635,7 +636,7 @@ func (m model) switchToConsoleMode() (model, tea.Cmd) {
 		// Fallback to main tab
 		for i, tab := range m.tabManager.GetTabs() {
 			if tab.Type() == TabTypeMain {
-				m = m.switchActiveTab(i)
+				m, _ = m.switchActiveTab(i)
 				break
 			}
 		}

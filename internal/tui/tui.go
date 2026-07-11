@@ -243,6 +243,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.input.Focus()
 		return m, tea.Batch(m.input.Focus(), tea.ClearScreen)
 
+	case focusTransferMsg:
+		// Handle focus coordination between planning tab and footer input
+		activeTab := m.tabManager.GetActiveTab()
+		if activeTab != nil && activeTab.Type() == TabTypePlanning {
+			if msg.target == "footer" {
+				// Focus footer input, blur any tab input
+				m.input.SetFocus(true)
+				return m, m.input.Focus()
+			} else if msg.target == "message" {
+				// Focus message input, blur footer input
+				m.input.SetFocus(false)
+			}
+		}
+		return m, nil
+
 	case updateCheckMsg:
 		updateLines := []string{}
 		if msg.err != nil {
@@ -462,11 +477,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "[":
 			// Previous tab
-			m.tabManager.PreviousTab()
+			tabCount := len(m.tabManager.GetTabs())
+			if tabCount > 1 {
+				prev := (m.tabManager.GetActiveTabIndex() - 1 + tabCount) % tabCount
+				var cmd tea.Cmd
+				m, cmd = m.switchActiveTab(prev)
+				return m, cmd
+			}
 			return m, nil
 		case "]":
 			// Next tab
-			m.tabManager.NextTab()
+			tabCount := len(m.tabManager.GetTabs())
+			if tabCount > 1 {
+				next := (m.tabManager.GetActiveTabIndex() + 1) % tabCount
+				var cmd tea.Cmd
+				m, cmd = m.switchActiveTab(next)
+				return m, cmd
+			}
 			return m, nil
 		case "ctrl+w":
 			// Close current tab (if closable)
@@ -500,7 +527,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			}
-			// Forward to tab manager for agent tabs
+			// Forward to tab manager for non-main tabs
+			// But if footer has focus in planning tab, route up/down to footer for dropdown
+			if activeTab != nil && activeTab.Type() == TabTypePlanning && m.input.Focused() {
+				if msg.String() == "up" || msg.String() == "down" {
+					var cmd tea.Cmd
+					m.input, cmd = m.input.Update(msg)
+					return m, cmd
+				}
+			}
+			// Blur footer input on pgup/pgdown/home/end so exactly one (zero) inputs
+			// are focused while the planning tab enters scroll mode.
+			if activeTab != nil && activeTab.Type() == TabTypePlanning {
+				switch msg.String() {
+				case "pgup", "pgdown", "home", "end":
+					m.input.SetFocus(false)
+				}
+			}
 			if cmd := m.tabManager.Update(msg); cmd != nil {
 				return m, cmd
 			}
@@ -524,6 +567,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Handle enter in main tab (console view), forward to other tabs
 			activeTab := m.tabManager.GetActiveTab()
 			if activeTab == nil || activeTab.Type() != TabTypeMain {
+				// If footer has focus in planning tab, route enter to footer for command execution
+				if activeTab != nil && activeTab.Type() == TabTypePlanning && m.input.Focused() {
+					var cmd tea.Cmd
+					m.input, cmd = m.input.Update(msg)
+
+					input := strings.TrimSpace(m.input.Value())
+					m.input.SetValue("")
+					if input == "" {
+						return m, cmd
+					}
+
+					return m.executeCommand(input)
+				}
 				// Forward to active tab (e.g., planning tab message sending)
 				if activeTab != nil {
 					if cmd := m.tabManager.Update(msg); cmd != nil {
@@ -901,21 +957,29 @@ func (m model) performExitCleanup() model {
 }
 
 // switchActiveTab switches to a tab by index and updates context tracking
-func (m model) switchActiveTab(index int) model {
+func (m model) switchActiveTab(index int) (model, tea.Cmd) {
 	m.tabManager.SetActiveTab(index)
-	// Update context tracker based on active tab type
+	// Update context tracker and focus based on active tab type
 	if activeTab := m.tabManager.GetActiveTab(); activeTab != nil {
 		if activeTab.Type() == TabTypePlanning {
 			if !m.footerManager.GetContextTracker().IsActive() {
 				m.footerManager.GetContextTracker().StartPlanningSession("claude-sonnet-4")
 			}
+			// Blur footer input so only the planning tab message input shows a cursor
+			m.input.SetFocus(false)
+			// Restore the planning tab's preserved focus state
+			if pt, ok := activeTab.(*PlanningTab); ok {
+				return m, pt.RestoreFocus()
+			}
 		} else {
 			if m.footerManager.GetContextTracker().IsActive() {
 				m.footerManager.GetContextTracker().StopPlanningSession()
 			}
+			// Restore footer input focus for non-planning tabs
+			m.input.SetFocus(true)
 		}
 	}
-	return m
+	return m, nil
 }
 
 func (m model) executeCommand(input string) (model, tea.Cmd) {

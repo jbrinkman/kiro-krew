@@ -42,6 +42,12 @@ type AutocompleteInput struct {
 func NewAutocompleteInput(registry *CommandRegistry, styles *Styles) *AutocompleteInput {
 	ti := textinput.New()
 	ti.Prompt = "kiro-krew> "
+
+	// Configure solid cursor (non-blinking)
+	currentStyles := ti.Styles()
+	currentStyles.Cursor.Blink = false
+	ti.SetStyles(currentStyles)
+
 	ti.Focus()
 
 	return &AutocompleteInput{
@@ -54,6 +60,21 @@ func NewAutocompleteInput(registry *CommandRegistry, styles *Styles) *Autocomple
 			showDropdown:  false,
 			ghostText:     "",
 		},
+	}
+}
+
+// Focused returns whether the input currently has focus
+func (a *AutocompleteInput) Focused() bool {
+	return a.textinput.Focused()
+}
+
+// SetFocus sets the focus state without triggering focus commands
+func (a *AutocompleteInput) SetFocus(focused bool) {
+	if focused {
+		a.textinput.Focus()
+	} else {
+		a.textinput.Blur()
+		a.state.showDropdown = false
 	}
 }
 
