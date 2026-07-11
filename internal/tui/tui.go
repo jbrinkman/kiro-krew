@@ -557,8 +557,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, cmd
 				}
 			}
-			// Blur footer input on pgup/pgdown/home/end so exactly one (zero) inputs
-			// are focused while the planning tab enters scroll mode.
+			// Blur footer input on pgup/pgdown/home/end so no footer input cursor
+			// remains while the planning tab enters viewport scroll mode.
 			if activeTab != nil && activeTab.Type() == TabTypePlanning {
 				switch msg.String() {
 				case "pgup", "pgdown", "home", "end":
@@ -687,7 +687,7 @@ func (m model) renderTabContentWithFooter(tabContent string, tabType TabType) st
 	// Normalize tab content by removing trailing newlines
 	normalizedContent := strings.TrimRight(tabContent, "\n")
 
-	// If content is empty, return footer directly without a leading newline
+	// If content is empty, return footer directly to avoid rendering a leading blank line.
 	if normalizedContent == "" {
 		return footerWithDropdown
 	}
