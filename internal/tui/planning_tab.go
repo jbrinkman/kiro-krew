@@ -839,7 +839,7 @@ func (pt *PlanningTab) IsActive() bool {
 }
 
 // RestoreFocus re-applies the planning tab's preserved focusInput state.
-// If focusInput is true the textinput is focused; otherwise it is blurred.
+// If focusInput is true, the textinput is focused; otherwise it is blurred.
 // Returns a tea.Cmd (non-nil only when focusing).
 func (pt *PlanningTab) RestoreFocus() tea.Cmd {
 	if pt.focusInput {
