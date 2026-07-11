@@ -614,18 +614,17 @@ func (pt *PlanningTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 			pt.viewport.GotoBottom()
 			pt.focusInput = false
 			pt.textinput.Blur()
-		case "tab":
-			// Toggle focus between message input and footer input
-			pt.focusInput = !pt.focusInput
+		case "esc":
+			// Transfer focus from message input to footer
 			if pt.focusInput {
-				// Focus on message input, tell parent to blur footer
-				cmds = append(cmds, pt.textinput.Focus())
-				cmds = append(cmds, func() tea.Msg { return focusTransferMsg{target: "message"} })
-			} else {
-				// Focus on footer input, blur message input
+				pt.focusInput = false
 				pt.textinput.Blur()
-				cmds = append(cmds, func() tea.Msg { return focusTransferMsg{target: "footer"} })
+				// Send focus transfer message to coordinate with parent
+				cmds = append(cmds, func() tea.Msg {
+					return focusTransferMsg{target: "footer"}
+				})
 			}
+
 		default:
 			if pt.focusInput {
 				// Forward to textinput
@@ -839,8 +838,13 @@ func (pt *PlanningTab) IsActive() bool {
 	return pt.state == session.PlanningStateActive
 }
 
+// SetFocusInput sets the planning tab's focusInput state.
+func (pt *PlanningTab) SetFocusInput(focused bool) {
+	pt.focusInput = focused
+}
+
 // RestoreFocus re-applies the planning tab's preserved focusInput state.
-// If focusInput is true the textinput is focused; otherwise it is blurred.
+// If focusInput is true, the textinput is focused; otherwise it is blurred.
 // Returns a tea.Cmd (non-nil only when focusing).
 func (pt *PlanningTab) RestoreFocus() tea.Cmd {
 	if pt.focusInput {

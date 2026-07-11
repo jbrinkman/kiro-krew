@@ -254,6 +254,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else if msg.target == "message" {
 				// Focus message input, blur footer input
 				m.input.SetFocus(false)
+				if pt, ok := activeTab.(*PlanningTab); ok {
+					pt.SetFocusInput(true)
+					return m, pt.RestoreFocus()
+				}
 			}
 		}
 		return m, nil
@@ -413,6 +417,27 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		// Priority handling for autocomplete dismissal
+		if msg.String() == "esc" && m.input.IsDropdownVisible() {
+			var cmd tea.Cmd
+			m.input, cmd = m.input.Update(msg)
+			return m, cmd
+		}
+
+		// Priority handling for focus transfer in planning tabs
+		if msg.String() == "esc" {
+			activeTab := m.tabManager.GetActiveTab()
+			if activeTab != nil && activeTab.Type() == TabTypePlanning {
+				// When footer has focus on planning tab and Esc is pressed, transfer focus to message input
+				if m.input.Focused() {
+					m.input.SetFocus(false)
+					return m, func() tea.Msg {
+						return focusTransferMsg{target: "message"}
+					}
+				}
+			}
+		}
+
 		// Handle number key selection in status overlay for agent restoration
 		if m.activeOverlay == overlayStatus {
 			switch msg.String() {
@@ -536,8 +561,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, cmd
 				}
 			}
-			// Blur footer input on pgup/pgdown/home/end so exactly one (zero) inputs
-			// are focused while the planning tab enters scroll mode.
+			// Blur footer input during viewport navigation to prevent cursor artifacts
+			// when the planning tab enters scroll mode.
 			if activeTab != nil && activeTab.Type() == TabTypePlanning {
 				switch msg.String() {
 				case "pgup", "pgdown", "home", "end":
@@ -549,14 +574,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "tab":
-			// Handle tab completion in main tab, forward to other tabs
+			// Handle tab completion in footer input
 			activeTab := m.tabManager.GetActiveTab()
 			if activeTab != nil && activeTab.Type() == TabTypeMain {
 				var cmd tea.Cmd
 				m.input, cmd = m.input.Update(msg)
 				return m, cmd
 			}
-			// Forward to active tab (e.g., planning tab focus switching)
+			// Tab completion also works in footer when planning tab has footer focused
+			if activeTab != nil && activeTab.Type() == TabTypePlanning && m.input.Focused() {
+				var cmd tea.Cmd
+				m.input, cmd = m.input.Update(msg)
+				return m, cmd
+			}
+			// Forward to active tab for other handling
 			if activeTab != nil {
 				if cmd := m.tabManager.Update(msg); cmd != nil {
 					return m, cmd
@@ -666,7 +697,8 @@ func (m model) renderTabContentWithFooter(tabContent string, tabType TabType) st
 	// Normalize tab content by removing trailing newlines
 	normalizedContent := strings.TrimRight(tabContent, "\n")
 
-	// If content is empty, return footer directly without a leading newline
+	// When content is empty, return footer directly without a separator to avoid
+	// an unnecessary leading blank line.
 	if normalizedContent == "" {
 		return footerWithDropdown
 	}
