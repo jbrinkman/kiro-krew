@@ -498,11 +498,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "[":
 			// Previous tab
-			m.tabManager.PreviousTab()
+			tabCount := len(m.tabManager.GetTabs())
+			if tabCount > 1 {
+				prev := (m.tabManager.GetActiveTabIndex() - 1 + tabCount) % tabCount
+				var cmd tea.Cmd
+				m, cmd = m.switchActiveTab(prev)
+				return m, cmd
+			}
 			return m, nil
 		case "]":
 			// Next tab
-			m.tabManager.NextTab()
+			tabCount := len(m.tabManager.GetTabs())
+			if tabCount > 1 {
+				next := (m.tabManager.GetActiveTabIndex() + 1) % tabCount
+				var cmd tea.Cmd
+				m, cmd = m.switchActiveTab(next)
+				return m, cmd
+			}
 			return m, nil
 		case "ctrl+w":
 			// Close current tab (if closable)
@@ -543,6 +555,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					var cmd tea.Cmd
 					m.input, cmd = m.input.Update(msg)
 					return m, cmd
+				}
+			}
+			// Blur footer input on pgup/pgdown/home/end so exactly one (zero) inputs
+			// are focused while the planning tab enters scroll mode.
+			if activeTab != nil && activeTab.Type() == TabTypePlanning {
+				switch msg.String() {
+				case "pgup", "pgdown", "home", "end":
+					m.input.SetFocus(false)
 				}
 			}
 			if cmd := m.tabManager.Update(msg); cmd != nil {
@@ -664,8 +684,16 @@ func (m model) renderTabContentWithFooter(tabContent string, tabType TabType) st
 	// Render footer using the footer system
 	footerWithDropdown, _ := m.footerManager.RenderDropdownWithFooter(tabType)
 
-	// Compose the complete view with tab content and footer
-	return tabContent + "\n" + footerWithDropdown
+	// Normalize tab content by removing trailing newlines
+	normalizedContent := strings.TrimRight(tabContent, "\n")
+
+	// If content is empty, return footer directly without a leading newline
+	if normalizedContent == "" {
+		return footerWithDropdown
+	}
+
+	// Compose the complete view with consistent newline separation
+	return normalizedContent + "\n" + footerWithDropdown
 }
 
 func (m model) View() tea.View {
@@ -950,9 +978,9 @@ func (m model) performExitCleanup() model {
 }
 
 // switchActiveTab switches to a tab by index and updates context tracking
-func (m model) switchActiveTab(index int) model {
+func (m model) switchActiveTab(index int) (model, tea.Cmd) {
 	m.tabManager.SetActiveTab(index)
-	// Update context tracker based on active tab type
+	// Update context tracker and focus based on active tab type
 	if activeTab := m.tabManager.GetActiveTab(); activeTab != nil {
 		if activeTab.Type() == TabTypePlanning {
 			if !m.footerManager.GetContextTracker().IsActive() {
@@ -960,6 +988,10 @@ func (m model) switchActiveTab(index int) model {
 			}
 			// Blur footer input so only the planning tab message input shows a cursor
 			m.input.SetFocus(false)
+			// Restore the planning tab's preserved focus state
+			if pt, ok := activeTab.(*PlanningTab); ok {
+				return m, pt.RestoreFocus()
+			}
 		} else {
 			if m.footerManager.GetContextTracker().IsActive() {
 				m.footerManager.GetContextTracker().StopPlanningSession()
@@ -968,7 +1000,7 @@ func (m model) switchActiveTab(index int) model {
 			m.input.SetFocus(true)
 		}
 	}
-	return m
+	return m, nil
 }
 
 func (m model) executeCommand(input string) (model, tea.Cmd) {
