@@ -104,6 +104,8 @@ func NewPlanningTabWithSession(id, title string, styles *Styles, contextTracker 
 	currentStyles.Cursor.Blink = false
 	ti.SetStyles(currentStyles)
 
+	ti.SetValue("") // Clear any default value to ensure empty input
+
 	ti.Focus() // Start focused since focusInput defaults to true
 
 	pt := &PlanningTab{
