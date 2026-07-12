@@ -303,6 +303,14 @@ func TestTask8Integration(t *testing.T) {
 				t.Error("Expected new planning tab to have no messages")
 			}
 
+			// Test textinput starts empty (no placeholder artifact like "T")
+			if planningTab.textinput.Value() != "" {
+				t.Errorf("Expected empty textinput value, got %q", planningTab.textinput.Value())
+			}
+			if planningTab.textinput.Placeholder != "" {
+				t.Errorf("Expected empty placeholder to avoid virtual cursor artifact, got %q", planningTab.textinput.Placeholder)
+			}
+
 			// Test adding messages
 			planningTab.AddMessage("user", "Test message")
 			if planningTab.GetMessageCount() != 1 {
