@@ -417,13 +417,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// Priority handling for autocomplete dismissal
-		if msg.String() == "esc" && m.input.IsDropdownVisible() {
-			var cmd tea.Cmd
-			m.input, cmd = m.input.Update(msg)
-			return m, cmd
-		}
-
 		// Priority handling for focus transfer in planning tabs
 		if msg.String() == "esc" {
 			activeTab := m.tabManager.GetActiveTab()
@@ -528,19 +521,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Handle console scroll events when in main tab
 			activeTab := m.tabManager.GetActiveTab()
 			if activeTab != nil && activeTab.Type() == TabTypeMain {
-				// Check if autocomplete dropdown is visible for up/down navigation
-				if (msg.String() == "up" || msg.String() == "down") && m.input.IsDropdownVisible() {
-					var cmd tea.Cmd
-					m.input, cmd = m.input.Update(msg)
-					return m, cmd
-				}
-
-				// Handle console scrolling
+				// Handle console scrolling - up/down keys are handled by textinput for suggestions
 				switch msg.String() {
-				case "up":
-					m.consoleViewport.ScrollUp(1)
-				case "down":
-					m.consoleViewport.ScrollDown(1)
 				case "pgup":
 					m.consoleViewport.HalfPageUp()
 				case "pgdown":
@@ -675,7 +657,7 @@ func (m model) clearOverlay() model {
 
 func (m model) renderBaseView() string {
 	// Calculate activity height accounting for footer and tab header
-	footerHeight := m.footerManager.GetFooterHeightWithDropdown()
+	footerHeight := m.footerManager.GetFooterHeight()
 	activityHeight := m.height - footerHeight - tabHeaderHeight
 	if activityHeight < 1 {
 		activityHeight = 1
@@ -692,7 +674,7 @@ func (m model) renderBaseView() string {
 // renderTabContentWithFooter creates a unified rendering method that combines tab content with footer
 func (m model) renderTabContentWithFooter(tabContent string, tabType TabType) string {
 	// Render footer using the footer system
-	footerWithDropdown, _ := m.footerManager.RenderDropdownWithFooter(tabType)
+	footer := m.footerManager.RenderWithSeparator(tabType)
 
 	// Normalize tab content by removing trailing newlines
 	normalizedContent := strings.TrimRight(tabContent, "\n")
@@ -700,11 +682,11 @@ func (m model) renderTabContentWithFooter(tabContent string, tabType TabType) st
 	// When content is empty, return footer directly without a separator to avoid
 	// an unnecessary leading blank line.
 	if normalizedContent == "" {
-		return footerWithDropdown
+		return footer
 	}
 
 	// Compose the complete view with consistent newline separation
-	return normalizedContent + "\n" + footerWithDropdown
+	return normalizedContent + "\n" + footer
 }
 
 func (m model) View() tea.View {

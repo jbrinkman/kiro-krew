@@ -21,10 +21,11 @@ func TestAutocompleteInput(t *testing.T) {
 		t.Error("Expected empty initial value")
 	}
 
-	// Test setting value and autocomplete update
+	// Test setting value and suggestions update
 	autocomplete.SetValue("w")
-	if !autocomplete.IsDropdownVisible() {
-		t.Error("Expected dropdown to be visible after typing 'w'")
+	suggestions := autocomplete.textinput.AvailableSuggestions()
+	if len(suggestions) == 0 {
+		t.Error("Expected suggestions to be available after typing 'w'")
 	}
 
 	// Test valid command detection
