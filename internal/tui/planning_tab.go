@@ -95,7 +95,7 @@ func NewPlanningTabWithSession(id, title string, styles *Styles, contextTracker 
 
 	// Create simple textinput for message input with terminal prompt style
 	ti := textinput.New()
-	ti.Placeholder = "Type your message here..."
+	ti.Placeholder = "" // No placeholder — avoids virtual cursor rendering first char as cursor glyph
 	ti.Prompt = ""      // We'll render the prompt ourselves for consistent styling
 	ti.CharLimit = 4000 // Reasonable message limit
 
