@@ -115,7 +115,7 @@ func NewPlanningTabWithSession(id, title string, styles *Styles, contextTracker 
 		messages:       make([]PlanningMessage, 0),
 		styles:         styles,
 		focusInput:     true,
-		inputHeight:    2, // Minimal height: prompt line + separator
+		inputHeight:    1, // Height for prompt line (separator handled by footer system)
 		contextTracker: contextTracker,
 		sessionManager: sessionManager,
 	}
@@ -717,7 +717,7 @@ func (pt *PlanningTab) Resize(width, height int) {
 	}
 
 	// Recalculate message area height using the footer-aware height
-	messageHeight := height - pt.inputHeight - 1 // 1 for separator
+	messageHeight := height - pt.inputHeight
 	if messageHeight > 0 {
 		pt.viewport.SetHeight(messageHeight)
 	}
