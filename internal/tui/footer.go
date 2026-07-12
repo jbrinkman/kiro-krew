@@ -268,7 +268,9 @@ func (fm *FooterManager) RenderWithSeparator(activeTabType TabType) string {
 
 	// Only add status row if it has content
 	if strings.TrimSpace(footer.StatusRow) != "" {
-		result = append(result, fm.styles.ThemeLabel.Render(footer.StatusRow))
+		// Render and trim any trailing newlines to prevent extra blank lines
+		renderedStatusRow := strings.TrimRight(fm.styles.ThemeLabel.Render(footer.StatusRow), "\n")
+		result = append(result, renderedStatusRow)
 	}
 
 	return strings.Join(result, "\n")
@@ -308,7 +310,9 @@ func (fm *FooterManager) RenderDropdownWithFooter(activeTabType TabType) (string
 
 	// Add status row if it has content
 	if strings.TrimSpace(footer.StatusRow) != "" {
-		result = append(result, fm.styles.ThemeLabel.Render(footer.StatusRow))
+		// Render and trim any trailing newlines to prevent extra blank lines
+		renderedStatusRow := strings.TrimRight(fm.styles.ThemeLabel.Render(footer.StatusRow), "\n")
+		result = append(result, renderedStatusRow)
 	}
 
 	return strings.Join(result, "\n"), dropdownHeight
