@@ -521,8 +521,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Handle console scroll events when in main tab
 			activeTab := m.tabManager.GetActiveTab()
 			if activeTab != nil && activeTab.Type() == TabTypeMain {
-				// Handle console scrolling - up/down keys are handled by textinput for suggestions
+				// Route up/down to textinput when suggestions are active
+				if (msg.String() == "up" || msg.String() == "down") && m.input.HasMatchedSuggestions() {
+					var cmd tea.Cmd
+					m.input, cmd = m.input.Update(msg)
+					return m, cmd
+				}
+
+				// Handle console scrolling
 				switch msg.String() {
+				case "up":
+					m.consoleViewport.ScrollUp(1)
+				case "down":
+					m.consoleViewport.ScrollDown(1)
 				case "pgup":
 					m.consoleViewport.HalfPageUp()
 				case "pgdown":

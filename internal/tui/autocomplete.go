@@ -114,14 +114,17 @@ func (a *AutocompleteInput) handleKeyMsg(msg tea.KeyMsg) (*AutocompleteInput, te
 			a.updateSuggestions()
 			return a, nil
 		}
+		// Accept the current suggestion before execution (matches previous behavior)
+		if current != "" {
+			a.textinput.SetValue(current)
+			a.textinput.CursorEnd()
+		}
 		// Fall through to normal textinput handling for execution
-	case "esc":
-		// Clear suggestions on escape
-		a.textinput.SetSuggestions([]string{})
-		return a, nil
 	}
 
-	// Handle all other input normally and update suggestions
+	// Handle all other input normally and update suggestions.
+	// Note: suggestions auto-hide when input doesn't match any commands
+	// (built-in ShowSuggestions behavior) — no explicit dismiss needed.
 	var cmd tea.Cmd
 	a.textinput, cmd = a.textinput.Update(msg)
 
@@ -136,9 +139,9 @@ func (a *AutocompleteInput) updateSuggestions() {
 	input := a.textinput.Value()
 
 	if input == "" {
-		// Show all commands when input is empty
-		suggestions := a.registry.GetFlattenedMatches("")
-		a.textinput.SetSuggestions(suggestions)
+		// Built-in textinput clears matchedSuggestions when value is empty,
+		// so no suggestions will display regardless of what we set here.
+		a.textinput.SetSuggestions([]string{})
 		return
 	}
 
@@ -150,6 +153,11 @@ func (a *AutocompleteInput) updateSuggestions() {
 // View renders the autocomplete input using built-in textinput rendering
 func (a *AutocompleteInput) View() string {
 	return a.textinput.View()
+}
+
+// HasMatchedSuggestions returns whether there are currently matched suggestions visible
+func (a *AutocompleteInput) HasMatchedSuggestions() bool {
+	return len(a.textinput.MatchedSuggestions()) > 0
 }
 
 // IsValidCommand checks if current input is a valid command
