@@ -63,12 +63,12 @@ func TestFooterDropdownRendersExactly3LinesWithoutDropdown(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rendered, dropdownHeight := fm.RenderDropdownWithFooter(tt.tabType)
+			rendered := fm.RenderWithSeparator(tt.tabType)
 			lines := strings.Split(rendered, "\n")
-			expected := fm.GetFooterHeight() + dropdownHeight
+			expected := fm.GetFooterHeight()
 			if len(lines) != expected {
-				t.Errorf("RenderDropdownWithFooter(%v) produced %d lines, expected %d (footer=%d, dropdown=%d)\nContent: %q",
-					tt.tabType, len(lines), expected, fm.GetFooterHeight(), dropdownHeight, rendered)
+				t.Errorf("RenderWithSeparator(%v) produced %d lines, expected %d\nContent: %q",
+					tt.tabType, len(lines), expected, rendered)
 			}
 		})
 	}

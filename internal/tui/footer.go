@@ -276,65 +276,8 @@ func (fm *FooterManager) RenderWithSeparator(activeTabType TabType) string {
 	return strings.Join(result, "\n")
 }
 
-// RenderDropdownWithFooter handles autocomplete dropdown rendering with footer integration
-func (fm *FooterManager) RenderDropdownWithFooter(activeTabType TabType) (string, int) {
-	if fm.autocompleteInput == nil {
-		return fm.RenderWithSeparator(activeTabType), 0
-	}
-
-	// Get dropdown content and calculate height impact
-	var dropdownContent string
-	var dropdownHeight int
-
-	if fm.autocompleteInput.IsDropdownVisible() {
-		dropdownContent = fm.autocompleteInput.ViewDropdown()
-		if dropdownContent != "" {
-			dropdownHeight = len(strings.Split(dropdownContent, "\n"))
-		}
-	}
-
-	// Render footer components
-	footer := fm.RenderFooter(activeTabType)
-	separator := fm.styles.Separator.Render(strings.Repeat("─", fm.width))
-
-	// Construct the final layout
-	var result []string
-	result = append(result, separator)
-
-	// Add dropdown above input if present
-	if dropdownContent != "" {
-		result = append(result, dropdownContent)
-	}
-
-	result = append(result, footer.InputRow)
-
-	// Add status row if it has content
-	if strings.TrimSpace(footer.StatusRow) != "" {
-		// Render and trim any trailing newlines to prevent extra blank lines
-		renderedStatusRow := strings.TrimRight(fm.styles.ThemeLabel.Render(footer.StatusRow), "\n")
-		result = append(result, renderedStatusRow)
-	}
-
-	return strings.Join(result, "\n"), dropdownHeight
-}
-
 // GetFooterHeight returns the total height occupied by the footer
 func (fm *FooterManager) GetFooterHeight() int {
 	// Base height: separator (1) + input row (1) + status row (1) = 3
 	return 3
-}
-
-// GetFooterHeightWithDropdown returns the footer height including dropdown
-func (fm *FooterManager) GetFooterHeightWithDropdown() int {
-	baseHeight := fm.GetFooterHeight()
-
-	if fm.autocompleteInput != nil && fm.autocompleteInput.IsDropdownVisible() {
-		dropdownContent := fm.autocompleteInput.ViewDropdown()
-		if dropdownContent != "" {
-			dropdownHeight := len(strings.Split(dropdownContent, "\n"))
-			return baseHeight + dropdownHeight
-		}
-	}
-
-	return baseHeight
 }
