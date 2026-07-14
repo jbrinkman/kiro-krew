@@ -179,7 +179,7 @@ func (fh *FileHandler) rotate() error {
 
 	// Close old file only after successfully opening the new one
 	oldFile := fh.currentFile
-	
+
 	// Update handler state
 	fh.currentFile = file
 	fh.currentPath = logPath
