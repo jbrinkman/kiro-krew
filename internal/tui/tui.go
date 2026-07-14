@@ -862,6 +862,12 @@ func (m model) renderOverlay() string {
 
 // skipVisualWidth returns the portion of s after the first n visual characters,
 // preserving ANSI escape sequences
+// skipVisualWidth returns the portion of s after the first n visual characters,
+// preserving ANSI CSI escape sequences (format: \x1b[...letter).
+//
+// This function assumes well-formed CSI sequences and only handles the subset
+// of ANSI sequences used by lipgloss styling. It may behave incorrectly with
+// malformed sequences or non-CSI escape sequences.
 func skipVisualWidth(s string, n int) string {
 	if n <= 0 {
 		return s
@@ -874,10 +880,10 @@ func skipVisualWidth(s string, n int) string {
 	)
 
 	for bytePos < len(s) && visualCount < n {
-		if s[bytePos] == '\x1b' {
-			// Start of ANSI escape sequence
+		if s[bytePos] == '\x1b' && bytePos+1 < len(s) && s[bytePos+1] == '[' {
+			// Start of ANSI CSI escape sequence
 			inEscape = true
-			bytePos++
+			bytePos += 2 // Skip both \x1b and [
 			continue
 		}
 
@@ -950,12 +956,18 @@ func (m model) layerOverlay(base, overlay string) string {
 			// Calculate portions of base line
 			beforeOverlay := ""
 			if startCol > 0 && len(baseLine) > 0 {
+				baseWidth := lipgloss.Width(baseLine)
+				truncWidth := startCol
+				if truncWidth > baseWidth {
+					truncWidth = baseWidth
+				}
 				// Use ANSI-aware truncation for beforeOverlay
-				beforeOverlay = ansi.Truncate(baseLine, startCol, "")
+				beforeOverlay = ansi.Truncate(baseLine, truncWidth, "")
 			}
 
 			afterOverlay := ""
 			afterStart := startCol + overlayWidth
+			// Only extract suffix if overlay doesn't extend beyond the visual width
 			if afterStart < lipgloss.Width(baseLine) {
 				afterOverlay = skipVisualWidth(baseLine, afterStart)
 			}
@@ -987,11 +999,8 @@ func (m model) layerMenuOverlay(base, overlay string) string {
 			baseLine := result[targetRow]
 			overlayWidth := lipgloss.Width(overlayLine)
 
-			afterOverlay := ""
-			// Similar to layerOverlay, slice the remainder of the base line
-			if overlayWidth < len(baseLine) {
-				afterOverlay = baseLine[overlayWidth:]
-			}
+			// FIX: Use ANSI-aware skip function to get remainder after overlay
+			afterOverlay := skipVisualWidth(baseLine, overlayWidth)
 
 			result[targetRow] = overlayLine + afterOverlay
 		}
