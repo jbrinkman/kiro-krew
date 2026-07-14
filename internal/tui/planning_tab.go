@@ -95,14 +95,18 @@ func NewPlanningTabWithSession(id, title string, styles *Styles, contextTracker 
 
 	// Create simple textinput for message input with terminal prompt style
 	ti := textinput.New()
-	ti.Placeholder = "" // No placeholder — avoids virtual cursor rendering first char as cursor glyph
-	ti.Prompt = ""      // We'll render the prompt ourselves for consistent styling
-	ti.CharLimit = 4000 // Reasonable message limit
+	ti.Placeholder = "ask a question or describe a task" // Set helpful placeholder text
+	ti.Prompt = ""                                       // We'll render the prompt ourselves for consistent styling
+	ti.CharLimit = 4000                                  // Reasonable message limit
 
-	// Configure solid cursor (non-blinking)
+	// Configure solid cursor (non-blinking) and disable virtual cursor
 	currentStyles := ti.Styles()
 	currentStyles.Cursor.Blink = false
+	// Apply placeholder styling to both focused and blurred states
+	currentStyles.Focused.Placeholder = styles.Placeholder
+	currentStyles.Blurred.Placeholder = styles.Placeholder
 	ti.SetStyles(currentStyles)
+	ti.SetVirtualCursor(false) // Disable virtual cursor to prevent placeholder artifacts
 
 	ti.Focus() // Start focused since focusInput defaults to true
 

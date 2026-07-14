@@ -45,6 +45,9 @@ type Styles struct {
 	AutocompleteSelected lipgloss.Style
 	AutocompleteError    lipgloss.Style
 
+	// Placeholder styles
+	Placeholder lipgloss.Style
+
 	// Planning tab styles
 	PlanningUser               lipgloss.Style
 	PlanningAssistant          lipgloss.Style
@@ -116,6 +119,10 @@ func NewStyles(theme *config.Theme) *Styles {
 		AutocompleteError: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(theme.Colors.Error)).
 			Bold(true),
+
+		// Placeholder style using TextMuted for consistency
+		Placeholder: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(theme.Colors.TextMuted)),
 
 		// Planning tab styles - minimal terminal aesthetic with clean styling
 		PlanningUser: lipgloss.NewStyle().
