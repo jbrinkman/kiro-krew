@@ -9,11 +9,13 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	clog "github.com/charmbracelet/log"
+	"github.com/charmbracelet/x/ansi"
 
 	"golang.org/x/mod/semver"
 
@@ -850,6 +852,49 @@ func (m model) renderOverlay() string {
 		Render(overlayContent)
 }
 
+// skipVisualWidth returns the portion of s after the first n visual characters,
+// preserving ANSI escape sequences
+func skipVisualWidth(s string, n int) string {
+	if n <= 0 {
+		return s
+	}
+
+	var (
+		visualCount int
+		bytePos     int
+		inEscape    bool
+	)
+
+	for bytePos < len(s) && visualCount < n {
+		if s[bytePos] == '\x1b' {
+			// Start of ANSI escape sequence
+			inEscape = true
+			bytePos++
+			continue
+		}
+
+		if inEscape {
+			if (s[bytePos] >= 'A' && s[bytePos] <= 'Z') ||
+				(s[bytePos] >= 'a' && s[bytePos] <= 'z') {
+				// End of ANSI escape sequence
+				inEscape = false
+			}
+			bytePos++
+			continue
+		}
+
+		// Regular character - count it and advance
+		_, size := utf8.DecodeRuneInString(s[bytePos:])
+		bytePos += size
+		visualCount++
+	}
+
+	if bytePos >= len(s) {
+		return ""
+	}
+	return s[bytePos:]
+}
+
 func (m model) layerOverlay(base, overlay string) string {
 	// Center overlay on base view
 	baseLines := strings.Split(base, "\n")
@@ -897,17 +942,14 @@ func (m model) layerOverlay(base, overlay string) string {
 			// Calculate portions of base line
 			beforeOverlay := ""
 			if startCol > 0 && len(baseLine) > 0 {
-				end := startCol
-				if end > len(baseLine) {
-					end = len(baseLine)
-				}
-				beforeOverlay = baseLine[:end]
+				// Use ANSI-aware truncation for beforeOverlay
+				beforeOverlay = ansi.Truncate(baseLine, startCol, "")
 			}
 
 			afterOverlay := ""
 			afterStart := startCol + overlayWidth
-			if afterStart < len(baseLine) {
-				afterOverlay = baseLine[afterStart:]
+			if afterStart < lipgloss.Width(baseLine) {
+				afterOverlay = skipVisualWidth(baseLine, afterStart)
 			}
 
 			result[targetRow] = beforeOverlay + overlayLine + afterOverlay
