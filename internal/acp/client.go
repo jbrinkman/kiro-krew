@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/coder/acp-go-sdk"
+	"github.com/jbrinkman/kiro-krew/internal/logging"
 )
 
 // KiroACPClient implements the Client interface using the official ACP SDK
@@ -31,13 +32,17 @@ type KiroClient struct {
 
 // RequestPermission handles permission requests from agents
 func (k *KiroClient) RequestPermission(ctx context.Context, params acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
+	logging.Debug("permission request received", "options_count", len(params.Options))
+
 	if len(params.Options) == 0 {
+		logging.Error("no permission options available")
 		return acp.RequestPermissionResponse{}, fmt.Errorf("no permission options available")
 	}
 
 	// Auto-approve: prefer "allow" option, fall back to first available
 	for _, opt := range params.Options {
 		if opt.Kind == "allow" {
+			logging.Info("auto-approving permission", "option_id", opt.OptionId, "kind", opt.Kind)
 			return acp.RequestPermissionResponse{
 				Outcome: acp.RequestPermissionOutcome{
 					Selected: &acp.RequestPermissionOutcomeSelected{
@@ -50,6 +55,7 @@ func (k *KiroClient) RequestPermission(ctx context.Context, params acp.RequestPe
 	}
 
 	// No "allow" option found, use first available
+	logging.Warn("no 'allow' option found, using first available", "option_id", params.Options[0].OptionId)
 	return acp.RequestPermissionResponse{
 		Outcome: acp.RequestPermissionOutcome{
 			Selected: &acp.RequestPermissionOutcomeSelected{
@@ -76,13 +82,12 @@ func (k *KiroClient) WriteTextFile(ctx context.Context, params acp.WriteTextFile
 
 // SessionUpdate handles session update notifications
 func (k *KiroClient) SessionUpdate(ctx context.Context, params acp.SessionNotification) error {
-	// Log session updates for debugging
-	// In a full implementation, this would update the UI with progress
 	u := params.Update
 	switch {
 	case u.AgentMessageChunk != nil:
 		content := u.AgentMessageChunk.Content
 		if content.Text != nil {
+			logging.Debug("agent message chunk received", "text_length", len(content.Text.Text))
 			// Forward text content to the response channel if available
 			k.mu.Lock()
 			ch := k.respChan
@@ -93,16 +98,18 @@ func (k *KiroClient) SessionUpdate(ctx context.Context, params acp.SessionNotifi
 					Content:   content.Text.Text,
 					Timestamp: time.Now(),
 				}
+			} else {
+				logging.Warn("agent message chunk received but no response channel available")
 			}
 		}
 	case u.ToolCall != nil:
-		// Tool call started
+		logging.Debug("tool call received")
 	case u.ToolCallUpdate != nil:
-		// Tool call updated
+		logging.Debug("tool call update received")
 	case u.Plan != nil:
-		// Plan update received
+		logging.Debug("plan update received")
 	case u.AgentThoughtChunk != nil:
-		// Agent thought process
+		logging.Debug("agent thought chunk received")
 	}
 	return nil
 }
@@ -151,7 +158,10 @@ func (c *KiroACPClient) Connect(ctx context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	logging.Info("attempting ACP connection", "kiro_cli_path", c.config.KiroCLIPath)
+
 	if c.connected {
+		logging.Warn("already connected to ACP")
 		return ErrAlreadyConnected
 	}
 
@@ -161,21 +171,28 @@ func (c *KiroACPClient) Connect(ctx context.Context) error {
 	// Get pipes for stdin/stdout communication
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
+		logging.Error("failed to create stdin pipe", "error", err)
 		return fmt.Errorf("failed to create stdin pipe: %w", err)
 	}
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		stdin.Close()
+		logging.Error("failed to create stdout pipe", "error", err)
 		return fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
+
+	logging.Debug("starting kiro-cli process")
 
 	// Start the command
 	if err := cmd.Start(); err != nil {
 		stdin.Close()
 		stdout.Close()
+		logging.Error("failed to start kiro-cli", "error", err)
 		return fmt.Errorf("failed to start kiro-cli: %w", err)
 	}
+
+	logging.Debug("creating ACP connection", "protocol_version", acp.ProtocolVersionNumber)
 
 	// Create ACP connection
 	conn := acp.NewClientSideConnection(c.client, stdin, stdout)
@@ -194,6 +211,7 @@ func (c *KiroACPClient) Connect(ctx context.Context) error {
 		// Kill the process and wait - this also closes the pipes
 		cmd.Process.Kill()
 		cmd.Wait()
+		logging.Error("failed to initialize ACP connection", "error", err)
 		return fmt.Errorf("failed to initialize ACP connection: %w", err)
 	}
 
@@ -201,6 +219,7 @@ func (c *KiroACPClient) Connect(ctx context.Context) error {
 	c.cmd = cmd
 	c.connected = true
 
+	logging.Info("ACP connection established successfully")
 	return nil
 }
 
@@ -209,11 +228,16 @@ func (c *KiroACPClient) Disconnect() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	logging.Info("disconnecting ACP connection")
+
 	if !c.connected {
+		logging.Debug("already disconnected")
 		return nil
 	}
 
 	if c.cmd != nil && c.cmd.Process != nil {
+		logging.Debug("terminating ACP process", "pid", c.cmd.Process.Pid)
+
 		// Attempt graceful shutdown with SIGTERM
 		c.cmd.Process.Signal(syscall.SIGTERM)
 
@@ -224,10 +248,15 @@ func (c *KiroACPClient) Disconnect() error {
 		}()
 
 		select {
-		case <-done:
-			// Process exited gracefully
+		case err := <-done:
+			if err != nil {
+				logging.Warn("process exited with error", "error", err)
+			} else {
+				logging.Debug("process exited gracefully")
+			}
 		case <-time.After(3 * time.Second):
 			// Force kill after timeout
+			logging.Warn("graceful shutdown timeout, force killing process")
 			c.cmd.Process.Kill()
 			<-done
 		}
@@ -238,6 +267,8 @@ func (c *KiroACPClient) Disconnect() error {
 	c.conn = nil
 	c.sessionID = ""
 	c.connected = false
+
+	logging.Info("ACP connection closed")
 	return nil
 }
 
@@ -250,13 +281,17 @@ func (c *KiroACPClient) IsConnected() bool {
 
 // SendMessage sends a message to an agent and returns the response
 func (c *KiroACPClient) SendMessage(ctx context.Context, req *MessageRequest) (*MessageResponse, error) {
+	logging.Info("sending ACP message", "agent", req.Agent, "message_length", len(req.Message), "streaming", req.Streaming)
+
 	if err := ValidateMessageRequest(req); err != nil {
+		logging.Error("invalid message request", "error", err)
 		return nil, err
 	}
 
 	c.mu.RLock()
 	if !c.connected || c.conn == nil {
 		c.mu.RUnlock()
+		logging.Error("not connected to ACP")
 		return nil, ErrNotConnected
 	}
 	conn := c.conn
@@ -272,10 +307,12 @@ func (c *KiroACPClient) SendMessage(ctx context.Context, req *MessageRequest) (*
 
 	// Create a new session or reuse existing one
 	if sessionID == "" {
+		logging.Debug("creating new ACP session")
 		sessionResp, err := conn.NewSession(ctx, acp.NewSessionRequest{
 			McpServers: []acp.McpServer{},
 		})
 		if err != nil {
+			logging.Error("failed to create ACP session", "error", err)
 			return nil, fmt.Errorf("failed to create session: %w", err)
 		}
 		sessionID = string(sessionResp.SessionId)
@@ -284,7 +321,13 @@ func (c *KiroACPClient) SendMessage(ctx context.Context, req *MessageRequest) (*
 		c.mu.Lock()
 		c.sessionID = sessionID
 		c.mu.Unlock()
+
+		logging.Info("ACP session created", "session_id", sessionID)
+	} else {
+		logging.Debug("reusing existing ACP session", "session_id", sessionID)
 	}
+
+	logging.Debug("sending prompt to ACP", "session_id", sessionID)
 
 	// Send the prompt - responses will come via SessionUpdate
 	_, err := conn.Prompt(ctx, acp.PromptRequest{
@@ -292,8 +335,11 @@ func (c *KiroACPClient) SendMessage(ctx context.Context, req *MessageRequest) (*
 		Prompt:    []acp.ContentBlock{acp.TextBlock(req.Message)},
 	})
 	if err != nil {
+		logging.Error("failed to send prompt", "session_id", sessionID, "error", err)
 		return nil, fmt.Errorf("failed to send prompt: %w", err)
 	}
+
+	logging.Info("ACP message sent successfully", "session_id", sessionID)
 
 	// For now, return a basic response indicating the message was sent
 	// In a full implementation, this would collect responses from SessionUpdate callbacks
@@ -312,13 +358,17 @@ func (c *KiroACPClient) SendMessage(ctx context.Context, req *MessageRequest) (*
 
 // StreamMessage sends a message to an agent and returns a streaming response
 func (c *KiroACPClient) StreamMessage(ctx context.Context, req *MessageRequest) (<-chan *StreamingResponse, error) {
+	logging.Info("starting ACP stream message", "agent", req.Agent, "message_length", len(req.Message))
+
 	if err := ValidateMessageRequest(req); err != nil {
+		logging.Error("invalid stream message request", "error", err)
 		return nil, err
 	}
 
 	c.mu.RLock()
 	if !c.connected || c.conn == nil {
 		c.mu.RUnlock()
+		logging.Error("not connected to ACP for streaming")
 		return nil, ErrNotConnected
 	}
 	conn := c.conn
@@ -329,7 +379,10 @@ func (c *KiroACPClient) StreamMessage(ctx context.Context, req *MessageRequest) 
 	respChan := make(chan *StreamingResponse, 10)
 
 	go func() {
-		defer close(respChan)
+		defer func() {
+			logging.Debug("closing stream response channel")
+			close(respChan)
+		}()
 
 		// Apply request timeout if specified
 		streamCtx := ctx
@@ -341,10 +394,12 @@ func (c *KiroACPClient) StreamMessage(ctx context.Context, req *MessageRequest) 
 
 		// Create a new session or reuse existing one
 		if sessionID == "" {
+			logging.Debug("creating new ACP session for streaming")
 			sessionResp, err := conn.NewSession(streamCtx, acp.NewSessionRequest{
 				McpServers: []acp.McpServer{},
 			})
 			if err != nil {
+				logging.Error("failed to create streaming session", "error", err)
 				respChan <- &StreamingResponse{
 					Type:      "error",
 					Error:     fmt.Sprintf("failed to create session: %v", err),
@@ -358,6 +413,10 @@ func (c *KiroACPClient) StreamMessage(ctx context.Context, req *MessageRequest) 
 			c.mu.Lock()
 			c.sessionID = sessionID
 			c.mu.Unlock()
+
+			logging.Info("streaming ACP session created", "session_id", sessionID)
+		} else {
+			logging.Debug("reusing existing session for streaming", "session_id", sessionID)
 		}
 
 		// Set the response channel on the client before sending the prompt
@@ -373,11 +432,14 @@ func (c *KiroACPClient) StreamMessage(ctx context.Context, req *MessageRequest) 
 		}
 
 		// Send streaming response indicating start
+		logging.Debug("sending stream start event", "session_id", sessionID)
 		respChan <- &StreamingResponse{
 			Type:      "start",
 			Content:   "Starting streaming response...",
 			Timestamp: time.Now(),
 		}
+
+		logging.Debug("sending prompt for streaming", "session_id", sessionID)
 
 		// Send the prompt - real responses will come via SessionUpdate
 		_, promptErr := conn.Prompt(streamCtx, acp.PromptRequest{
@@ -385,6 +447,7 @@ func (c *KiroACPClient) StreamMessage(ctx context.Context, req *MessageRequest) 
 			Prompt:    []acp.ContentBlock{acp.TextBlock(req.Message)},
 		})
 		if promptErr != nil {
+			logging.Error("streaming prompt failed", "session_id", sessionID, "error", promptErr)
 			respChan <- &StreamingResponse{
 				Type:      "error",
 				Error:     fmt.Sprintf("failed to send prompt: %v", promptErr),
@@ -396,6 +459,7 @@ func (c *KiroACPClient) StreamMessage(ctx context.Context, req *MessageRequest) 
 		// The ACP SDK's notification barrier guarantees all SessionUpdate
 		// callbacks (which forward text chunks to respChan) have completed
 		// by the time Prompt() returns. Send the completion signal.
+		logging.Info("streaming completed", "session_id", sessionID)
 		respChan <- &StreamingResponse{
 			Type:      "done",
 			Content:   "",

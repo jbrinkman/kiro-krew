@@ -13,6 +13,7 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	clog "github.com/charmbracelet/log"
 
 	"golang.org/x/mod/semver"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/jbrinkman/kiro-krew/internal/config"
 	"github.com/jbrinkman/kiro-krew/internal/github"
 	"github.com/jbrinkman/kiro-krew/internal/hotkey"
+	"github.com/jbrinkman/kiro-krew/internal/logging"
 	"github.com/jbrinkman/kiro-krew/internal/session"
 	"github.com/jbrinkman/kiro-krew/internal/version"
 	"github.com/jbrinkman/kiro-krew/internal/watcher"
@@ -98,6 +100,11 @@ type model struct {
 
 	// Footer system
 	footerManager *FooterManager
+
+	// Logging system state
+	loggingActive     bool
+	activeLogTabID    string
+	activeFileHandler *logging.FileHandler
 }
 
 func newModel(w *watcher.Watcher, m *agent.Manager, cfg *config.Config, logFile *os.File, logReader *os.File) model {
@@ -119,6 +126,11 @@ func newModel(w *watcher.Watcher, m *agent.Manager, cfg *config.Config, logFile 
 
 	// Initialize footer system
 	footerManager := NewFooterManager(styles, cfg, autocompleteInput, tabManager)
+
+	// Initialize logging subsystem (inactive state - no handlers attached)
+	if err := logging.Initialize("info"); err != nil {
+		log.Printf("Failed to initialize logging subsystem: %v", err)
+	}
 
 	return model{
 		watcher:          w,
@@ -515,6 +527,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "ctrl+w":
 			// Close current tab (if closable)
+			activeTab := m.tabManager.GetActiveTab()
+			if activeTab != nil && activeTab.Type() == TabTypeLog {
+				// Deactivate logging before closing the tab
+				if err := m.deactivateLogging(); err != nil {
+					m = m.appendActivity(m.styles.Warning.Render(fmt.Sprintf("Warning during logging deactivation: %v", err)))
+				}
+			}
 			m.tabManager.CloseCurrentTab()
 			return m, nil
 		case "up", "down", "pgup", "pgdown", "home", "end":
@@ -1057,6 +1076,12 @@ func (m model) executeCommand(input string) (model, tea.Cmd) {
 		return m.handleTheme(args)
 	case "logs":
 		return m.handleLogs()
+	case "log":
+		args := []string{}
+		if len(parts) > 1 {
+			args = parts[1:]
+		}
+		return m.handleLog(args)
 	default:
 		m = m.appendActivity(m.styles.Error.Render(fmt.Sprintf("Unknown command: %s", cmd)))
 		return m, nil
@@ -1088,6 +1113,109 @@ func (m model) updateAgentTabs() model {
 	}
 
 	return m
+}
+
+// activateLogging activates the logging subsystem when a log viewer tab opens
+func (m *model) activateLogging(logTab *LogTab) error {
+	if m.loggingActive {
+		return fmt.Errorf("logging already active")
+	}
+
+	// Get the ring buffer from the log tab
+	ringBuffer := logTab.GetRingBuffer()
+	if ringBuffer == nil {
+		return fmt.Errorf("log tab has no ring buffer")
+	}
+
+	// Create file handler with configuration
+	fileConfig := logging.FileOutputConfig{
+		LogDir:        m.config.Logging.LogDir,
+		MaxFileSizeMB: m.config.Logging.MaxFileSizeMB,
+	}
+	fileHandler, err := logging.NewFileHandler(fileConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create file handler: %w", err)
+	}
+
+	// Create a custom writer that writes to both ring buffer and file handler
+	multiWriter := &loggingMultiWriter{
+		ringBuffer:  ringBuffer,
+		fileHandler: fileHandler,
+	}
+
+	// Activate logging with the multi-writer
+	logging.Activate(multiWriter)
+
+	// Set the configured log level
+	if err := logging.SetLevel(logTab.level); err != nil {
+		return fmt.Errorf("failed to set log level: %w", err)
+	}
+
+	// Store state
+	m.loggingActive = true
+	m.activeLogTabID = logTab.ID()
+	m.activeFileHandler = fileHandler
+
+	log.Printf("Logging activated: level=%s, buffer_size=%d", logTab.level, logTab.bufferSize)
+	return nil
+}
+
+// deactivateLogging deactivates the logging subsystem when the log viewer tab closes
+func (m *model) deactivateLogging() error {
+	if !m.loggingActive {
+		return nil // Already inactive
+	}
+
+	// Deactivate the logger (removes handlers)
+	logging.Deactivate()
+
+	// Close the file handler
+	if m.activeFileHandler != nil {
+		if err := m.activeFileHandler.Close(); err != nil {
+			log.Printf("Error closing file handler: %v", err)
+		}
+		m.activeFileHandler = nil
+	}
+
+	// Clear state
+	m.loggingActive = false
+	m.activeLogTabID = ""
+
+	log.Printf("Logging deactivated")
+	return nil
+}
+
+// loggingMultiWriter writes to both ring buffer and file handler
+type loggingMultiWriter struct {
+	ringBuffer  *logging.RingBuffer
+	fileHandler *logging.FileHandler
+}
+
+func (lmw *loggingMultiWriter) Write(p []byte) (n int, err error) {
+	// Parse the log entry from the formatted output
+	// The charmbracelet/log library writes formatted strings
+	// We need to extract level and message and write to ring buffer
+
+	// Write to file handler first
+	n, err = lmw.fileHandler.Write(p)
+	if err != nil {
+		return n, err
+	}
+
+	// For ring buffer, we need to parse the log entry
+	// This is a simplified approach - just add the raw message
+	// In a production system, you'd parse the structured log format
+	message := string(p)
+	if len(message) > 0 && message[len(message)-1] == '\n' {
+		message = message[:len(message)-1]
+	}
+
+	// Add to ring buffer with INFO level (we can't easily extract level from formatted output)
+	// This is a limitation of using charmbracelet/log's formatted output
+	// A better approach would be to implement a custom Handler that writes structured data
+	lmw.ringBuffer.Add(clog.InfoLevel, message)
+
+	return n, nil
 }
 
 func Run(w *watcher.Watcher, m *agent.Manager, cfg *config.Config) error {

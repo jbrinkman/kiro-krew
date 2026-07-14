@@ -192,6 +192,7 @@ func (m model) handleHelp() (model, tea.Cmd) {
 		"  stop <issue>   - Stop agent for specific issue number",
 		"  plan [desc]    - Create new ACP-based Planning tab",
 		"  plan classic [desc] - Start legacy subprocess planning session",
+		"  log [level] [size] - Open log viewer (level: debug/info/warn/error, size: buffer lines)",
 		"  logs           - View incident logs",
 		"  theme          - Show current theme",
 		"  theme <name>   - Switch to theme",
@@ -485,6 +486,8 @@ func getTabTypeName(tabType TabType) string {
 		return "Agent Output"
 	case TabTypePlanning:
 		return "Planning"
+	case TabTypeLog:
+		return "Log Viewer"
 	default:
 		return "Unknown"
 	}
@@ -698,4 +701,83 @@ func (m model) handleLogs() (model, tea.Cmd) {
 
 	m = m.activateOverlay(overlayLogs, "Incident Logs", content)
 	return m, nil
+}
+
+// handleLog opens the log viewer tab with optional level and size parameters
+func (m model) handleLog(args []string) (model, tea.Cmd) {
+	// Parse optional parameters: log [level] [size]
+	var level string
+	var bufferSize int
+	var err error
+
+	// Use config defaults
+	level = m.config.Logging.DefaultLevel
+	bufferSize = m.config.Logging.MaxBufferLines
+
+	// Parse level parameter if provided
+	if len(args) > 0 {
+		providedLevel := strings.ToLower(args[0])
+		validLevels := map[string]bool{
+			"debug": true,
+			"info":  true,
+			"warn":  true,
+			"error": true,
+		}
+		if !validLevels[providedLevel] {
+			m = m.appendActivity(m.styles.Error.Render(fmt.Sprintf("Invalid log level '%s'. Valid levels: debug, info, warn, error", args[0])))
+			return m, nil
+		}
+		level = providedLevel
+	}
+
+	// Parse size parameter if provided
+	if len(args) > 1 {
+		bufferSize, err = strconv.Atoi(args[1])
+		if err != nil || bufferSize <= 0 {
+			m = m.appendActivity(m.styles.Error.Render(fmt.Sprintf("Invalid buffer size '%s'. Must be a positive integer", args[1])))
+			return m, nil
+		}
+	}
+
+	// Check if a log viewer tab already exists (enforce single tab constraint)
+	if m.tabManager.HasLogTab() {
+		existingIndex := m.tabManager.FindLogTab()
+		if len(args) > 0 {
+			// User provided parameters - prompt for action
+			m = m.appendActivity(
+				m.styles.Warning.Render("Log viewer tab already exists"),
+				m.styles.Warning.Render("Close the existing tab (Ctrl+W) first to create a new one with different parameters"),
+			)
+		} else {
+			// No parameters provided - just navigate to existing tab
+			m = m.appendActivity(m.styles.Success.Render("Switched to existing log viewer tab"))
+		}
+		// Switch to the existing log tab
+		var cmd tea.Cmd
+		m, cmd = m.switchActiveTab(existingIndex)
+		return m, cmd
+	}
+
+	// Create new log viewer tab
+	logTab := NewLogTab("log-viewer", level, bufferSize, m.styles)
+
+	// Activate the logging subsystem with this log tab
+	if err := m.activateLogging(logTab); err != nil {
+		m = m.appendActivity(m.styles.Error.Render(fmt.Sprintf("Failed to activate logging: %v", err)))
+		return m, nil
+	}
+
+	// Add the log tab to the tab manager
+	m.tabManager.AddTab(logTab)
+
+	// Switch to the newly created log tab
+	var switchCmd tea.Cmd
+	m, switchCmd = m.switchActiveTab(len(m.tabManager.GetTabs()) - 1)
+
+	// Start polling for log entries
+	pollCmd := logTab.StartPolling()
+
+	m = m.appendActivity(m.styles.Success.Render(fmt.Sprintf("Log viewer opened: level=%s, buffer_size=%d", level, bufferSize)))
+
+	return m, tea.Batch(switchCmd, pollCmd)
 }

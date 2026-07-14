@@ -12,6 +12,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/jbrinkman/kiro-krew/internal/acp"
+	"github.com/jbrinkman/kiro-krew/internal/logging"
 	"github.com/jbrinkman/kiro-krew/internal/session"
 )
 
@@ -89,6 +90,8 @@ func NewPlanningTab(id, title string, styles *Styles, contextTracker *ContextTra
 
 // NewPlanningTabWithSession creates a new planning tab with session management
 func NewPlanningTabWithSession(id, title string, styles *Styles, contextTracker *ContextTracker, sessionManager *session.SessionManager, acpClient acp.Client) *PlanningTab {
+	logging.Info("creating planning tab", "tab_id", id, "title", title)
+
 	// Create viewport for message history
 	vp := viewport.New(viewport.WithWidth(80), viewport.WithHeight(20))
 	vp.KeyMap = viewport.KeyMap{} // Disable built-in keybindings - we'll handle them
@@ -122,12 +125,16 @@ func NewPlanningTabWithSession(id, title string, styles *Styles, contextTracker 
 
 	// Initialize ACP client with provided client or create default
 	if acpClient == nil {
+		logging.Debug("creating default ACP client", "tab_id", id)
 		acpClient = acp.NewClient(acp.DefaultConnectionConfig())
+	} else {
+		logging.Debug("using provided ACP client", "tab_id", id)
 	}
 	pt.acpClient = acpClient
 
 	// Create or load session if session manager is provided
 	if sessionManager != nil {
+		logging.Debug("initializing session", "tab_id", id)
 		pt.initializeSession()
 	}
 
@@ -135,6 +142,7 @@ func NewPlanningTabWithSession(id, title string, styles *Styles, contextTracker 
 	pt.lifecycleCtx = lifecycleCtx
 	pt.lifecycleCancel = lifecycleCancel
 
+	logging.Info("planning tab created", "tab_id", id, "state", pt.state)
 	return pt
 }
 
@@ -333,6 +341,8 @@ func (pt *PlanningTab) CleanupSession() {
 
 // AddMessage adds a message to the conversation history
 func (pt *PlanningTab) AddMessage(role, content string) {
+	logging.Debug("adding message to conversation", "tab_id", pt.id, "role", role, "content_length", len(content))
+
 	message := PlanningMessage{
 		Role:      role,
 		Content:   content,
@@ -343,6 +353,8 @@ func (pt *PlanningTab) AddMessage(role, content string) {
 
 	// Save to session
 	pt.saveSessionState()
+
+	logging.Info("message added", "tab_id", pt.id, "role", role, "message_count", len(pt.messages))
 }
 
 // updateViewportContent rebuilds the viewport content from messages with minimal styling
@@ -402,19 +414,24 @@ func (pt *PlanningTab) updateViewportContent() {
 
 // sendMessage sends a message to the agent via ACP
 func (pt *PlanningTab) sendMessage(message string) tea.Cmd {
+	logging.Info("sending message to ACP", "tab_id", pt.id, "message_length", len(message))
+
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(pt.lifecycleCtx, 60*time.Second)
 
 		// Ensure ACP connection
 		if !pt.acpClient.IsConnected() {
+			logging.Warn("ACP not connected, attempting connection", "tab_id", pt.id)
 			if err := pt.acpClient.Connect(ctx); err != nil {
 				cancel()
+				logging.Error("failed to connect to ACP", "tab_id", pt.id, "error", err)
 				return planningResponseMsg{
 					content:    fmt.Sprintf("Failed to connect to agent: %v", err),
 					isError:    true,
 					isComplete: true,
 				}
 			}
+			logging.Info("ACP connection established", "tab_id", pt.id)
 		}
 
 		// Create message request
@@ -426,16 +443,21 @@ func (pt *PlanningTab) sendMessage(message string) tea.Cmd {
 			Timeout:        60 * time.Second,
 		}
 
+		logging.Debug("creating ACP stream", "tab_id", pt.id, "agent", req.Agent)
+
 		// Send streaming request
 		streamChan, err := pt.acpClient.StreamMessage(ctx, req)
 		if err != nil {
 			cancel()
+			logging.Error("failed to send ACP message", "tab_id", pt.id, "error", err)
 			return planningResponseMsg{
 				content:    fmt.Sprintf("Failed to send message: %v", err),
 				isError:    true,
 				isComplete: true,
 			}
 		}
+
+		logging.Info("ACP stream created", "tab_id", pt.id)
 
 		// Return streaming start message instead of storing directly
 		return planningStreamStartMsg{
@@ -572,6 +594,8 @@ func (pt *PlanningTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 				// Send message
 				message := strings.TrimSpace(pt.textinput.Value())
 				if message != "" {
+					logging.Info("user message submitted", "tab_id", pt.id, "message_length", len(message))
+
 					// Add user message
 					pt.AddMessage("user", message)
 
@@ -579,9 +603,12 @@ func (pt *PlanningTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 					pt.textinput.SetValue("")
 
 					// Start streaming response
+					oldState := pt.state
 					pt.state = session.PlanningStateActive
 					pt.streamingResponse = true
 					pt.currentResponse.Reset()
+
+					logging.Info("state transition", "tab_id", pt.id, "from", oldState, "to", pt.state)
 
 					// Save state change
 					pt.saveSessionState()
@@ -617,6 +644,7 @@ func (pt *PlanningTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 		case "esc":
 			// Transfer focus from message input to footer
 			if pt.focusInput {
+				logging.Debug("focus transfer to footer", "tab_id", pt.id)
 				pt.focusInput = false
 				pt.textinput.Blur()
 				// Send focus transfer message to coordinate with parent
@@ -637,6 +665,7 @@ func (pt *PlanningTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 		}
 
 	case planningStreamStartMsg:
+		logging.Info("streaming start", "tab_id", pt.id)
 		pt.streamChan = msg.streamChan
 		pt.streamCancel = msg.streamCancel
 		// Start listening to the stream
@@ -648,12 +677,14 @@ func (pt *PlanningTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 		switch response.Type {
 		case "start":
 			// Stream started — issue continuation to read the first real chunk
+			logging.Debug("stream start event received", "tab_id", pt.id)
 			if pt.streamingResponse {
 				cmds = append(cmds, pt.listenToStream())
 			}
 
 		case "text":
 			// Append text to current response
+			logging.Debug("stream text received", "tab_id", pt.id, "content_length", len(response.Content))
 			pt.currentResponse.WriteString(response.Content)
 			pt.updateViewportContent()
 
@@ -664,9 +695,13 @@ func (pt *PlanningTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 
 		case "error":
 			// Handle error response
+			logging.Error("stream error received", "tab_id", pt.id, "error", response.Error)
 			pt.streamingResponse = false
+			oldState := pt.state
 			pt.state = session.PlanningStateFailed
 			pt.cancelStream()
+
+			logging.Warn("state transition on error", "tab_id", pt.id, "from", oldState, "to", pt.state)
 
 			// Add error message
 			if response.Error != "" {
@@ -677,9 +712,13 @@ func (pt *PlanningTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 
 		case "done":
 			// Complete the response
+			logging.Info("stream done event received", "tab_id", pt.id, "response_length", pt.currentResponse.Len())
 			pt.streamingResponse = false
+			oldState := pt.state
 			pt.state = session.PlanningStateIdle
 			pt.cancelStream()
+
+			logging.Info("state transition on completion", "tab_id", pt.id, "from", oldState, "to", pt.state)
 
 			// Finalize the assistant message
 			if pt.currentResponse.Len() > 0 {
@@ -690,13 +729,18 @@ func (pt *PlanningTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 
 	case planningResponseMsg:
 		// Handle direct response (non-streaming)
+		logging.Debug("direct response received", "tab_id", pt.id, "is_error", msg.isError, "is_complete", msg.isComplete)
 		pt.streamingResponse = false
 
 		if msg.isError {
+			oldState := pt.state
 			pt.state = session.PlanningStateFailed
+			logging.Warn("state transition on error response", "tab_id", pt.id, "from", oldState, "to", pt.state)
 			pt.AddMessage("assistant", fmt.Sprintf("[Error: %s]", msg.content))
 		} else if msg.isComplete {
+			oldState := pt.state
 			pt.state = session.PlanningStateCompleted
+			logging.Info("state transition on completion", "tab_id", pt.id, "from", oldState, "to", pt.state)
 		} else {
 			pt.AddMessage("assistant", msg.content)
 		}

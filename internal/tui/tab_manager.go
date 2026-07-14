@@ -157,6 +157,11 @@ func (tm *TabManager) CloseTab(index int) bool {
 		planningTab.Close()
 	}
 
+	// Clean up resources for log tabs before removing
+	if logTab, ok := tm.tabs[index].(*LogTab); ok {
+		logTab.Cleanup()
+	}
+
 	tm.tabs = append(tm.tabs[:index], tm.tabs[index+1:]...)
 	tm.ClearHover()
 
@@ -516,6 +521,33 @@ func (tm *TabManager) RestoreOrFocusAgentTab(agentID string, manager *agent.Mana
 	// Set the new tab as active (it will be the last one added)
 	tm.SetActiveTab(len(tm.tabs) - 1)
 	return true
+}
+
+// FindLogTab returns the index of the log viewer tab if it exists, or -1 if not found
+func (tm *TabManager) FindLogTab() int {
+	for i, tab := range tm.tabs {
+		if tab.Type() == TabTypeLog {
+			return i
+		}
+	}
+	return -1
+}
+
+// GetLogTab returns the log viewer tab if it exists, or nil if not found
+func (tm *TabManager) GetLogTab() *LogTab {
+	for _, tab := range tm.tabs {
+		if tab.Type() == TabTypeLog {
+			if logTab, ok := tab.(*LogTab); ok {
+				return logTab
+			}
+		}
+	}
+	return nil
+}
+
+// HasLogTab returns whether a log viewer tab currently exists
+func (tm *TabManager) HasLogTab() bool {
+	return tm.FindLogTab() >= 0
 }
 
 // HandleTabHeaderHover handles mouse hover over tab headers.
