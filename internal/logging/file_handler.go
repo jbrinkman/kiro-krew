@@ -56,8 +56,12 @@ func (fh *FileHandler) Write(p []byte) (n int, err error) {
 	// Check if rotation is needed before writing
 	if fh.needsRotation(len(p)) {
 		if err := fh.rotate(); err != nil {
-			// Log to stderr if rotation fails, but continue with current file
+			// Log to stderr if rotation fails
 			fmt.Fprintf(os.Stderr, "log rotation failed: %v\n", err)
+			// If we no longer have an open file, fail this write
+			if fh.currentFile == nil {
+				return 0, fmt.Errorf("log rotation failed and no file is open: %w", err)
+			}
 		}
 	}
 
@@ -69,12 +73,6 @@ func (fh *FileHandler) Write(p []byte) (n int, err error) {
 
 	// Update current size
 	fh.currentSize += int64(n)
-
-	// Sync to ensure data is written to disk
-	if err := fh.currentFile.Sync(); err != nil {
-		// Log sync error but don't fail the write
-		fmt.Fprintf(os.Stderr, "log file sync failed: %v\n", err)
-	}
 
 	return n, nil
 }
@@ -97,7 +95,7 @@ func (fh *FileHandler) Close() error {
 }
 
 // ensureLogDir creates the log directory if it doesn't exist.
-// Directory is created with 0755 permissions (rwxr-xr-x).
+// Directory is created with 0700 permissions (rwx------).
 func (fh *FileHandler) ensureLogDir() error {
 	// Get absolute path
 	absPath, err := filepath.Abs(fh.config.LogDir)
@@ -117,7 +115,7 @@ func (fh *FileHandler) ensureLogDir() error {
 
 	// Directory doesn't exist, create it
 	if os.IsNotExist(err) {
-		if err := os.MkdirAll(absPath, 0755); err != nil {
+		if err := os.MkdirAll(absPath, 0700); err != nil {
 			return fmt.Errorf("failed to create log directory: %w", err)
 		}
 		return nil
@@ -141,15 +139,6 @@ func (fh *FileHandler) needsRotation(nextWriteSize int) bool {
 // rotate closes the current file and opens a new one with an updated timestamp.
 // File naming format: debug-YYYY-MM-DD-HHMM.log (minute resolution)
 func (fh *FileHandler) rotate() error {
-	// Close current file if open
-	if fh.currentFile != nil {
-		if err := fh.currentFile.Close(); err != nil {
-			// Log error but continue with rotation
-			fmt.Fprintf(os.Stderr, "failed to close log file during rotation: %v\n", err)
-		}
-		fh.currentFile = nil
-	}
-
 	// Generate new filename with current timestamp
 	now := time.Now()
 	filename := fmt.Sprintf("debug-%s.log", now.Format("2006-01-02-1504"))
@@ -175,8 +164,8 @@ func (fh *FileHandler) rotate() error {
 	}
 
 	// Open new log file with create/append flags
-	// Using 0644 permissions (rw-r--r--)
-	file, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	// Using 0600 permissions (rw-------)
+	file, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
 		return fmt.Errorf("failed to open log file: %w", err)
 	}
@@ -188,10 +177,21 @@ func (fh *FileHandler) rotate() error {
 		return fmt.Errorf("failed to stat log file: %w", err)
 	}
 
+	// Close old file only after successfully opening the new one
+	oldFile := fh.currentFile
+	
 	// Update handler state
 	fh.currentFile = file
 	fh.currentPath = logPath
 	fh.currentSize = info.Size()
+
+	// Close old file if it exists
+	if oldFile != nil {
+		if err := oldFile.Close(); err != nil {
+			// Log error but don't fail rotation since new file is ready
+			fmt.Fprintf(os.Stderr, "failed to close old log file during rotation: %v\n", err)
+		}
+	}
 
 	return nil
 }

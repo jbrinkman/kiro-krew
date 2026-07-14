@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jbrinkman/kiro-krew/internal/logging"
 	"gopkg.in/yaml.v3"
 )
 
@@ -121,13 +122,14 @@ func Load() (*Config, error) {
 
 	// Validate logging config
 	validLevels := map[string]bool{
-		"debug": true,
-		"info":  true,
-		"warn":  true,
-		"error": true,
+		logging.LevelDebug: true,
+		logging.LevelInfo:  true,
+		logging.LevelWarn:  true,
+		logging.LevelError: true,
 	}
 	if !validLevels[cfg.Logging.DefaultLevel] {
-		return nil, fmt.Errorf("logging.default_level must be one of: debug, info, warn, error")
+		return nil, fmt.Errorf("logging.default_level must be one of: %s, %s, %s, %s",
+			logging.LevelDebug, logging.LevelInfo, logging.LevelWarn, logging.LevelError)
 	}
 	if cfg.Logging.MaxBufferLines <= 0 {
 		return nil, fmt.Errorf("logging.max_buffer_lines must be greater than 0")

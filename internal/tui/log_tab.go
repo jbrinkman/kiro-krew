@@ -34,8 +34,8 @@ type LogTab struct {
 	// Ring buffer for log entries
 	ringBuffer *logging.RingBuffer
 
-	// Last known size of ring buffer to detect new entries
-	lastBufferSize int
+	// Last known write counter to detect new entries (monotonic)
+	lastWriteCounter int64
 
 	// Track whether user has scrolled away from bottom (disable auto-scroll)
 	userScrolled bool
@@ -57,14 +57,14 @@ func NewLogTab(id string, level string, bufferSize int, styles *Styles) *LogTab 
 	ringBuffer := logging.NewRingBuffer(bufferSize)
 
 	return &LogTab{
-		id:             id,
-		viewport:       vp,
-		styles:         styles,
-		ringBuffer:     ringBuffer,
-		lastBufferSize: 0,
-		userScrolled:   false,
-		level:          level,
-		bufferSize:     bufferSize,
+		id:               id,
+		viewport:         vp,
+		styles:           styles,
+		ringBuffer:       ringBuffer,
+		lastWriteCounter: 0,
+		userScrolled:     false,
+		level:            level,
+		bufferSize:       bufferSize,
 	}
 }
 
@@ -105,10 +105,6 @@ func (lt *LogTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 			lt.userScrolled = true
 		case "down", "j", "pgdown":
 			lt.userScrolled = true
-			// Re-enable auto-scroll if user scrolls to near bottom
-			if lt.isNearBottom() {
-				lt.userScrolled = false
-			}
 		case "end":
 			// Jump to bottom and re-enable auto-scroll
 			lt.userScrolled = false
@@ -116,6 +112,11 @@ func (lt *LogTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 
 		// Pass key event to viewport for scrolling
 		lt.viewport, cmd = lt.viewport.Update(msg)
+
+		// Re-enable auto-scroll if user has scrolled to near bottom (check after viewport update)
+		if lt.userScrolled && lt.isNearBottom() {
+			lt.userScrolled = false
+		}
 
 	case TickMsg:
 		// Poll ring buffer for new entries
@@ -143,10 +144,10 @@ func (lt *LogTab) Resize(width, height int) {
 
 // refreshContent polls the ring buffer and updates the viewport with new log entries
 func (lt *LogTab) refreshContent() {
-	currentSize := lt.ringBuffer.Size()
+	currentCounter := lt.ringBuffer.WriteCounter()
 
-	// Check if there are new entries
-	if currentSize == lt.lastBufferSize {
+	// Check if there are new entries (write counter is monotonic)
+	if currentCounter == lt.lastWriteCounter {
 		return // No new entries
 	}
 
@@ -169,8 +170,8 @@ func (lt *LogTab) refreshContent() {
 		lt.userScrolled = false // Re-enable auto-scroll
 	}
 
-	// Update last known size
-	lt.lastBufferSize = currentSize
+	// Update last known write counter
+	lt.lastWriteCounter = currentCounter
 }
 
 // formatLogEntry formats a single log entry with color-coded level
@@ -230,9 +231,23 @@ func (lt *LogTab) formatMetadata(metadata map[string]interface{}) string {
 		return ""
 	}
 
+	// Collect and sort keys for deterministic ordering
+	keys := make([]string, 0, len(metadata))
+	for k := range metadata {
+		keys = append(keys, k)
+	}
+	// Sort keys alphabetically
+	for i := 0; i < len(keys); i++ {
+		for j := i + 1; j < len(keys); j++ {
+			if keys[i] > keys[j] {
+				keys[i], keys[j] = keys[j], keys[i]
+			}
+		}
+	}
+
 	var pairs []string
-	for k, v := range metadata {
-		pairs = append(pairs, fmt.Sprintf("%s=%v", k, v))
+	for _, k := range keys {
+		pairs = append(pairs, fmt.Sprintf("%s=%v", k, metadata[k]))
 	}
 
 	style := lipgloss.NewStyle().Foreground(lipgloss.Color("#666666"))

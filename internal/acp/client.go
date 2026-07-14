@@ -307,22 +307,22 @@ func (c *KiroACPClient) SendMessage(ctx context.Context, req *MessageRequest) (*
 
 	// Create a new session or reuse existing one
 	if sessionID == "" {
-		logging.Debug("creating new ACP session")
-		sessionResp, err := conn.NewSession(ctx, acp.NewSessionRequest{
-			McpServers: []acp.McpServer{},
-		})
-		if err != nil {
-			logging.Error("failed to create ACP session", "error", err)
-			return nil, fmt.Errorf("failed to create session: %w", err)
-		}
-		sessionID = string(sessionResp.SessionId)
-
-		// Store the session ID for reuse
 		c.mu.Lock()
-		c.sessionID = sessionID
+		if c.sessionID == "" {
+			logging.Debug("creating new ACP session")
+			sessionResp, err := conn.NewSession(ctx, acp.NewSessionRequest{
+				McpServers: []acp.McpServer{},
+			})
+			if err != nil {
+				c.mu.Unlock()
+				logging.Error("failed to create ACP session", "error", err)
+				return nil, fmt.Errorf("failed to create session: %w", err)
+			}
+			c.sessionID = string(sessionResp.SessionId)
+			logging.Info("ACP session created", "session_id", c.sessionID)
+		}
+		sessionID = c.sessionID
 		c.mu.Unlock()
-
-		logging.Info("ACP session created", "session_id", sessionID)
 	} else {
 		logging.Debug("reusing existing ACP session", "session_id", sessionID)
 	}
@@ -394,27 +394,27 @@ func (c *KiroACPClient) StreamMessage(ctx context.Context, req *MessageRequest) 
 
 		// Create a new session or reuse existing one
 		if sessionID == "" {
-			logging.Debug("creating new ACP session for streaming")
-			sessionResp, err := conn.NewSession(streamCtx, acp.NewSessionRequest{
-				McpServers: []acp.McpServer{},
-			})
-			if err != nil {
-				logging.Error("failed to create streaming session", "error", err)
-				respChan <- &StreamingResponse{
-					Type:      "error",
-					Error:     fmt.Sprintf("failed to create session: %v", err),
-					Timestamp: time.Now(),
-				}
-				return
-			}
-			sessionID = string(sessionResp.SessionId)
-
-			// Store the session ID for reuse
 			c.mu.Lock()
-			c.sessionID = sessionID
+			if c.sessionID == "" {
+				logging.Debug("creating new ACP session for streaming")
+				sessionResp, err := conn.NewSession(streamCtx, acp.NewSessionRequest{
+					McpServers: []acp.McpServer{},
+				})
+				if err != nil {
+					c.mu.Unlock()
+					logging.Error("failed to create streaming session", "error", err)
+					respChan <- &StreamingResponse{
+						Type:      "error",
+						Error:     fmt.Sprintf("failed to create session: %v", err),
+						Timestamp: time.Now(),
+					}
+					return
+				}
+				c.sessionID = string(sessionResp.SessionId)
+				logging.Info("streaming ACP session created", "session_id", c.sessionID)
+			}
+			sessionID = c.sessionID
 			c.mu.Unlock()
-
-			logging.Info("streaming ACP session created", "session_id", sessionID)
 		} else {
 			logging.Debug("reusing existing session for streaming", "session_id", sessionID)
 		}

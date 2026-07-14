@@ -11,12 +11,13 @@ import (
 // It provides O(1) performance for add and remove operations using slice-based storage
 // with head and tail pointers.
 type RingBuffer struct {
-	entries  []LogEntry   // Pre-allocated slice for log entries
-	head     int          // Index of oldest entry (read position)
-	tail     int          // Index of next write position
-	size     int          // Current number of entries in buffer
-	capacity int          // Maximum number of entries (FIFO when full)
-	mutex    sync.RWMutex // Protects concurrent access
+	entries      []LogEntry   // Pre-allocated slice for log entries
+	head         int          // Index of oldest entry (read position)
+	tail         int          // Index of next write position
+	size         int          // Current number of entries in buffer
+	capacity     int          // Maximum number of entries (FIFO when full)
+	writeCounter int64        // Monotonically increasing write counter
+	mutex        sync.RWMutex // Protects concurrent access
 }
 
 // NewRingBuffer creates a new ring buffer with the specified maximum capacity.
@@ -63,6 +64,9 @@ func (rb *RingBuffer) Add(level log.Level, message string, keyvals ...interface{
 	// Write to tail position
 	rb.entries[rb.tail] = entry
 	rb.tail = (rb.tail + 1) % rb.capacity
+
+	// Increment write counter (monotonic)
+	rb.writeCounter++
 
 	// Update size and head position
 	if rb.size < rb.capacity {
@@ -122,18 +126,9 @@ func (rb *RingBuffer) GetRecent(n int) []LogEntry {
 	startPos := (rb.head + rb.size - n) % rb.capacity
 
 	// Copy entries
-	if startPos < rb.tail || (startPos >= rb.tail && rb.size < rb.capacity) {
-		// Simple case: no wrap around for the slice we want
-		endPos := (startPos + n) % rb.capacity
-		if endPos > startPos {
-			copy(result, rb.entries[startPos:endPos])
-		} else {
-			// Wrap around: copy from startPos to end, then from 0 to endPos
-			copied := copy(result, rb.entries[startPos:])
-			copy(result[copied:], rb.entries[:endPos])
-		}
+	if startPos < rb.tail {
+		copy(result, rb.entries[startPos:rb.tail])
 	} else {
-		// Wrap around case
 		copied := copy(result, rb.entries[startPos:])
 		copy(result[copied:], rb.entries[:rb.tail])
 	}
@@ -158,6 +153,15 @@ func (rb *RingBuffer) Size() int {
 	rb.mutex.RLock()
 	defer rb.mutex.RUnlock()
 	return rb.size
+}
+
+// WriteCounter returns the monotonic write counter. This counter increments
+// with every Add operation, allowing detection of overwrites when buffer
+// reaches capacity. This operation is O(1).
+func (rb *RingBuffer) WriteCounter() int64 {
+	rb.mutex.RLock()
+	defer rb.mutex.RUnlock()
+	return rb.writeCounter
 }
 
 // Capacity returns the maximum number of entries the buffer can hold.
@@ -188,50 +192,33 @@ func (rb *RingBuffer) IsEmpty() bool {
 // without modifying the buffer. This allows multiple consumers to read the
 // same buffer concurrently.
 type Iterator struct {
-	buffer   *RingBuffer
-	position int
-	count    int
+	entries []LogEntry
+	index   int
 }
 
 // NewIterator creates a new iterator for reading entries from the ring buffer.
 // The iterator snapshots the current state and iterates through entries in
 // chronological order.
 func (rb *RingBuffer) NewIterator() *Iterator {
-	rb.mutex.RLock()
-	defer rb.mutex.RUnlock()
-
 	return &Iterator{
-		buffer:   rb,
-		position: rb.head,
-		count:    0,
+		entries: rb.Get(),
+		index:   0,
 	}
 }
 
 // Next advances the iterator to the next entry and returns it.
 // Returns nil when no more entries are available.
 func (it *Iterator) Next() *LogEntry {
-	it.buffer.mutex.RLock()
-	defer it.buffer.mutex.RUnlock()
-
-	// Check if we've consumed all entries
-	if it.count >= it.buffer.size {
+	if it.index >= len(it.entries) {
 		return nil
 	}
 
-	// Get current entry
-	entry := it.buffer.entries[it.position]
-
-	// Advance position
-	it.position = (it.position + 1) % it.buffer.capacity
-	it.count++
-
-	return &entry
+	entry := &it.entries[it.index]
+	it.index++
+	return entry
 }
 
 // HasNext returns true if there are more entries to iterate over.
 func (it *Iterator) HasNext() bool {
-	it.buffer.mutex.RLock()
-	defer it.buffer.mutex.RUnlock()
-
-	return it.count < it.buffer.size
+	return it.index < len(it.entries)
 }

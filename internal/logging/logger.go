@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"fmt"
 	"io"
 	"sync"
 
@@ -190,6 +191,22 @@ func parseLevel(level string) (log.Level, error) {
 	case "error":
 		return log.ErrorLevel, nil
 	default:
-		return log.InfoLevel, nil // Default to info for invalid levels
+		return log.InfoLevel, fmt.Errorf("invalid log level %q: must be debug, info, warn, or error", level)
 	}
+}
+
+// ValidLevels returns a slice of all valid log level strings.
+// This is the single source of truth for level validation.
+func ValidLevels() []string {
+	return []string{LevelDebug, LevelInfo, LevelWarn, LevelError}
+}
+
+// IsValidLevel checks if the given level string is valid.
+func IsValidLevel(level string) bool {
+	for _, validLevel := range ValidLevels() {
+		if level == validLevel {
+			return true
+		}
+	}
+	return false
 }

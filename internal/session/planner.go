@@ -39,6 +39,7 @@ func NewPlannerProcess() (*PlannerProcess, error) {
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
+		stdin.Close()
 		cancel()
 		logging.Error("failed to create stdout pipe for planner", "error", err)
 		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
@@ -46,6 +47,8 @@ func NewPlannerProcess() (*PlannerProcess, error) {
 
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
+		stdin.Close()
+		stdout.Close()
 		cancel()
 		logging.Error("failed to create stderr pipe for planner", "error", err)
 		return nil, fmt.Errorf("failed to create stderr pipe: %w", err)
@@ -65,6 +68,9 @@ func NewPlannerProcess() (*PlannerProcess, error) {
 	}
 
 	if err := cmd.Start(); err != nil {
+		stdin.Close()
+		stdout.Close()
+		stderr.Close()
 		cancel()
 		logging.Error("failed to start planner process", "error", err)
 		return nil, fmt.Errorf("failed to start kiro-cli: %w", err)

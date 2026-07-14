@@ -149,10 +149,11 @@ func (sm *SessionManager) Load(id string) (*SessionState, error) {
 		// Attempt corruption recovery
 		if recovered := sm.recoverCorruptedSession(id, filename, data); recovered != nil {
 			logging.Info("session recovered from corruption", "session_id", id)
-			return recovered, nil
+			state = recovered
+		} else {
+			logging.Error("session recovery failed", "session_id", id, "error", err)
+			return nil, fmt.Errorf("failed to deserialize session (corruption detected): %w", err)
 		}
-		logging.Error("session recovery failed", "session_id", id, "error", err)
-		return nil, fmt.Errorf("failed to deserialize session (corruption detected): %w", err)
 	}
 
 	// Repair session integrity before validation so fixable fields

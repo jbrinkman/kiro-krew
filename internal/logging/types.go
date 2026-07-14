@@ -14,22 +14,10 @@ type LogEntry struct {
 	Metadata  map[string]interface{} // Structured key-value fields
 }
 
-// RingBufferConfig contains configuration for the in-memory ring buffer.
-type RingBufferConfig struct {
-	MaxLines int // Maximum number of log entries to store (FIFO when full)
-}
-
 // FileOutputConfig contains configuration for file-based log output.
 type FileOutputConfig struct {
 	LogDir        string // Directory for log files
 	MaxFileSizeMB int    // Maximum file size before rotation (in MB)
-}
-
-// LoggingConfig contains all logging-related configuration.
-type LoggingConfig struct {
-	DefaultLevel string // Default log level: debug, info, warn, error
-	RingBuffer   RingBufferConfig
-	FileOutput   FileOutputConfig
 }
 
 // Constants for log levels

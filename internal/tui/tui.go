@@ -127,11 +127,6 @@ func newModel(w *watcher.Watcher, m *agent.Manager, cfg *config.Config, logFile 
 	// Initialize footer system
 	footerManager := NewFooterManager(styles, cfg, autocompleteInput, tabManager)
 
-	// Initialize logging subsystem (inactive state - no handlers attached)
-	if err := logging.Initialize("info"); err != nil {
-		log.Printf("Failed to initialize logging subsystem: %v", err)
-	}
-
 	return model{
 		watcher:          w,
 		manager:          m,
@@ -408,6 +403,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Check if click is in the tab header area (first line)
 			if mouse.Y < tabHeaderHeight {
 				m.tabManager.HandleTabHeaderClick(mouse.X)
+				// Check if log tab was closed
+				m.checkLogTabClosed()
 				return m, nil
 			}
 		}
@@ -415,6 +412,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if cmd := m.tabManager.Update(msg); cmd != nil {
 			return m, cmd
 		}
+		// Check if log tab was closed by tab update
+		m.checkLogTabClosed()
 		return m, nil
 
 	case tea.KeyPressMsg:
@@ -963,6 +962,13 @@ func (m model) performExitCleanup() model {
 	// Stop watcher
 	m.watcher.Stop()
 
+	// Deactivate logging if active
+	if m.loggingActive {
+		if err := m.deactivateLogging(); err != nil {
+			cleanupErrors = append(cleanupErrors, fmt.Sprintf("Logging deactivation warning: %v", err))
+		}
+	}
+
 	// Cleanup all planning tabs
 	for _, tab := range m.tabManager.GetTabs() {
 		if planningTab, ok := tab.(*PlanningTab); ok {
@@ -1148,6 +1154,9 @@ func (m *model) activateLogging(logTab *LogTab) error {
 
 	// Set the configured log level
 	if err := logging.SetLevel(logTab.level); err != nil {
+		// Roll back activation on failure
+		logging.Deactivate()
+		fileHandler.Close()
 		return fmt.Errorf("failed to set log level: %w", err)
 	}
 
@@ -1185,35 +1194,79 @@ func (m *model) deactivateLogging() error {
 	return nil
 }
 
+// checkLogTabClosed checks if the log tab was closed and deactivates logging if necessary.
+// This should be called after any operation that might close tabs (e.g., tabManager.Update).
+func (m *model) checkLogTabClosed() {
+	if !m.loggingActive {
+		return
+	}
+
+	// Check if the log tab with the active ID still exists
+	logTab := m.tabManager.GetLogTab()
+	if logTab == nil || logTab.ID() != m.activeLogTabID {
+		// Log tab was closed, deactivate logging
+		if err := m.deactivateLogging(); err != nil {
+			log.Printf("Error deactivating logging after tab close: %v", err)
+		}
+	}
+}
+
 // loggingMultiWriter writes to both ring buffer and file handler
+// It implements io.Writer to work with charmbracelet/log
 type loggingMultiWriter struct {
 	ringBuffer  *logging.RingBuffer
 	fileHandler *logging.FileHandler
 }
 
 func (lmw *loggingMultiWriter) Write(p []byte) (n int, err error) {
-	// Parse the log entry from the formatted output
-	// The charmbracelet/log library writes formatted strings
-	// We need to extract level and message and write to ring buffer
-
-	// Write to file handler first
+	// Write to file handler
 	n, err = lmw.fileHandler.Write(p)
 	if err != nil {
 		return n, err
 	}
 
-	// For ring buffer, we need to parse the log entry
-	// This is a simplified approach - just add the raw message
-	// In a production system, you'd parse the structured log format
+	// Parse the formatted log entry to extract level and message
+	// charmbracelet/log format: "LEVEL MESSAGE key=value key=value..."
+	// We'll do best-effort parsing to preserve the level
 	message := string(p)
 	if len(message) > 0 && message[len(message)-1] == '\n' {
 		message = message[:len(message)-1]
 	}
 
-	// Add to ring buffer with INFO level (we can't easily extract level from formatted output)
-	// This is a limitation of using charmbracelet/log's formatted output
-	// A better approach would be to implement a custom Handler that writes structured data
-	lmw.ringBuffer.Add(clog.InfoLevel, message)
+	// Extract level from the beginning of the message
+	level := clog.InfoLevel // default
+	fields := strings.Fields(message)
+	if len(fields) > 0 {
+		levelStr := strings.ToLower(strings.TrimSpace(fields[0]))
+		switch levelStr {
+		case "debu", "dbug":
+			level = clog.DebugLevel
+			// Remove level prefix from message for ring buffer
+			if len(fields) > 1 {
+				message = strings.Join(fields[1:], " ")
+			}
+		case "info":
+			level = clog.InfoLevel
+			if len(fields) > 1 {
+				message = strings.Join(fields[1:], " ")
+			}
+		case "warn":
+			level = clog.WarnLevel
+			if len(fields) > 1 {
+				message = strings.Join(fields[1:], " ")
+			}
+		case "erro", "err!":
+			level = clog.ErrorLevel
+			if len(fields) > 1 {
+				message = strings.Join(fields[1:], " ")
+			}
+		default:
+			// Level not recognized, keep full message
+		}
+	}
+
+	// Add to ring buffer with parsed level
+	lmw.ringBuffer.Add(level, message)
 
 	return n, nil
 }
