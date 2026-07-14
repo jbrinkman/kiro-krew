@@ -54,6 +54,7 @@ func NewCommandRegistry(agentManager *agent.Manager) *CommandRegistry {
 	registry.register(&Command{
 		Name:        "plan",
 		Description: "Start interactive planning session",
+		Subcommands: []string{"classic"},
 		HasArgs:     true,
 		ArgPattern:  "[desc]",
 	})
@@ -311,6 +312,10 @@ func (r *CommandRegistry) IsValidCommand(input string) bool {
 			if strings.ToLower(validSub) == subCmd {
 				return true
 			}
+		}
+		// Allow fallback if the command accepts normal arguments
+		if cmd.HasArgs {
+			return true
 		}
 		return false
 	}
