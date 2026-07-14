@@ -267,3 +267,6 @@ When QA tool discovery results are provided by krew-lead, run those commands and
 3. **No Partial Credit**: "8 of 10 criteria met" = overall FAIL, not "mostly passing"
 4. **Evidence Required**: Every criterion must document what was checked and what was found
 5. **Implementation Criteria**: For "use X" requirements, document grep search results and exact finding
+6. **Failure Sentinel**: When validation fails, output must contain the exact text "VALIDATION FAILED" on its own line
+7. **Exit Code Contract**: Exit with code 1 when ANY criterion or QA check fails; exit with code 0 only when ALL checks pass
+8. **Workflow Gating**: The krew-lead agent MUST check validator exit code and block PR creation on non-zero exit; a Markdown ❌ alone is not sufficient
