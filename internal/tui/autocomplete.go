@@ -5,6 +5,7 @@ import (
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // isTemplateCommand checks if a command is a template (contains placeholders like <...>)
@@ -25,6 +26,7 @@ func extractTemplatePrefix(command string) string {
 type AutocompleteInput struct {
 	textinput textinput.Model
 	registry  *CommandRegistry
+	styles    *Styles
 }
 
 // NewAutocompleteInput creates a new autocomplete input component using built-in suggestions
@@ -45,6 +47,7 @@ func NewAutocompleteInput(registry *CommandRegistry, styles *Styles) *Autocomple
 	input := &AutocompleteInput{
 		textinput: ti,
 		registry:  registry,
+		styles:    styles,
 	}
 
 	// Initialize suggestions
@@ -158,6 +161,54 @@ func (a *AutocompleteInput) View() string {
 // HasMatchedSuggestions returns whether there are currently matched suggestions visible
 func (a *AutocompleteInput) HasMatchedSuggestions() bool {
 	return len(a.textinput.MatchedSuggestions()) > 0
+}
+
+// RenderSuggestionsMenu returns a styled autocomplete dropdown menu
+func (a *AutocompleteInput) RenderSuggestionsMenu() string {
+	if !a.HasMatchedSuggestions() {
+		return ""
+	}
+
+	suggestions := a.textinput.MatchedSuggestions()
+	currentIndex := a.textinput.CurrentSuggestionIndex()
+
+	var menuItems []string
+	maxItems := 10
+	startIdx := 0
+
+	// Implement sliding window to keep current selection visible
+	if len(suggestions) > maxItems {
+		if currentIndex >= maxItems {
+			// Slide window to keep selection in view
+			startIdx = currentIndex - maxItems + 1
+			if startIdx > len(suggestions)-maxItems {
+				startIdx = len(suggestions) - maxItems
+			}
+		}
+		maxItems = len(suggestions) - startIdx
+		if maxItems > 10 {
+			maxItems = 10
+		}
+	} else {
+		maxItems = len(suggestions)
+	}
+
+	selectedStyle := a.styles.AutocompleteSelected.Padding(0, 1)
+	defaultStyle := lipgloss.NewStyle().Padding(0, 1)
+
+	for i := 0; i < maxItems; i++ {
+		actualIdx := startIdx + i
+		var style lipgloss.Style
+		if actualIdx == currentIndex {
+			style = selectedStyle
+		} else {
+			style = defaultStyle
+		}
+		menuItems = append(menuItems, style.Render(suggestions[actualIdx]))
+	}
+
+	menuBox := strings.Join(menuItems, "\n")
+	return a.styles.AutocompleteDropdown.Render(menuBox)
 }
 
 // IsValidCommand checks if current input is a valid command
