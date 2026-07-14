@@ -5,6 +5,7 @@ import (
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // isTemplateCommand checks if a command is a template (contains placeholders like <...>)
@@ -25,6 +26,7 @@ func extractTemplatePrefix(command string) string {
 type AutocompleteInput struct {
 	textinput textinput.Model
 	registry  *CommandRegistry
+	styles    *Styles
 }
 
 // NewAutocompleteInput creates a new autocomplete input component using built-in suggestions
@@ -45,6 +47,7 @@ func NewAutocompleteInput(registry *CommandRegistry, styles *Styles) *Autocomple
 	input := &AutocompleteInput{
 		textinput: ti,
 		registry:  registry,
+		styles:    styles,
 	}
 
 	// Initialize suggestions
@@ -158,6 +161,35 @@ func (a *AutocompleteInput) View() string {
 // HasMatchedSuggestions returns whether there are currently matched suggestions visible
 func (a *AutocompleteInput) HasMatchedSuggestions() bool {
 	return len(a.textinput.MatchedSuggestions()) > 0
+}
+
+// RenderSuggestionsMenu returns a styled autocomplete dropdown menu
+func (a *AutocompleteInput) RenderSuggestionsMenu() string {
+	if !a.HasMatchedSuggestions() {
+		return ""
+	}
+
+	suggestions := a.textinput.MatchedSuggestions()
+	currentIndex := a.textinput.CurrentSuggestionIndex()
+
+	var menuItems []string
+	maxItems := 10
+	if len(suggestions) < maxItems {
+		maxItems = len(suggestions)
+	}
+
+	for i := 0; i < maxItems; i++ {
+		var style lipgloss.Style
+		if i == currentIndex {
+			style = a.styles.AutocompleteSelected.Padding(0, 1)
+		} else {
+			style = lipgloss.NewStyle().Padding(0, 1)
+		}
+		menuItems = append(menuItems, style.Render(suggestions[i]))
+	}
+
+	menuBox := strings.Join(menuItems, "\n")
+	return a.styles.AutocompleteDropdown.Render(menuBox)
 }
 
 // IsValidCommand checks if current input is a valid command

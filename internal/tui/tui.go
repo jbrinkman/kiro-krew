@@ -733,6 +733,14 @@ func (m model) View() tea.View {
 	// Combine tab headers with content
 	content = tabHeaders + "\n" + content
 
+	// Render autocomplete menu overlay BEFORE other overlays
+	if m.input.HasMatchedSuggestions() {
+		menuOverlay := m.input.RenderSuggestionsMenu()
+		if menuOverlay != "" {
+			content = m.layerOverlay(content, menuOverlay)
+		}
+	}
+
 	// Compose overlay if active (overlays work on any view)
 	if m.activeOverlay != overlayNone {
 		overlay := m.renderOverlay()
