@@ -26,17 +26,17 @@ PR #230 successfully converted the autocomplete system to use Bubble Tea v2's bu
 The built-in `textinput.ShowSuggestions` feature only provides **inline ghost text completion**, not a dropdown menu. PR #230 removed the custom `ViewDropdown()` method and dropdown rendering logic (~150 lines), assuming the built-in feature would provide both capabilities. It does not.
 
 **Previous Architecture (pre-PR #230):**
-```
+```text
 AutocompleteInput.ViewDropdown() → Footer.RenderDropdownWithFooter() → inline in footer layout
 ```
 
 **Current Architecture (post-PR #230):**
-```
+```text
 textinput with ShowSuggestions=true → ghost text only → NO DROPDOWN RENDERING
 ```
 
 **Required Architecture (hybrid solution):**
-```
+```text
 textinput with ShowSuggestions=true → ghost text ✅
 + Custom overlay menu → lipgloss.Place() → rendered as overlay ✅
 ```

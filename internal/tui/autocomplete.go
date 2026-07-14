@@ -174,18 +174,37 @@ func (a *AutocompleteInput) RenderSuggestionsMenu() string {
 
 	var menuItems []string
 	maxItems := 10
-	if len(suggestions) < maxItems {
+	startIdx := 0
+
+	// Implement sliding window to keep current selection visible
+	if len(suggestions) > maxItems {
+		if currentIndex >= maxItems {
+			// Slide window to keep selection in view
+			startIdx = currentIndex - maxItems + 1
+			if startIdx > len(suggestions)-maxItems {
+				startIdx = len(suggestions) - maxItems
+			}
+		}
+		maxItems = len(suggestions) - startIdx
+		if maxItems > 10 {
+			maxItems = 10
+		}
+	} else {
 		maxItems = len(suggestions)
 	}
 
+	selectedStyle := a.styles.AutocompleteSelected.Padding(0, 1)
+	defaultStyle := lipgloss.NewStyle().Padding(0, 1)
+
 	for i := 0; i < maxItems; i++ {
+		actualIdx := startIdx + i
 		var style lipgloss.Style
-		if i == currentIndex {
-			style = a.styles.AutocompleteSelected.Padding(0, 1)
+		if actualIdx == currentIndex {
+			style = selectedStyle
 		} else {
-			style = lipgloss.NewStyle().Padding(0, 1)
+			style = defaultStyle
 		}
-		menuItems = append(menuItems, style.Render(suggestions[i]))
+		menuItems = append(menuItems, style.Render(suggestions[actualIdx]))
 	}
 
 	menuBox := strings.Join(menuItems, "\n")

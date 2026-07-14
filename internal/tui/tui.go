@@ -737,7 +737,7 @@ func (m model) View() tea.View {
 	if m.input.HasMatchedSuggestions() {
 		menuOverlay := m.input.RenderSuggestionsMenu()
 		if menuOverlay != "" {
-			content = m.layerOverlay(content, menuOverlay)
+			content = m.layerMenuOverlay(content, menuOverlay)
 		}
 	}
 
@@ -901,6 +901,39 @@ func (m model) layerOverlay(base, overlay string) string {
 			}
 
 			result[targetRow] = beforeOverlay + overlayLine + afterOverlay
+		}
+	}
+
+	return strings.Join(result, "\n")
+}
+
+// layerMenuOverlay positions the autocomplete menu at the bottom-left, directly above the 3-line footer
+func (m model) layerMenuOverlay(base, overlay string) string {
+	baseLines := strings.Split(base, "\n")
+	overlayLines := strings.Split(overlay, "\n")
+
+	// Calculate start row: above the 3-line footer
+	startRow := len(baseLines) - 3 - len(overlayLines)
+	if startRow < 0 {
+		startRow = 0
+	}
+
+	result := make([]string, len(baseLines))
+	copy(result, baseLines)
+
+	for i, overlayLine := range overlayLines {
+		targetRow := startRow + i
+		if targetRow >= 0 && targetRow < len(result) {
+			baseLine := result[targetRow]
+			overlayWidth := lipgloss.Width(overlayLine)
+
+			afterOverlay := ""
+			// Similar to layerOverlay, slice the remainder of the base line
+			if overlayWidth < len(baseLine) {
+				afterOverlay = baseLine[overlayWidth:]
+			}
+
+			result[targetRow] = overlayLine + afterOverlay
 		}
 	}
 
