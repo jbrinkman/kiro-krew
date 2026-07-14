@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jbrinkman/kiro-krew/internal/logging"
 	"gopkg.in/yaml.v3"
 )
 
@@ -22,6 +23,13 @@ type SandboxConfig struct {
 	Timeout      time.Duration `yaml:"timeout"`
 }
 
+type LoggingConfig struct {
+	DefaultLevel   string `yaml:"default_level"`
+	MaxBufferLines int    `yaml:"max_buffer_lines"`
+	MaxFileSizeMB  int    `yaml:"max_file_size_mb"`
+	LogDir         string `yaml:"log_dir"`
+}
+
 type Config struct {
 	Repo                string        `yaml:"repo"`
 	Label               string        `yaml:"label"`
@@ -34,6 +42,7 @@ type Config struct {
 	EnableCopilotReview bool          `yaml:"enable_copilot_review"`
 	Session             SessionConfig `yaml:"session"`
 	Sandbox             SandboxConfig `yaml:"sandbox"`
+	Logging             LoggingConfig `yaml:"logging"`
 	LoadedTheme         *Theme        `yaml:"-"`
 }
 
@@ -61,6 +70,12 @@ func Load() (*Config, error) {
 			CPUCores:     1.0,
 			MemoryMB:     1024,
 			Timeout:      5 * time.Minute,
+		},
+		Logging: LoggingConfig{
+			DefaultLevel:   "info",
+			MaxBufferLines: 10000,
+			MaxFileSizeMB:  100,
+			LogDir:         ".kiro-krew/logs",
 		},
 	}
 
@@ -103,6 +118,27 @@ func Load() (*Config, error) {
 	}
 	if cfg.Sandbox.WorkspaceDir == "" {
 		return nil, fmt.Errorf("sandbox.workspace_dir cannot be empty")
+	}
+
+	// Validate logging config
+	validLevels := map[string]bool{
+		logging.LevelDebug: true,
+		logging.LevelInfo:  true,
+		logging.LevelWarn:  true,
+		logging.LevelError: true,
+	}
+	if !validLevels[cfg.Logging.DefaultLevel] {
+		return nil, fmt.Errorf("logging.default_level must be one of: %s, %s, %s, %s",
+			logging.LevelDebug, logging.LevelInfo, logging.LevelWarn, logging.LevelError)
+	}
+	if cfg.Logging.MaxBufferLines <= 0 {
+		return nil, fmt.Errorf("logging.max_buffer_lines must be greater than 0")
+	}
+	if cfg.Logging.MaxFileSizeMB <= 0 {
+		return nil, fmt.Errorf("logging.max_file_size_mb must be greater than 0")
+	}
+	if cfg.Logging.LogDir == "" {
+		return nil, fmt.Errorf("logging.log_dir cannot be empty")
 	}
 
 	// Load the specified theme

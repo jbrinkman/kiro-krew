@@ -86,6 +86,13 @@ func NewCommandRegistry(agentManager *agent.Manager) *CommandRegistry {
 		Description: "View incident logs",
 	})
 
+	registry.register(&Command{
+		Name:        "log",
+		Description: "Open log viewer with optional level and buffer size",
+		HasArgs:     true,
+		ArgPattern:  "[level] [size]",
+	})
+
 	// Build flattened command list
 	registry.buildFlattenedCommands()
 

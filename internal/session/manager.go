@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/jbrinkman/kiro-krew/internal/logging"
 )
 
 // SessionManager handles CRUD operations and persistence for sessions
@@ -44,9 +46,12 @@ func NewSessionManagerWithDir(dir string) *SessionManager {
 
 // Create creates a new session and returns its ID
 func (sm *SessionManager) Create(sessionType SessionType) (string, error) {
+	logging.Info("creating new session", "type", sessionType)
+
 	// Generate session ID
 	id, err := generateSessionID()
 	if err != nil {
+		logging.Error("failed to generate session ID", "error", err)
 		return "", err
 	}
 
@@ -56,23 +61,34 @@ func (sm *SessionManager) Create(sessionType SessionType) (string, error) {
 	// Save to disk
 	err = sm.Save(id, state)
 	if err != nil {
+		logging.Error("failed to save new session", "session_id", id, "error", err)
 		return "", err
 	}
 
+	logging.Info("session created", "session_id", id, "type", sessionType)
 	return id, nil
 }
 
 // Save persists a session to disk with validation
 func (sm *SessionManager) Save(id string, state *SessionState) error {
+	logging.Debug("saving session", "session_id", id, "type", state.Type, "message_count", len(state.History))
+
 	// Repair before validation to enforce limits
 	sm.RepairSession(id, state)
 
 	// Validate session before saving
 	if err := sm.ValidateSession(id, state); err != nil {
+		logging.Error("session validation failed", "session_id", id, "error", err)
 		return fmt.Errorf("session validation failed: %w", err)
 	}
 
-	return sm.writeSession(id, state)
+	if err := sm.writeSession(id, state); err != nil {
+		logging.Error("failed to write session", "session_id", id, "error", err)
+		return err
+	}
+
+	logging.Debug("session saved", "session_id", id)
+	return nil
 }
 
 // SaveQuiet persists a session to disk without full validation (for high-frequency background saves)
@@ -117,20 +133,27 @@ func (sm *SessionManager) writeSession(id string, state *SessionState) error {
 
 // Load reads a session from disk with corruption recovery
 func (sm *SessionManager) Load(id string) (*SessionState, error) {
+	logging.Debug("loading session", "session_id", id)
+
 	filename := filepath.Join(sm.sessionsDir, id+".json")
 
 	data, err := os.ReadFile(filename)
 	if err != nil {
+		logging.Error("failed to read session file", "session_id", id, "error", err)
 		return nil, fmt.Errorf("failed to read session file: %w", err)
 	}
 
 	state, err := FromJSON(data)
 	if err != nil {
+		logging.Warn("session deserialization failed, attempting recovery", "session_id", id, "error", err)
 		// Attempt corruption recovery
 		if recovered := sm.recoverCorruptedSession(id, filename, data); recovered != nil {
-			return recovered, nil
+			logging.Info("session recovered from corruption", "session_id", id)
+			state = recovered
+		} else {
+			logging.Error("session recovery failed", "session_id", id, "error", err)
+			return nil, fmt.Errorf("failed to deserialize session (corruption detected): %w", err)
 		}
-		return nil, fmt.Errorf("failed to deserialize session (corruption detected): %w", err)
 	}
 
 	// Repair session integrity before validation so fixable fields
@@ -138,19 +161,26 @@ func (sm *SessionManager) Load(id string) (*SessionState, error) {
 	sm.RepairSession(id, state)
 
 	if err := sm.ValidateSession(id, state); err != nil {
+		logging.Error("session validation failed after load", "session_id", id, "error", err)
 		return nil, fmt.Errorf("session validation failed: %w", err)
 	}
 
+	logging.Info("session loaded", "session_id", id, "type", state.Type, "message_count", len(state.History))
 	return state, nil
 }
 
 // Delete removes a session from disk
 func (sm *SessionManager) Delete(id string) error {
+	logging.Info("deleting session", "session_id", id)
+
 	filename := filepath.Join(sm.sessionsDir, id+".json")
 	err := os.Remove(filename)
 	if err != nil {
+		logging.Error("failed to delete session file", "session_id", id, "error", err)
 		return fmt.Errorf("failed to delete session file: %w", err)
 	}
+
+	logging.Info("session deleted", "session_id", id)
 	return nil
 }
 
@@ -489,9 +519,12 @@ func (sm *SessionManager) ValidateSessionFlow(sessionID string) error {
 
 // CreatePlanningSession creates a new planning session with ACP metadata
 func (sm *SessionManager) CreatePlanningSession(tabID, title string) (string, *SessionState, error) {
+	logging.Info("creating planning session", "tab_id", tabID, "title", title)
+
 	// Generate session ID
 	sessionID, err := generateSessionID()
 	if err != nil {
+		logging.Error("failed to generate planning session ID", "tab_id", tabID, "error", err)
 		return "", nil, fmt.Errorf("failed to generate session ID: %w", err)
 	}
 
@@ -500,30 +533,39 @@ func (sm *SessionManager) CreatePlanningSession(tabID, title string) (string, *S
 
 	// Save to disk
 	if err := sm.Save(sessionID, state); err != nil {
+		logging.Error("failed to save planning session", "session_id", sessionID, "tab_id", tabID, "error", err)
 		return "", nil, fmt.Errorf("failed to save planning session: %w", err)
 	}
 
+	logging.Info("planning session created", "session_id", sessionID, "tab_id", tabID)
 	return sessionID, state, nil
 }
 
 // LoadPlanningSession loads a planning session by session ID
 func (sm *SessionManager) LoadPlanningSession(sessionID string) (*SessionState, error) {
+	logging.Debug("loading planning session", "session_id", sessionID)
+
 	state, err := sm.Load(sessionID)
 	if err != nil {
 		return nil, err
 	}
 
 	if !state.IsPlanning() {
+		logging.Error("session is not a planning session", "session_id", sessionID, "type", state.Type)
 		return nil, fmt.Errorf("session %s is not a planning session", sessionID)
 	}
 
+	logging.Info("planning session loaded", "session_id", sessionID, "tab_id", state.GetTabID())
 	return state, nil
 }
 
 // FindPlanningSessionByTabID finds a planning session by tab ID
 func (sm *SessionManager) FindPlanningSessionByTabID(tabID string) (string, *SessionState, error) {
+	logging.Debug("finding planning session by tab ID", "tab_id", tabID)
+
 	sessions, err := sm.List()
 	if err != nil {
+		logging.Error("failed to list sessions for tab search", "tab_id", tabID, "error", err)
 		return "", nil, fmt.Errorf("failed to list sessions: %w", err)
 	}
 
@@ -534,10 +576,12 @@ func (sm *SessionManager) FindPlanningSessionByTabID(tabID string) (string, *Ses
 		}
 
 		if state.IsPlanning() && state.GetTabID() == tabID {
+			logging.Info("found planning session for tab", "session_id", sessionID, "tab_id", tabID)
 			return sessionID, state, nil
 		}
 	}
 
+	logging.Debug("no planning session found for tab", "tab_id", tabID)
 	return "", nil, fmt.Errorf("no planning session found for tab ID: %s", tabID)
 }
 

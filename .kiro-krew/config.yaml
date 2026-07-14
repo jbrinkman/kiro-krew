@@ -15,6 +15,13 @@ session:
   max_age: 24h
   sessions_dir: ".kiro-krew/sessions"
 
+# Logging configuration
+logging:
+  default_level: "info"
+  max_buffer_lines: 10000
+  max_file_size_mb: 100
+  log_dir: ".kiro-krew/logs"
+
 # Sandbox configuration (optional, for containerized agent execution)
 # sandbox:
 #   image: "alpine:3.19"           # Docker image for agent containers
