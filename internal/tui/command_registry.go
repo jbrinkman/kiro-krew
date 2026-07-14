@@ -313,6 +313,10 @@ func (r *CommandRegistry) IsValidCommand(input string) bool {
 				return true
 			}
 		}
+		// Allow fallback if the command accepts normal arguments
+		if cmd.HasArgs {
+			return true
+		}
 		return false
 	}
 

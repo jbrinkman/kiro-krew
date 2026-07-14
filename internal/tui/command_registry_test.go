@@ -79,6 +79,15 @@ func TestPlanClassicAutocomplete(t *testing.T) {
 		t.Error("Expected 'plan classic some description' to be valid")
 	}
 
+	// Test backward compatibility for base plan command with description
+	if !registry.IsValidCommand("plan some description") {
+		t.Error("Expected 'plan some description' to be valid")
+	}
+
+	if !registry.IsValidCommand("plan implement feature X") {
+		t.Error("Expected 'plan implement feature X' to be valid")
+	}
+
 	// Test prefix filtering for plan classic
 	matches = registry.GetFlattenedMatches("plan c")
 	foundPlanClassic = false
