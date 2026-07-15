@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -92,6 +94,9 @@ type ConnectionConfig struct {
 	// Agent is the name of the agent to connect to
 	Agent string `json:"agent,omitempty"`
 
+	// Cwd is the working directory for the ACP session (must be absolute path)
+	Cwd string `json:"cwd,omitempty"`
+
 	// MaxRetries is the maximum number of retry attempts
 	MaxRetries int `json:"max_retries,omitempty"`
 
@@ -148,9 +153,21 @@ type AuthProvider interface {
 
 // DefaultConnectionConfig returns default connection configuration
 func DefaultConnectionConfig() *ConnectionConfig {
+	cwd, err := os.Getwd()
+	if err != nil {
+		cwd = "." // Fallback to current directory
+	}
+	// Convert to absolute path
+	if !filepath.IsAbs(cwd) {
+		if absCwd, err := filepath.Abs(cwd); err == nil {
+			cwd = absCwd
+		}
+	}
+
 	return &ConnectionConfig{
 		KiroCLIPath:       "kiro-cli",
 		Agent:             "", // Must be set explicitly by caller
+		Cwd:               cwd,
 		MaxRetries:        3,
 		RetryDelay:        1 * time.Second,
 		ConnectionTimeout: 30 * time.Second,
@@ -170,6 +187,14 @@ func ValidateConnectionConfig(config *ConnectionConfig) error {
 
 	if config.KiroCLIPath == "" {
 		return errors.New("kiro-cli path is required")
+	}
+
+	if config.Cwd == "" {
+		return errors.New("working directory (cwd) is required")
+	}
+
+	if !filepath.IsAbs(config.Cwd) {
+		return errors.New("working directory (cwd) must be an absolute path")
 	}
 
 	if config.ConnectionTimeout <= 0 || config.RequestTimeout <= 0 {
