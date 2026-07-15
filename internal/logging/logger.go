@@ -43,6 +43,8 @@ func Initialize(level string, handlers ...io.Writer) error {
 	// Set formatting options for structured output
 	globalLogger.SetReportTimestamp(true)
 	globalLogger.SetReportCaller(false) // Can be enabled for debugging
+	// Use JSON formatter for structured output that can be parsed reliably
+	globalLogger.SetFormatter(log.JSONFormatter)
 
 	// Mark as active if handlers were provided
 	isActive = len(handlers) > 0
@@ -104,6 +106,8 @@ func Activate(handlers ...io.Writer) {
 		globalLogger = log.New(output)
 		globalLogger.SetLevel(log.InfoLevel)
 		globalLogger.SetReportTimestamp(true)
+		// Use JSON formatter for structured output that can be parsed reliably
+		globalLogger.SetFormatter(log.JSONFormatter)
 	} else {
 		// Add new handlers to existing logger
 		globalLogger.SetOutput(output)
