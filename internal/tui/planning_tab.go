@@ -70,19 +70,36 @@ func sanitizeErrorMessage(rawError string) string {
 		return "An unknown error occurred"
 	}
 
+	// Strip any prefix before JSON (e.g., "failed to send prompt: {...}")
+	// Look for the first '{' to find embedded JSON
+	jsonStart := strings.Index(rawError, "{")
+	var jsonStr string
+	if jsonStart >= 0 {
+		jsonStr = rawError[jsonStart:]
+	} else {
+		jsonStr = rawError
+	}
+
 	// Try to parse as JSON-RPC error structure
 	var jsonError map[string]interface{}
-	if err := json.Unmarshal([]byte(rawError), &jsonError); err == nil {
-		// Check for nested error structures: data > message > code
-		if data, ok := jsonError["data"].(map[string]interface{}); ok {
-			if message, ok := data["message"].(map[string]interface{}); ok {
-				if code, ok := message["code"].(string); ok && code != "" {
-					return code
-				}
+	if err := json.Unmarshal([]byte(jsonStr), &jsonError); err == nil {
+		// Check for data field (can be string or object in JSON-RPC)
+		if data, ok := jsonError["data"]; ok && data != nil {
+			// Handle data as string (most common case)
+			if dataStr, ok := data.(string); ok && dataStr != "" {
+				return dataStr
 			}
-			// Check for direct message in data
-			if message, ok := data["message"].(string); ok && message != "" {
-				return message
+			// Handle data as object
+			if dataObj, ok := data.(map[string]interface{}); ok {
+				if message, ok := dataObj["message"].(map[string]interface{}); ok {
+					if code, ok := message["code"].(string); ok && code != "" {
+						return code
+					}
+				}
+				// Check for direct message in data
+				if message, ok := dataObj["message"].(string); ok && message != "" {
+					return message
+				}
 			}
 		}
 		// Check for direct error message field
@@ -759,6 +776,10 @@ func (pt *PlanningTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 			sanitizedError := sanitizeErrorMessage(response.Error)
 			errorMessage := fmt.Sprintf("Error: %s", sanitizedError)
 
+			// Transition to Idle state BEFORE AddMessage to ensure correct state persistence
+			pt.state = session.PlanningStateIdle
+			logging.Info("state transition on error", "tab_id", pt.id, "from", oldState, "to", pt.state)
+
 			// Preserve accumulated response before displaying error
 			accumulatedResponse := pt.currentResponse.String()
 			if accumulatedResponse != "" {
@@ -768,10 +789,6 @@ func (pt *PlanningTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 
 			// Add sanitized error message
 			pt.AddMessage("assistant", errorMessage)
-
-			// Transition to Idle state to allow immediate retry
-			pt.state = session.PlanningStateIdle
-			logging.Info("state transition on error", "tab_id", pt.id, "from", oldState, "to", pt.state)
 
 			// Force viewport to scroll to error message
 			pt.viewport.GotoBottom()
@@ -805,12 +822,12 @@ func (pt *PlanningTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 			sanitizedError := sanitizeErrorMessage(msg.content)
 			errorMessage := fmt.Sprintf("Error: %s", sanitizedError)
 
-			// Add sanitized error message
-			pt.AddMessage("assistant", errorMessage)
-
-			// Transition to Idle state to allow immediate retry
+			// Transition to Idle state BEFORE AddMessage to ensure correct state persistence
 			pt.state = session.PlanningStateIdle
 			logging.Info("state transition on error response", "tab_id", pt.id, "from", oldState, "to", pt.state)
+
+			// Add sanitized error message
+			pt.AddMessage("assistant", errorMessage)
 
 			// Force viewport to scroll to error message
 			pt.viewport.GotoBottom()
