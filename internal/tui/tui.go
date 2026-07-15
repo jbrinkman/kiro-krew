@@ -609,42 +609,30 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "enter":
-			// Handle enter in main tab (console view), forward to other tabs
+			// Refactored logic: Check footer focus FIRST
 			activeTab := m.tabManager.GetActiveTab()
-			if activeTab == nil || activeTab.Type() != TabTypeMain {
-				// If footer has focus in planning tab, route enter to footer for command execution
-				if activeTab != nil && activeTab.Type() == TabTypePlanning && m.input.Focused() {
-					var cmd tea.Cmd
-					m.input, cmd = m.input.Update(msg)
 
-					input := strings.TrimSpace(m.input.Value())
-					m.input.SetValue("")
-					if input == "" {
-						return m, cmd
-					}
+			// If footer is focused, execute command regardless of tab type
+			if m.input.Focused() {
+				var cmd tea.Cmd
+				m.input, cmd = m.input.Update(msg)
 
-					return m.executeCommand(input)
+				input := strings.TrimSpace(m.input.Value())
+				m.input.SetValue("")
+				if input == "" {
+					return m, cmd
 				}
-				// Forward to active tab (e.g., planning tab message sending)
-				if activeTab != nil {
-					if cmd := m.tabManager.Update(msg); cmd != nil {
-						return m, cmd
-					}
-				}
-				return m, nil
+
+				return m.executeCommand(input)
 			}
 
-			// Let autocomplete handle enter first (which will pass through)
-			var cmd tea.Cmd
-			m.input, cmd = m.input.Update(msg)
-
-			input := strings.TrimSpace(m.input.Value())
-			m.input.SetValue("")
-			if input == "" {
-				return m, cmd
+			// Footer NOT focused: Forward to active tab for tab-specific handling
+			if activeTab != nil {
+				if cmd := m.tabManager.Update(msg); cmd != nil {
+					return m, cmd
+				}
 			}
-
-			return m.executeCommand(input)
+			return m, nil
 		default:
 			// Forward key messages to active tab - removed TabTypeAgent restriction
 			activeTab := m.tabManager.GetActiveTab()
