@@ -9,9 +9,6 @@ const (
 
 	// FocusTargetMessage indicates the planning tab message input should have focus
 	FocusTargetMessage FocusTarget = "message"
-
-	// FocusTargetNone indicates no input should have focus (viewport scroll mode)
-	FocusTargetNone FocusTarget = "none"
 )
 
 // String returns the string representation of the focus target
@@ -22,7 +19,7 @@ func (ft FocusTarget) String() string {
 // IsValid checks if the focus target is a valid value
 func (ft FocusTarget) IsValid() bool {
 	switch ft {
-	case FocusTargetFooter, FocusTargetMessage, FocusTargetNone:
+	case FocusTargetFooter, FocusTargetMessage:
 		return true
 	default:
 		return false

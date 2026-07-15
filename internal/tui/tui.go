@@ -287,10 +287,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		activeTab := m.tabManager.GetActiveTab()
 		if activeTab != nil && activeTab.Type() == TabTypePlanning {
 			if msg.target == "footer" {
+				// Update centralized focus state
+				m.tabFocusStates[activeTab.ID()] = FocusTargetFooter
+
 				// Focus footer input, blur any tab input
 				m.input.SetFocus(true)
 				return m, m.input.Focus()
 			} else if msg.target == "message" {
+				// Update centralized focus state
+				m.tabFocusStates[activeTab.ID()] = FocusTargetMessage
+
 				// Focus message input, blur footer input
 				m.input.SetFocus(false)
 				if pt, ok := activeTab.(*PlanningTab); ok {
@@ -444,26 +450,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.isClickInFooterInput(mouse.X, mouse.Y) {
 				activeTab := m.tabManager.GetActiveTab()
 				if activeTab != nil {
-					// Update tab's focus state
+					// Update tab's centralized focus state
 					m.tabFocusStates[activeTab.ID()] = FocusTargetFooter
+
+					// Restore focus state on the tab using the interface method
+					tabCmd := activeTab.RestoreFocusState(FocusTargetFooter)
 
 					// Apply focus to footer input
 					m.input.SetFocus(true)
-
-					// If on planning tab, update its focus state
-					if activeTab.Type() == TabTypePlanning {
-						if pt, ok := activeTab.(*PlanningTab); ok {
-							pt.SetFocusInput(false)
-							pt.textinput.Blur()
-						}
-					}
 
 					logging.Debug("mouse click focus transfer to footer",
 						"tab_id", activeTab.ID(),
 						"mouse_x", mouse.X,
 						"mouse_y", mouse.Y)
 
-					return m, m.input.Focus()
+					return m, tea.Batch(m.input.Focus(), tabCmd)
 				}
 			}
 		}
