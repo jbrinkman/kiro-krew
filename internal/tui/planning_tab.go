@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -62,6 +63,74 @@ type PlanningTab struct {
 	// Session management
 	sessionManager *session.SessionManager
 	sessionID      string
+}
+
+// sanitizeErrorMessage parses and formats error messages into user-friendly text.
+// It handles JSON-RPC error structures and plain text errors, truncating very long messages.
+func sanitizeErrorMessage(rawError string) string {
+	if rawError == "" {
+		return "An unknown error occurred"
+	}
+
+	// Strip any prefix before JSON (e.g., "failed to send prompt: {...}")
+	// Look for the first '{' to find embedded JSON
+	jsonStart := strings.Index(rawError, "{")
+	var jsonStr string
+	if jsonStart >= 0 {
+		jsonStr = rawError[jsonStart:]
+	} else {
+		jsonStr = rawError
+	}
+
+	// Try to parse as JSON-RPC error structure
+	var jsonError map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonStr), &jsonError); err == nil {
+		// Check for data field (can be string or object in JSON-RPC)
+		if data, ok := jsonError["data"]; ok && data != nil {
+			// Handle data as string (most common case)
+			if dataStr, ok := data.(string); ok && dataStr != "" {
+				return dataStr
+			}
+			// Handle data as object
+			if dataObj, ok := data.(map[string]interface{}); ok {
+				if message, ok := dataObj["message"].(map[string]interface{}); ok {
+					if code, ok := message["code"].(string); ok && code != "" {
+						return code
+					}
+				}
+				// Check for direct message in data
+				if message, ok := dataObj["message"].(string); ok && message != "" {
+					return message
+				}
+			}
+		}
+		// Check for direct error message field
+		if message, ok := jsonError["message"].(string); ok && message != "" {
+			return message
+		}
+		if errorMsg, ok := jsonError["error"].(string); ok && errorMsg != "" {
+			return errorMsg
+		}
+	}
+
+	// Use as plain text error, cleaning up common patterns
+	cleanError := strings.TrimSpace(rawError)
+
+	// Remove "Error: " prefix if present to avoid duplication
+	cleanError = strings.TrimPrefix(cleanError, "Error: ")
+	cleanError = strings.TrimPrefix(cleanError, "error: ")
+
+	// Truncate very long errors
+	const maxLength = 500
+	if len(cleanError) > maxLength {
+		cleanError = cleanError[:maxLength] + "... (truncated)"
+	}
+
+	if cleanError == "" {
+		return "An unknown error occurred"
+	}
+
+	return cleanError
 }
 
 // Planning tab messages
@@ -407,8 +476,9 @@ func (pt *PlanningTab) updateViewportContent() {
 			// Assistant messages with minimal formatting
 			assistantContent := msg.Content
 
-			// Add error styling for error messages
-			if strings.Contains(strings.ToLower(assistantContent), "error:") {
+			// Add error styling for error messages (case-insensitive)
+			contentLower := strings.ToLower(assistantContent)
+			if strings.Contains(contentLower, "error:") {
 				assistantContent = pt.styles.PlanningError.Render(assistantContent)
 			} else {
 				assistantContent = messageStyle.Render(assistantContent)
@@ -726,17 +796,28 @@ func (pt *PlanningTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 			logging.Error("stream error received", "tab_id", pt.id, "error", response.Error)
 			pt.streamingResponse = false
 			oldState := pt.state
-			pt.state = session.PlanningStateFailed
 			pt.cancelStream()
 
-			logging.Warn("state transition on error", "tab_id", pt.id, "from", oldState, "to", pt.state)
+			// Sanitize error message for user display
+			sanitizedError := sanitizeErrorMessage(response.Error)
+			errorMessage := fmt.Sprintf("Error: %s", sanitizedError)
 
-			// Add error message
-			if response.Error != "" {
-				pt.currentResponse.WriteString(fmt.Sprintf("\n[Error: %s]", response.Error))
+			// Transition to Idle state BEFORE AddMessage to ensure correct state persistence
+			pt.state = session.PlanningStateIdle
+			logging.Info("state transition on error", "tab_id", pt.id, "from", oldState, "to", pt.state)
+
+			// Preserve accumulated response before displaying error
+			accumulatedResponse := pt.currentResponse.String()
+			if accumulatedResponse != "" {
+				pt.AddMessage("assistant", accumulatedResponse)
 			}
-			pt.AddMessage("assistant", pt.currentResponse.String())
 			pt.currentResponse.Reset()
+
+			// Add sanitized error message
+			pt.AddMessage("assistant", errorMessage)
+
+			// Force viewport to scroll to error message
+			pt.viewport.GotoBottom()
 
 		case "done":
 			// Complete the response
@@ -762,9 +843,20 @@ func (pt *PlanningTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 
 		if msg.isError {
 			oldState := pt.state
-			pt.state = session.PlanningStateFailed
-			logging.Warn("state transition on error response", "tab_id", pt.id, "from", oldState, "to", pt.state)
-			pt.AddMessage("assistant", fmt.Sprintf("[Error: %s]", msg.content))
+
+			// Sanitize error message for user display
+			sanitizedError := sanitizeErrorMessage(msg.content)
+			errorMessage := fmt.Sprintf("Error: %s", sanitizedError)
+
+			// Transition to Idle state BEFORE AddMessage to ensure correct state persistence
+			pt.state = session.PlanningStateIdle
+			logging.Info("state transition on error response", "tab_id", pt.id, "from", oldState, "to", pt.state)
+
+			// Add sanitized error message
+			pt.AddMessage("assistant", errorMessage)
+
+			// Force viewport to scroll to error message
+			pt.viewport.GotoBottom()
 		} else if msg.isComplete {
 			oldState := pt.state
 			pt.state = session.PlanningStateCompleted
