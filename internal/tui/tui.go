@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -1311,56 +1312,67 @@ type loggingMultiWriter struct {
 }
 
 func (lmw *loggingMultiWriter) Write(p []byte) (n int, err error) {
-	// Write to file handler
+	// Write to file handler first
 	n, err = lmw.fileHandler.Write(p)
 	if err != nil {
 		return n, err
 	}
 
-	// Parse the formatted log entry to extract level and message
-	// charmbracelet/log format: "LEVEL MESSAGE key=value key=value..."
-	// We'll do best-effort parsing to preserve the level
-	message := string(p)
-	if len(message) > 0 && message[len(message)-1] == '\n' {
-		message = message[:len(message)-1]
+	// Parse JSON structured log entry
+	// Unmarshal into a map to capture all fields
+	var rawEntry map[string]interface{}
+	if err := json.Unmarshal(p, &rawEntry); err != nil {
+		// JSON parse failed, but file write succeeded - don't fail the write
+		// This could happen during transition or with malformed input
+		return n, nil
 	}
 
-	// Extract level from the beginning of the message
-	level := clog.InfoLevel // default
-	fields := strings.Fields(message)
-	if len(fields) > 0 {
-		levelStr := strings.ToLower(strings.TrimSpace(fields[0]))
-		switch levelStr {
-		case "debu", "dbug":
-			level = clog.DebugLevel
-			// Remove level prefix from message for ring buffer
-			if len(fields) > 1 {
-				message = strings.Join(fields[1:], " ")
+	// Extract level and message
+	var levelStr, message string
+	if l, ok := rawEntry["level"].(string); ok {
+		levelStr = l
+	}
+	if m, ok := rawEntry["message"].(string); ok {
+		message = m
+	}
+
+	// Map string level to log.Level constant
+	level := mapStringToLogLevel(levelStr)
+
+	// Convert remaining fields to key-value pairs (exclude time, level, message)
+	// Normalize float64 values that are actually integers
+	var keyvals []interface{}
+	for k, v := range rawEntry {
+		if k != "time" && k != "level" && k != "message" {
+			// JSON unmarshals all numbers as float64; normalize integers
+			if f, ok := v.(float64); ok && f == float64(int64(f)) {
+				keyvals = append(keyvals, k, int64(f))
+			} else {
+				keyvals = append(keyvals, k, v)
 			}
-		case "info":
-			level = clog.InfoLevel
-			if len(fields) > 1 {
-				message = strings.Join(fields[1:], " ")
-			}
-		case "warn":
-			level = clog.WarnLevel
-			if len(fields) > 1 {
-				message = strings.Join(fields[1:], " ")
-			}
-		case "erro", "err!":
-			level = clog.ErrorLevel
-			if len(fields) > 1 {
-				message = strings.Join(fields[1:], " ")
-			}
-		default:
-			// Level not recognized, keep full message
 		}
 	}
 
-	// Add to ring buffer with parsed level
-	lmw.ringBuffer.Add(level, message)
+	// Add structured entry to ring buffer
+	lmw.ringBuffer.Add(level, message, keyvals...)
 
 	return n, nil
+}
+
+// mapStringToLogLevel converts a string log level to charmbracelet/log.Level constant
+func mapStringToLogLevel(levelStr string) clog.Level {
+	switch strings.ToLower(levelStr) {
+	case "debug", "debu", "dbug":
+		return clog.DebugLevel
+	case "info":
+		return clog.InfoLevel
+	case "warn", "warning":
+		return clog.WarnLevel
+	case "error", "erro", "err":
+		return clog.ErrorLevel
+	default:
+		return clog.InfoLevel // Default to info for unknown levels
+	}
 }
 
 func Run(w *watcher.Watcher, m *agent.Manager, cfg *config.Config) error {
