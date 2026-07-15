@@ -129,7 +129,6 @@ func NewPlanningTabWithSession(id, title string, styles *Styles, contextTracker 
 		config := acp.DefaultConnectionConfig()
 		config.Agent = "planner"
 		acpClient = acp.NewClient(config)
-		logging.Info("configured ACP client", "tab_id", id, "agent", "planner")
 	} else {
 		logging.Debug("using provided ACP client", "tab_id", id)
 	}
@@ -439,7 +438,7 @@ func (pt *PlanningTab) sendMessage(message string) tea.Cmd {
 
 		// Create message request
 		req := &acp.MessageRequest{
-			Agent:          "", // Use empty string to let ACP client use configured agent
+			Agent:          "", // Agent field deprecated - agent context established at connection level
 			Message:        message,
 			Streaming:      true,
 			ResponseFormat: "text",

@@ -13,8 +13,8 @@ var (
 	ErrNotConnected          = errors.New("not connected to ACP server")
 	ErrAlreadyConnected      = errors.New("already connected to ACP server")
 	ErrConnectionFailed      = errors.New("failed to connect to ACP server")
-	ErrInvalidRequest        = errors.New("invalid request")
-	ErrInvalidConfig         = errors.New("invalid connection configuration")
+	ErrInvalidRequest        = errors.New("invalid request")                  // Use for MessageRequest validation
+	ErrInvalidConfig         = errors.New("invalid connection configuration") // Use for ConnectionConfig validation
 	ErrMissingConfigAgent    = errors.New("agent name is required in connection configuration")
 	ErrMissingAgent          = errors.New("agent name is required")
 	ErrMissingMessage        = errors.New("message is required")
@@ -90,7 +90,7 @@ type ConnectionConfig struct {
 	KiroCLIPath string `json:"kiro_cli_path,omitempty"`
 
 	// Agent is the name of the agent to connect to
-	Agent string `json:"agent"`
+	Agent string `json:"agent,omitempty"`
 
 	// MaxRetries is the maximum number of retry attempts
 	MaxRetries int `json:"max_retries,omitempty"`
@@ -168,6 +168,14 @@ func ValidateConnectionConfig(config *ConnectionConfig) error {
 		return ErrMissingConfigAgent
 	}
 
+	if config.KiroCLIPath == "" {
+		return errors.New("kiro-cli path is required")
+	}
+
+	if config.ConnectionTimeout <= 0 || config.RequestTimeout <= 0 {
+		return errors.New("timeouts must be positive")
+	}
+
 	return nil
 }
 
@@ -175,10 +183,6 @@ func ValidateConnectionConfig(config *ConnectionConfig) error {
 func ValidateMessageRequest(req *MessageRequest) error {
 	if req == nil {
 		return ErrInvalidRequest
-	}
-
-	if req.Agent == "" {
-		return ErrMissingAgent
 	}
 
 	if req.Message == "" {

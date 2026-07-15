@@ -172,7 +172,8 @@ func (c *KiroACPClient) Connect(ctx context.Context) error {
 	}
 
 	// Start kiro-cli in ACP mode with agent flag
-	cmd := exec.CommandContext(ctx, c.config.KiroCLIPath, "acp", "--agent", c.config.Agent)
+	args := []string{"acp", "--agent", c.config.Agent}
+	cmd := exec.CommandContext(ctx, c.config.KiroCLIPath, args...)
 
 	// Get pipes for stdin/stdout communication
 	stdin, err := cmd.StdinPipe()
