@@ -571,9 +571,9 @@ func (pt *PlanningTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 		if pt.state == session.PlanningStateReadOnly {
 			// In read-only mode, only allow scrolling
 			switch msg.String() {
-			case "up", "k":
+			case "up":
 				pt.viewport.ScrollUp(1)
-			case "down", "j":
+			case "down":
 				pt.viewport.ScrollDown(1)
 			case "pgup":
 				pt.viewport.HalfPageUp()
@@ -617,11 +617,11 @@ func (pt *PlanningTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 					cmds = append(cmds, pt.sendMessage(message))
 				}
 			}
-		case "up", "k":
+		case "up":
 			if !pt.focusInput {
 				pt.viewport.ScrollUp(1)
 			}
-		case "down", "j":
+		case "down":
 			if !pt.focusInput {
 				pt.viewport.ScrollDown(1)
 			}
