@@ -133,17 +133,23 @@ func NewPlanningTabWithSession(id, title string, styles *Styles, contextTracker 
 		cwd, err := os.Getwd()
 		if err != nil {
 			logging.Warn("failed to get current working directory, using fallback", "tab_id", id, "error", err)
-			cwd = "."
+			// Use absolute fallback when Getwd fails
+			cwd = os.TempDir()
 		}
 
-		// Ensure absolute path
+		// Ensure absolute path unconditionally
 		if !filepath.IsAbs(cwd) {
-			if absCwd, err := filepath.Abs(cwd); err == nil {
+			absCwd, err := filepath.Abs(cwd)
+			if err != nil {
+				// Final fallback to temp dir if Abs fails
+				logging.Warn("failed to convert to absolute path, using temp dir", "tab_id", id, "error", err)
+				cwd = os.TempDir()
+			} else {
 				cwd = absCwd
 			}
 		}
 
-		logging.Info("initializing ACP client with working directory", "tab_id", id, "cwd", cwd)
+		logging.Debug("initializing ACP client with working directory", "tab_id", id, "cwd", cwd)
 
 		config := acp.DefaultConnectionConfig()
 		config.Agent = "planner"

@@ -155,11 +155,17 @@ type AuthProvider interface {
 func DefaultConnectionConfig() *ConnectionConfig {
 	cwd, err := os.Getwd()
 	if err != nil {
-		cwd = "." // Fallback to current directory
+		// Use absolute fallback when Getwd fails (e.g., dir deleted, permission issues)
+		cwd = os.TempDir()
 	}
-	// Convert to absolute path
+
+	// Ensure absolute path unconditionally
 	if !filepath.IsAbs(cwd) {
-		if absCwd, err := filepath.Abs(cwd); err == nil {
+		absCwd, err := filepath.Abs(cwd)
+		if err != nil {
+			// Final fallback to temp dir if Abs fails
+			cwd = os.TempDir()
+		} else {
 			cwd = absCwd
 		}
 	}
