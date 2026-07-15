@@ -316,8 +316,9 @@ func (c *KiroACPClient) SendMessage(ctx context.Context, req *MessageRequest) (*
 	if sessionID == "" {
 		c.mu.Lock()
 		if c.sessionID == "" {
-			logging.Debug("creating new ACP session")
+			logging.Debug("creating ACP session", "cwd", c.config.Cwd)
 			sessionResp, err := conn.NewSession(ctx, acp.NewSessionRequest{
+				Cwd:        c.config.Cwd,
 				McpServers: []acp.McpServer{},
 			})
 			if err != nil {
@@ -403,8 +404,9 @@ func (c *KiroACPClient) StreamMessage(ctx context.Context, req *MessageRequest) 
 		if sessionID == "" {
 			c.mu.Lock()
 			if c.sessionID == "" {
-				logging.Debug("creating new ACP session for streaming")
+				logging.Debug("creating streaming ACP session", "cwd", c.config.Cwd)
 				sessionResp, err := conn.NewSession(streamCtx, acp.NewSessionRequest{
+					Cwd:        c.config.Cwd,
 					McpServers: []acp.McpServer{},
 				})
 				if err != nil {

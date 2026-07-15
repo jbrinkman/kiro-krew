@@ -3,6 +3,8 @@ package tui
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -126,8 +128,32 @@ func NewPlanningTabWithSession(id, title string, styles *Styles, contextTracker 
 	// Initialize ACP client with provided client or create default
 	if acpClient == nil {
 		logging.Debug("creating default ACP client for planner agent", "tab_id", id)
+
+		// Get current working directory for ACP session
+		cwd, err := os.Getwd()
+		if err != nil {
+			logging.Warn("failed to get current working directory, using fallback", "tab_id", id, "error", err)
+			// Use absolute fallback when Getwd fails
+			cwd = os.TempDir()
+		}
+
+		// Ensure absolute path unconditionally
+		if !filepath.IsAbs(cwd) {
+			absCwd, err := filepath.Abs(cwd)
+			if err != nil {
+				// Final fallback to temp dir if Abs fails
+				logging.Warn("failed to convert to absolute path, using temp dir", "tab_id", id, "error", err)
+				cwd = os.TempDir()
+			} else {
+				cwd = absCwd
+			}
+		}
+
+		logging.Debug("initializing ACP client with working directory", "tab_id", id, "cwd", cwd)
+
 		config := acp.DefaultConnectionConfig()
 		config.Agent = "planner"
+		config.Cwd = cwd
 		acpClient = acp.NewClient(config)
 	} else {
 		logging.Debug("using provided ACP client", "tab_id", id)
