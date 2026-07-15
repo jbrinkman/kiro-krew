@@ -159,13 +159,15 @@ type mockAgentTab struct {
 	agentID string
 }
 
-func (m *mockAgentTab) ID() string                        { return m.id }
-func (m *mockAgentTab) Type() TabType                     { return TabTypeAgent }
-func (m *mockAgentTab) Title() string                     { return "Agent " + m.agentID }
-func (m *mockAgentTab) IsClosable() bool                  { return true }
-func (m *mockAgentTab) View() string                      { return "" }
-func (m *mockAgentTab) Update(msg tea.Msg) (Tab, tea.Cmd) { return m, nil }
-func (m *mockAgentTab) Resize(width, height int)          {}
+func (m *mockAgentTab) ID() string                                   { return m.id }
+func (m *mockAgentTab) Type() TabType                                { return TabTypeAgent }
+func (m *mockAgentTab) Title() string                                { return "Agent " + m.agentID }
+func (m *mockAgentTab) IsClosable() bool                             { return true }
+func (m *mockAgentTab) View() string                                 { return "" }
+func (m *mockAgentTab) Update(msg tea.Msg) (Tab, tea.Cmd)            { return m, nil }
+func (m *mockAgentTab) Resize(width, height int)                     {}
+func (m *mockAgentTab) CaptureFocusState() FocusTarget               { return FocusTargetFooter }
+func (m *mockAgentTab) RestoreFocusState(target FocusTarget) tea.Cmd { return nil }
 
 func TestTabToggle(t *testing.T) {
 	tm := NewTabManager()

@@ -44,8 +44,8 @@ type PlanningTab struct {
 
 	// UI state
 	styles      *Styles
-	focusInput  bool // Whether input area has focus
-	inputHeight int  // Height reserved for input area
+	focusTarget FocusTarget // Which input has focus
+	inputHeight int         // Height reserved for input area
 
 	// Streaming state
 	streamingResponse bool
@@ -178,7 +178,7 @@ func NewPlanningTabWithSession(id, title string, styles *Styles, contextTracker 
 	currentStyles.Cursor.Blink = false
 	ti.SetStyles(currentStyles)
 
-	ti.Focus() // Start focused since focusInput defaults to true
+	ti.Focus() // Start focused since focusTarget defaults to FocusTargetMessage
 
 	pt := &PlanningTab{
 		id:             id,
@@ -188,8 +188,8 @@ func NewPlanningTabWithSession(id, title string, styles *Styles, contextTracker 
 		textinput:      ti,
 		messages:       make([]PlanningMessage, 0),
 		styles:         styles,
-		focusInput:     true,
-		inputHeight:    1, // Height for prompt line (separator handled by footer system)
+		focusTarget:    FocusTargetMessage, // Start with message input focused
+		inputHeight:    1,                  // Height for prompt line (separator handled by footer system)
 		contextTracker: contextTracker,
 		sessionManager: sessionManager,
 	}
@@ -340,7 +340,7 @@ func (pt *PlanningTab) loadSessionState(state *session.SessionState) {
 
 	// Set read-only state if needed
 	if pt.state == session.PlanningStateReadOnly {
-		pt.focusInput = false
+		pt.focusTarget = FocusTargetFooter
 	}
 }
 
@@ -688,7 +688,7 @@ func (pt *PlanningTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 		// Handle input focus and message sending
 		switch msg.String() {
 		case "enter":
-			if pt.focusInput && pt.state != session.PlanningStateActive {
+			if pt.focusTarget == FocusTargetMessage && pt.state != session.PlanningStateActive {
 				// Send message
 				message := strings.TrimSpace(pt.textinput.Value())
 				if message != "" {
@@ -716,34 +716,34 @@ func (pt *PlanningTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 				}
 			}
 		case "up":
-			if !pt.focusInput {
+			if pt.focusTarget != FocusTargetMessage {
 				pt.viewport.ScrollUp(1)
 			}
 		case "down":
-			if !pt.focusInput {
+			if pt.focusTarget != FocusTargetMessage {
 				pt.viewport.ScrollDown(1)
 			}
 		case "pgup":
 			pt.viewport.HalfPageUp()
-			pt.focusInput = false
+			pt.focusTarget = FocusTargetFooter
 			pt.textinput.Blur()
 		case "pgdown":
 			pt.viewport.HalfPageDown()
-			pt.focusInput = false
+			pt.focusTarget = FocusTargetFooter
 			pt.textinput.Blur()
 		case "home":
 			pt.viewport.GotoTop()
-			pt.focusInput = false
+			pt.focusTarget = FocusTargetFooter
 			pt.textinput.Blur()
 		case "end":
 			pt.viewport.GotoBottom()
-			pt.focusInput = false
+			pt.focusTarget = FocusTargetFooter
 			pt.textinput.Blur()
 		case "esc":
 			// Transfer focus from message input to footer
-			if pt.focusInput {
+			if pt.focusTarget == FocusTargetMessage {
 				logging.Debug("focus transfer to footer", "tab_id", pt.id)
-				pt.focusInput = false
+				pt.focusTarget = FocusTargetFooter
 				pt.textinput.Blur()
 				// Send focus transfer message to coordinate with parent
 				cmds = append(cmds, func() tea.Msg {
@@ -752,7 +752,7 @@ func (pt *PlanningTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 			}
 
 		default:
-			if pt.focusInput {
+			if pt.focusTarget == FocusTargetMessage {
 				// Forward to textinput
 				var cmd tea.Cmd
 				pt.textinput, cmd = pt.textinput.Update(msg)
@@ -864,6 +864,34 @@ func (pt *PlanningTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 		} else {
 			pt.AddMessage("assistant", msg.content)
 		}
+
+	case tea.MouseClickMsg:
+		// Handle mouse clicks on message input area
+		mouse := msg.Mouse()
+
+		// Calculate message input area boundaries
+		// Input is at the bottom of the planning tab content area
+		// The input line starts after the viewport (messageHeight) and has inputHeight lines
+		inputStartY := pt.height - pt.inputHeight
+
+		// Check if click is in the message input area
+		if mouse.Y >= inputStartY && mouse.Y < pt.height {
+			// Click is in the message input area
+			if pt.focusTarget != FocusTargetMessage && pt.state != session.PlanningStateReadOnly {
+				logging.Debug("mouse click focus transfer to message input",
+					"tab_id", pt.id,
+					"mouse_x", mouse.X,
+					"mouse_y", mouse.Y,
+					"input_start_y", inputStartY)
+
+				pt.focusTarget = FocusTargetMessage
+				// Send focus transfer message to update centralized state
+				focusCmd := func() tea.Msg {
+					return focusTransferMsg{target: "message"}
+				}
+				return pt, tea.Batch(pt.textinput.Focus(), focusCmd)
+			}
+		}
 	}
 
 	return pt, tea.Batch(cmds...)
@@ -890,21 +918,21 @@ func (pt *PlanningTab) Resize(width, height int) {
 // SetCompleted sets the tab to completed state (successful GitHub issue creation)
 func (pt *PlanningTab) SetCompleted() {
 	pt.state = session.PlanningStateCompleted
-	pt.focusInput = false
+	pt.focusTarget = FocusTargetFooter
 	pt.SaveSession() // Persist important state change
 }
 
 // SetFailed sets the tab to failed state
 func (pt *PlanningTab) SetFailed() {
 	pt.state = session.PlanningStateFailed
-	pt.focusInput = false
+	pt.focusTarget = FocusTargetFooter
 	pt.SaveSession() // Persist important state change
 }
 
 // SetReadOnly sets the tab to read-only mode
 func (pt *PlanningTab) SetReadOnly() {
 	pt.state = session.PlanningStateReadOnly
-	pt.focusInput = false
+	pt.focusTarget = FocusTargetFooter
 	pt.SaveSession() // Persist important state change
 }
 
@@ -928,7 +956,7 @@ func (pt *PlanningTab) Reset() {
 	pt.streamingResponse = false
 	pt.currentResponse.Reset()
 	pt.textinput.SetValue("")
-	pt.focusInput = true
+	pt.focusTarget = FocusTargetMessage
 	pt.updateViewportContent()
 	pt.SaveSession() // Persist state reset
 }
@@ -1002,18 +1030,42 @@ func (pt *PlanningTab) IsActive() bool {
 	return pt.state == session.PlanningStateActive
 }
 
-// SetFocusInput sets the planning tab's focusInput state.
+// SetFocusInput sets the planning tab's focus target based on focused boolean.
+// This method exists for backward compatibility and will be deprecated.
 func (pt *PlanningTab) SetFocusInput(focused bool) {
-	pt.focusInput = focused
+	if focused {
+		pt.focusTarget = FocusTargetMessage
+	} else {
+		pt.focusTarget = FocusTargetFooter
+	}
 }
 
-// RestoreFocus re-applies the planning tab's preserved focusInput state.
-// If focusInput is true, the textinput is focused; otherwise it is blurred.
-// Returns a tea.Cmd (non-nil only when focusing).
-func (pt *PlanningTab) RestoreFocus() tea.Cmd {
-	if pt.focusInput {
+// CaptureFocusState returns the current focus state for the planning tab
+func (pt *PlanningTab) CaptureFocusState() FocusTarget {
+	return pt.focusTarget
+}
+
+// RestoreFocusState restores the focus state for the planning tab
+func (pt *PlanningTab) RestoreFocusState(target FocusTarget) tea.Cmd {
+	switch target {
+	case FocusTargetMessage:
+		pt.focusTarget = FocusTargetMessage
 		return pt.textinput.Focus()
+	case FocusTargetFooter:
+		pt.focusTarget = FocusTargetFooter
+		pt.textinput.Blur()
+		return nil
+	default:
+		// Invalid target, default to footer focus
+		pt.focusTarget = FocusTargetFooter
+		pt.textinput.Blur()
+		return nil
 	}
-	pt.textinput.Blur()
-	return nil
+}
+
+// RestoreFocus is kept for backward compatibility
+// It now delegates to RestoreFocusState
+func (pt *PlanningTab) RestoreFocus() tea.Cmd {
+	target := pt.CaptureFocusState()
+	return pt.RestoreFocusState(target)
 }

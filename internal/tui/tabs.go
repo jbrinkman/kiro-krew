@@ -37,4 +37,8 @@ type Tab interface {
 	View() string
 	Update(tea.Msg) (Tab, tea.Cmd)
 	Resize(width, height int)
+
+	// Focus state management
+	CaptureFocusState() FocusTarget
+	RestoreFocusState(target FocusTarget) tea.Cmd
 }

@@ -60,3 +60,15 @@ func (mt *MainTab) Resize(width, height int) {
 func (mt *MainTab) SetBaseView(view string) {
 	mt.baseView = view
 }
+
+// CaptureFocusState returns the current focus state for the main tab
+func (mt *MainTab) CaptureFocusState() FocusTarget {
+	// Main tab always uses footer input
+	return FocusTargetFooter
+}
+
+// RestoreFocusState restores the focus state for the main tab
+func (mt *MainTab) RestoreFocusState(target FocusTarget) tea.Cmd {
+	// Main tab doesn't manage focus directly - handled by parent model
+	return nil
+}
