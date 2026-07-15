@@ -125,8 +125,11 @@ func NewPlanningTabWithSession(id, title string, styles *Styles, contextTracker 
 
 	// Initialize ACP client with provided client or create default
 	if acpClient == nil {
-		logging.Debug("creating default ACP client", "tab_id", id)
-		acpClient = acp.NewClient(acp.DefaultConnectionConfig())
+		logging.Debug("creating default ACP client for planner agent", "tab_id", id)
+		config := acp.DefaultConnectionConfig()
+		config.Agent = "planner"
+		acpClient = acp.NewClient(config)
+		logging.Info("configured ACP client", "tab_id", id, "agent", "planner")
 	} else {
 		logging.Debug("using provided ACP client", "tab_id", id)
 	}
@@ -424,26 +427,26 @@ func (pt *PlanningTab) sendMessage(message string) tea.Cmd {
 			logging.Warn("ACP not connected, attempting connection", "tab_id", pt.id)
 			if err := pt.acpClient.Connect(ctx); err != nil {
 				cancel()
-				logging.Error("failed to connect to ACP", "tab_id", pt.id, "error", err)
+				logging.Error("failed to connect to planner agent via ACP", "tab_id", pt.id, "error", err)
 				return planningResponseMsg{
-					content:    fmt.Sprintf("Failed to connect to agent: %v", err),
+					content:    fmt.Sprintf("Failed to connect to planner agent: %v", err),
 					isError:    true,
 					isComplete: true,
 				}
 			}
-			logging.Info("ACP connection established", "tab_id", pt.id)
+			logging.Info("ACP connection established for planner agent", "tab_id", pt.id)
 		}
 
 		// Create message request
 		req := &acp.MessageRequest{
-			Agent:          "kiro-agent", // Default agent name
+			Agent:          "", // Use empty string to let ACP client use configured agent
 			Message:        message,
 			Streaming:      true,
 			ResponseFormat: "text",
 			Timeout:        60 * time.Second,
 		}
 
-		logging.Debug("creating ACP stream", "tab_id", pt.id, "agent", req.Agent)
+		logging.Debug("creating ACP stream", "tab_id", pt.id, "agent", "planner")
 
 		// Send streaming request
 		streamChan, err := pt.acpClient.StreamMessage(ctx, req)
