@@ -1332,7 +1332,7 @@ func (lmw *loggingMultiWriter) Write(p []byte) (n int, err error) {
 	if l, ok := rawEntry["level"].(string); ok {
 		levelStr = l
 	}
-	if m, ok := rawEntry["message"].(string); ok {
+	if m, ok := rawEntry["msg"].(string); ok {
 		message = m
 	}
 
@@ -1343,7 +1343,7 @@ func (lmw *loggingMultiWriter) Write(p []byte) (n int, err error) {
 	// Normalize float64 values that are actually integers
 	var keyvals []interface{}
 	for k, v := range rawEntry {
-		if k != "time" && k != "level" && k != "message" {
+		if k != "time" && k != "level" && k != "msg" {
 			// JSON unmarshals all numbers as float64; normalize integers
 			if f, ok := v.(float64); ok && f == float64(int64(f)) {
 				keyvals = append(keyvals, k, int64(f))
