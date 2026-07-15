@@ -13,7 +13,9 @@ var (
 	ErrNotConnected          = errors.New("not connected to ACP server")
 	ErrAlreadyConnected      = errors.New("already connected to ACP server")
 	ErrConnectionFailed      = errors.New("failed to connect to ACP server")
-	ErrInvalidRequest        = errors.New("invalid request")
+	ErrInvalidRequest        = errors.New("invalid request")                  // Use for MessageRequest validation
+	ErrInvalidConfig         = errors.New("invalid connection configuration") // Use for ConnectionConfig validation
+	ErrMissingConfigAgent    = errors.New("agent name is required in connection configuration")
 	ErrMissingAgent          = errors.New("agent name is required")
 	ErrMissingMessage        = errors.New("message is required")
 	ErrInvalidResponseFormat = errors.New("response format must be 'json' or 'text'")
@@ -87,6 +89,9 @@ type ConnectionConfig struct {
 	// KiroCLIPath is the path to the Kiro CLI executable
 	KiroCLIPath string `json:"kiro_cli_path,omitempty"`
 
+	// Agent is the name of the agent to connect to
+	Agent string `json:"agent,omitempty"`
+
 	// MaxRetries is the maximum number of retry attempts
 	MaxRetries int `json:"max_retries,omitempty"`
 
@@ -145,6 +150,7 @@ type AuthProvider interface {
 func DefaultConnectionConfig() *ConnectionConfig {
 	return &ConnectionConfig{
 		KiroCLIPath:       "kiro-cli",
+		Agent:             "", // Must be set explicitly by caller
 		MaxRetries:        3,
 		RetryDelay:        1 * time.Second,
 		ConnectionTimeout: 30 * time.Second,
@@ -152,14 +158,31 @@ func DefaultConnectionConfig() *ConnectionConfig {
 	}
 }
 
+// ValidateConnectionConfig validates a ConnectionConfig
+func ValidateConnectionConfig(config *ConnectionConfig) error {
+	if config == nil {
+		return ErrInvalidConfig
+	}
+
+	if config.Agent == "" {
+		return ErrMissingConfigAgent
+	}
+
+	if config.KiroCLIPath == "" {
+		return errors.New("kiro-cli path is required")
+	}
+
+	if config.ConnectionTimeout <= 0 || config.RequestTimeout <= 0 {
+		return errors.New("timeouts must be positive")
+	}
+
+	return nil
+}
+
 // ValidateMessageRequest validates a MessageRequest
 func ValidateMessageRequest(req *MessageRequest) error {
 	if req == nil {
 		return ErrInvalidRequest
-	}
-
-	if req.Agent == "" {
-		return ErrMissingAgent
 	}
 
 	if req.Message == "" {

@@ -158,41 +158,48 @@ func (c *KiroACPClient) Connect(ctx context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	logging.Info("attempting ACP connection", "kiro_cli_path", c.config.KiroCLIPath)
+	// Validate connection configuration including agent field
+	if err := ValidateConnectionConfig(c.config); err != nil {
+		logging.Error("invalid connection configuration", "error", err)
+		return err
+	}
+
+	logging.Info("attempting ACP connection", "kiro_cli_path", c.config.KiroCLIPath, "agent", c.config.Agent)
 
 	if c.connected {
-		logging.Warn("already connected to ACP")
+		logging.Warn("already connected to ACP", "agent", c.config.Agent)
 		return ErrAlreadyConnected
 	}
 
-	// Start kiro-cli in ACP mode
-	cmd := exec.CommandContext(ctx, c.config.KiroCLIPath, "acp")
+	// Start kiro-cli in ACP mode with agent flag
+	args := []string{"acp", "--agent", c.config.Agent}
+	cmd := exec.CommandContext(ctx, c.config.KiroCLIPath, args...)
 
 	// Get pipes for stdin/stdout communication
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		logging.Error("failed to create stdin pipe", "error", err)
+		logging.Error("failed to create stdin pipe", "agent", c.config.Agent, "error", err)
 		return fmt.Errorf("failed to create stdin pipe: %w", err)
 	}
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		stdin.Close()
-		logging.Error("failed to create stdout pipe", "error", err)
+		logging.Error("failed to create stdout pipe", "agent", c.config.Agent, "error", err)
 		return fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
 
-	logging.Debug("starting kiro-cli process")
+	logging.Debug("starting kiro-cli process", "agent", c.config.Agent)
 
 	// Start the command
 	if err := cmd.Start(); err != nil {
 		stdin.Close()
 		stdout.Close()
-		logging.Error("failed to start kiro-cli", "error", err)
+		logging.Error("failed to start kiro-cli", "agent", c.config.Agent, "error", err)
 		return fmt.Errorf("failed to start kiro-cli: %w", err)
 	}
 
-	logging.Debug("creating ACP connection", "protocol_version", acp.ProtocolVersionNumber)
+	logging.Debug("creating ACP connection", "agent", c.config.Agent, "protocol_version", acp.ProtocolVersionNumber)
 
 	// Create ACP connection
 	conn := acp.NewClientSideConnection(c.client, stdin, stdout)
@@ -211,7 +218,7 @@ func (c *KiroACPClient) Connect(ctx context.Context) error {
 		// Kill the process and wait - this also closes the pipes
 		cmd.Process.Kill()
 		cmd.Wait()
-		logging.Error("failed to initialize ACP connection", "error", err)
+		logging.Error("failed to initialize ACP connection", "agent", c.config.Agent, "error", err)
 		return fmt.Errorf("failed to initialize ACP connection: %w", err)
 	}
 
@@ -219,7 +226,7 @@ func (c *KiroACPClient) Connect(ctx context.Context) error {
 	c.cmd = cmd
 	c.connected = true
 
-	logging.Info("ACP connection established successfully")
+	logging.Info("ACP connection established successfully", "agent", c.config.Agent)
 	return nil
 }
 
