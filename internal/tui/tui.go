@@ -1319,14 +1319,7 @@ func (lmw *loggingMultiWriter) Write(p []byte) (n int, err error) {
 	}
 
 	// Parse JSON structured log entry
-	var entry struct {
-		Time    string                 `json:"time"`
-		Level   string                 `json:"level"`
-		Message string                 `json:"message"`
-		Fields  map[string]interface{} `json:"-"` // Capture remaining fields
-	}
-
-	// Unmarshal into a map first to capture all fields
+	// Unmarshal into a map to capture all fields
 	var rawEntry map[string]interface{}
 	if err := json.Unmarshal(p, &rawEntry); err != nil {
 		// JSON parse failed, but file write succeeded - don't fail the write
@@ -1334,30 +1327,34 @@ func (lmw *loggingMultiWriter) Write(p []byte) (n int, err error) {
 		return n, nil
 	}
 
-	// Extract known fields
-	if t, ok := rawEntry["time"].(string); ok {
-		entry.Time = t
-	}
+	// Extract level and message
+	var levelStr, message string
 	if l, ok := rawEntry["level"].(string); ok {
-		entry.Level = l
+		levelStr = l
 	}
 	if m, ok := rawEntry["message"].(string); ok {
-		entry.Message = m
+		message = m
 	}
 
 	// Map string level to log.Level constant
-	level := mapStringToLogLevel(entry.Level)
+	level := mapStringToLogLevel(levelStr)
 
 	// Convert remaining fields to key-value pairs (exclude time, level, message)
+	// Normalize float64 values that are actually integers
 	var keyvals []interface{}
 	for k, v := range rawEntry {
 		if k != "time" && k != "level" && k != "message" {
-			keyvals = append(keyvals, k, v)
+			// JSON unmarshals all numbers as float64; normalize integers
+			if f, ok := v.(float64); ok && f == float64(int64(f)) {
+				keyvals = append(keyvals, k, int64(f))
+			} else {
+				keyvals = append(keyvals, k, v)
+			}
 		}
 	}
 
 	// Add structured entry to ring buffer
-	lmw.ringBuffer.Add(level, entry.Message, keyvals...)
+	lmw.ringBuffer.Add(level, message, keyvals...)
 
 	return n, nil
 }
