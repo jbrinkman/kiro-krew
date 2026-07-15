@@ -70,3 +70,15 @@ func (at *AgentTab) GetStatus() agent.Status {
 	}
 	return agent.StatusRunning // Default to running if agent not found
 }
+
+// CaptureFocusState returns the current focus state for the agent tab
+func (at *AgentTab) CaptureFocusState() FocusTarget {
+	// Agent tab always uses footer input
+	return FocusTargetFooter
+}
+
+// RestoreFocusState restores the focus state for the agent tab
+func (at *AgentTab) RestoreFocusState(target FocusTarget) tea.Cmd {
+	// Agent tab doesn't manage focus directly - handled by parent model
+	return nil
+}

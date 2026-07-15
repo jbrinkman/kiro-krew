@@ -108,6 +108,9 @@ type model struct {
 	loggingActive     bool
 	activeLogTabID    string
 	activeFileHandler *logging.FileHandler
+
+	// Focus state tracking per tab
+	tabFocusStates map[string]FocusTarget
 }
 
 func newModel(w *watcher.Watcher, m *agent.Manager, cfg *config.Config, logFile *os.File, logReader *os.File) model {
@@ -147,11 +150,12 @@ func newModel(w *watcher.Watcher, m *agent.Manager, cfg *config.Config, logFile 
 			inputValue:    "",
 			activityLines: make([]string, 0),
 		},
-		tabManager:    tabManager,
-		mainTab:       mainTab,
-		knownAgents:   make(map[string]bool),
-		aboutDialog:   NewAboutDialog(),
-		footerManager: footerManager,
+		tabManager:     tabManager,
+		mainTab:        mainTab,
+		knownAgents:    make(map[string]bool),
+		aboutDialog:    NewAboutDialog(),
+		footerManager:  footerManager,
+		tabFocusStates: make(map[string]FocusTarget),
 	}
 }
 
@@ -178,6 +182,31 @@ func (m model) appendActivity(lines ...string) model {
 		m.consoleViewport.GotoBottom()
 	}
 	return m
+}
+
+// isClickInFooterInput checks if mouse click is in the footer input area
+func (m model) isClickInFooterInput(mouseX, mouseY int) bool {
+	// Footer is at the bottom of the screen
+	footerHeight := m.footerManager.GetFooterHeight()
+	footerStartY := m.height - footerHeight
+
+	// Click must be within footer area
+	if mouseY < footerStartY {
+		return false
+	}
+
+	// Input line is the middle line of the 3-line footer (separator, input, help)
+	inputLineY := footerStartY + 1
+	if mouseY != inputLineY {
+		return false
+	}
+
+	// Click must be after the prompt text
+	// The prompt is "kiro-krew> " from the textinput
+	prompt := "kiro-krew> "
+	promptWidth := lipgloss.Width(prompt)
+
+	return mouseX >= promptWidth
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -409,6 +438,33 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Check if log tab was closed
 				m.checkLogTabClosed()
 				return m, nil
+			}
+
+			// Check if click is in footer input area
+			if m.isClickInFooterInput(mouse.X, mouse.Y) {
+				activeTab := m.tabManager.GetActiveTab()
+				if activeTab != nil {
+					// Update tab's focus state
+					m.tabFocusStates[activeTab.ID()] = FocusTargetFooter
+
+					// Apply focus to footer input
+					m.input.SetFocus(true)
+
+					// If on planning tab, update its focus state
+					if activeTab.Type() == TabTypePlanning {
+						if pt, ok := activeTab.(*PlanningTab); ok {
+							pt.SetFocusInput(false)
+							pt.textinput.Blur()
+						}
+					}
+
+					logging.Debug("mouse click focus transfer to footer",
+						"tab_id", activeTab.ID(),
+						"mouse_x", mouse.X,
+						"mouse_y", mouse.Y)
+
+					return m, m.input.Focus()
+				}
 			}
 		}
 		// Forward to active tab
@@ -1101,28 +1157,59 @@ func (m model) performExitCleanup() model {
 
 // switchActiveTab switches to a tab by index and updates context tracking
 func (m model) switchActiveTab(index int) (model, tea.Cmd) {
+	var cmds []tea.Cmd
+
+	// Capture focus state from current active tab before switching
+	if currentTab := m.tabManager.GetActiveTab(); currentTab != nil {
+		currentFocus := currentTab.CaptureFocusState()
+		m.tabFocusStates[currentTab.ID()] = currentFocus
+		logging.Debug("captured focus state",
+			"tab_id", currentTab.ID(),
+			"focus_target", currentFocus)
+	}
+
+	// Switch to new tab
 	m.tabManager.SetActiveTab(index)
-	// Update context tracker and focus based on active tab type
+
+	// Restore focus state for newly active tab
 	if activeTab := m.tabManager.GetActiveTab(); activeTab != nil {
+		// Handle planning context tracking
 		if activeTab.Type() == TabTypePlanning {
 			if !m.footerManager.GetContextTracker().IsActive() {
 				m.footerManager.GetContextTracker().StartPlanningSession("claude-sonnet-4")
-			}
-			// Blur footer input so only the planning tab message input shows a cursor
-			m.input.SetFocus(false)
-			// Restore the planning tab's preserved focus state
-			if pt, ok := activeTab.(*PlanningTab); ok {
-				return m, pt.RestoreFocus()
 			}
 		} else {
 			if m.footerManager.GetContextTracker().IsActive() {
 				m.footerManager.GetContextTracker().StopPlanningSession()
 			}
-			// Restore footer input focus for non-planning tabs
+		}
+
+		// Retrieve previous focus state or default to footer
+		previousFocus, exists := m.tabFocusStates[activeTab.ID()]
+		if !exists {
+			// Default: footer focus for new tabs
+			previousFocus = FocusTargetFooter
+		}
+
+		logging.Debug("restoring focus state",
+			"tab_id", activeTab.ID(),
+			"focus_target", previousFocus)
+
+		// Apply focus state to the tab
+		if cmd := activeTab.RestoreFocusState(previousFocus); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+
+		// Apply footer input focus based on target
+		if previousFocus == FocusTargetFooter {
 			m.input.SetFocus(true)
+			cmds = append(cmds, m.input.Focus())
+		} else {
+			m.input.SetFocus(false)
 		}
 	}
-	return m, nil
+
+	return m, tea.Batch(cmds...)
 }
 
 func (m model) executeCommand(input string) (model, tea.Cmd) {

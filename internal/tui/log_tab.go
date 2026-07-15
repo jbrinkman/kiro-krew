@@ -285,3 +285,15 @@ func (lt *LogTab) Cleanup() {
 		lt.ringBuffer.Clear()
 	}
 }
+
+// CaptureFocusState returns the current focus state for the log tab
+func (lt *LogTab) CaptureFocusState() FocusTarget {
+	// Log tab always uses footer input
+	return FocusTargetFooter
+}
+
+// RestoreFocusState restores the focus state for the log tab
+func (lt *LogTab) RestoreFocusState(target FocusTarget) tea.Cmd {
+	// Log tab doesn't manage focus directly - handled by parent model
+	return nil
+}

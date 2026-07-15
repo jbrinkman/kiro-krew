@@ -864,6 +864,30 @@ func (pt *PlanningTab) Update(msg tea.Msg) (Tab, tea.Cmd) {
 		} else {
 			pt.AddMessage("assistant", msg.content)
 		}
+
+	case tea.MouseClickMsg:
+		// Handle mouse clicks on message input area
+		mouse := msg.Mouse()
+
+		// Calculate message input area boundaries
+		// Input is at the bottom of the planning tab content area
+		// The input line starts after the viewport (messageHeight) and has inputHeight lines
+		inputStartY := pt.height - pt.inputHeight
+
+		// Check if click is in the message input area
+		if mouse.Y >= inputStartY && mouse.Y < pt.height {
+			// Click is in the message input area
+			if !pt.focusInput && pt.state != session.PlanningStateReadOnly {
+				logging.Debug("mouse click focus transfer to message input",
+					"tab_id", pt.id,
+					"mouse_x", mouse.X,
+					"mouse_y", mouse.Y,
+					"input_start_y", inputStartY)
+
+				pt.focusInput = true
+				return pt, pt.textinput.Focus()
+			}
+		}
 	}
 
 	return pt, tea.Batch(cmds...)
@@ -1007,13 +1031,41 @@ func (pt *PlanningTab) SetFocusInput(focused bool) {
 	pt.focusInput = focused
 }
 
-// RestoreFocus re-applies the planning tab's preserved focusInput state.
-// If focusInput is true, the textinput is focused; otherwise it is blurred.
-// Returns a tea.Cmd (non-nil only when focusing).
-func (pt *PlanningTab) RestoreFocus() tea.Cmd {
+// CaptureFocusState returns the current focus state for the planning tab
+func (pt *PlanningTab) CaptureFocusState() FocusTarget {
 	if pt.focusInput {
-		return pt.textinput.Focus()
+		return FocusTargetMessage
 	}
-	pt.textinput.Blur()
-	return nil
+	// When focusInput is false, check if in scroll mode (viewport navigation)
+	// If neither message input nor footer has focus, we're in scroll/none mode
+	return FocusTargetNone
+}
+
+// RestoreFocusState restores the focus state for the planning tab
+func (pt *PlanningTab) RestoreFocusState(target FocusTarget) tea.Cmd {
+	switch target {
+	case FocusTargetMessage:
+		pt.focusInput = true
+		return pt.textinput.Focus()
+	case FocusTargetFooter:
+		pt.focusInput = false
+		pt.textinput.Blur()
+		return nil
+	case FocusTargetNone:
+		pt.focusInput = false
+		pt.textinput.Blur()
+		return nil
+	default:
+		// Invalid target, default to no focus
+		pt.focusInput = false
+		pt.textinput.Blur()
+		return nil
+	}
+}
+
+// RestoreFocus is kept for backward compatibility
+// It now delegates to RestoreFocusState
+func (pt *PlanningTab) RestoreFocus() tea.Cmd {
+	target := pt.CaptureFocusState()
+	return pt.RestoreFocusState(target)
 }
