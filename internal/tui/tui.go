@@ -609,7 +609,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "enter":
-			// Refactored logic: Check footer focus FIRST
+			// Execute commands when footer is focused, forward enter to tabs otherwise.
+			// This allows command execution from any tab while preserving tab-specific
+			// enter handling (e.g., message sending in planning tabs).
 			activeTab := m.tabManager.GetActiveTab()
 
 			// If footer is focused, execute command regardless of tab type

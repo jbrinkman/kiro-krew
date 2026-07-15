@@ -12,17 +12,6 @@ import (
 // TestEnterKeyCommandExecutionInAllTabs tests that command execution works
 // when footer is focused, regardless of which tab is active
 func TestEnterKeyCommandExecutionInAllTabs(t *testing.T) {
-	// Test what msg.String() returns for different enter key constructions
-	key1 := tea.KeyPressMsg(tea.Key{Code: 13})
-	key2 := tea.KeyPressMsg(tea.Key{Text: "\n", Code: '\n'})
-	key3 := tea.KeyPressMsg(tea.Key{Text: "enter"})
-	key4 := tea.KeyPressMsg(tea.Key{Code: 13})
-
-	t.Logf("key1 (\\r): String=%q, Keystroke=%q", key1.String(), key1.Keystroke())
-	t.Logf("key2 (\\n): String=%q, Keystroke=%q", key2.String(), key2.Keystroke())
-	t.Logf("key3 (enter text): String=%q, Keystroke=%q", key3.String(), key3.Keystroke())
-	t.Logf("key4 (Code 13): String=%q, Keystroke=%q", key4.String(), key4.Keystroke())
-
 	tests := []struct {
 		name          string
 		tabType       TabType
@@ -198,7 +187,9 @@ func TestEnterKeyLogTabCommandExecution(t *testing.T) {
 }
 
 // TestEnterKeyPlanningTabForwarding verifies that enter key is forwarded
-// to planning tab when footer is NOT focused (for sending messages)
+// to planning tab when footer is NOT focused (for sending messages).
+// Note: This test only verifies the negative case (command not executed).
+// Full forwarding behavior is verified through integration tests.
 func TestEnterKeyPlanningTabForwarding(t *testing.T) {
 	m := createTestModelWithTab(t, TabTypePlanning)
 	m.input.SetFocus(false) // Footer NOT focused
@@ -215,9 +206,9 @@ func TestEnterKeyPlanningTabForwarding(t *testing.T) {
 	}
 }
 
-// TestEnterKeyCommandExecutionWithAutocomplete verifies that command execution
-// still works correctly when autocomplete is active
-func TestEnterKeyCommandExecutionWithAutocomplete(t *testing.T) {
+// TestEnterKeyCommandExecutionWithSequentialInput verifies that command execution
+// works correctly when characters are typed sequentially before pressing enter
+func TestEnterKeyCommandExecutionWithSequentialInput(t *testing.T) {
 	m := createTestModelWithTab(t, TabTypeMain)
 	m.input.SetFocus(true)
 
@@ -235,7 +226,7 @@ func TestEnterKeyCommandExecutionWithAutocomplete(t *testing.T) {
 
 	// Command should execute, clearing the input
 	if updated.input.Value() != "" {
-		t.Error("Command should execute even when autocomplete is active")
+		t.Error("Command should execute after sequential input")
 	}
 }
 
@@ -348,20 +339,4 @@ func createMinimalTheme() *config.Theme {
 	theme.Colors.Background = "#000000"
 	theme.Colors.Surface = "#111111"
 	return theme
-}
-
-// Helper method to get string representation of TabType for better test output
-func (t TabType) String() string {
-	switch t {
-	case TabTypeMain:
-		return "Main"
-	case TabTypeAgent:
-		return "Agent"
-	case TabTypePlanning:
-		return "Planning"
-	case TabTypeLog:
-		return "Log"
-	default:
-		return "Unknown"
-	}
 }
