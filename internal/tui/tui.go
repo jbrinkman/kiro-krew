@@ -750,7 +750,24 @@ func (m model) renderBaseView() string {
 	return m.renderTabContentWithFooter(m.styles.Activity.Render(activity), TabTypeMain)
 }
 
-// renderTabContentWithFooter creates a unified rendering method that combines tab content with footer
+// renderTabContentWithFooter creates a unified rendering method that combines tab content with footer.
+//
+// Unified Footer Rendering Flow (Issue #195, completed by Issue #211):
+// This method is the central point for all tab rendering, ensuring consistent footer
+// display across all tab types (main, planning, agent, log).
+//
+// For agent tabs specifically (Issue #211):
+//  1. AgentTab.View() returns OutputView content (viewport with agent output)
+//  2. This method wraps that content with the footer from FooterManager
+//  3. OutputView must pre-reserve footer space (3 lines) in its viewport height
+//     to prevent the footer from overflowing the available screen space
+//
+// Footer Structure (3 lines total):
+//   - Line 1: Separator line (─────)
+//   - Line 2: Input row (kiro-krew> prompt with autocomplete)
+//   - Line 3: Status row (base: theme info, enhanced for planning: context/model/directory)
+//
+// The footer height calculation must match FooterManager.GetFooterHeight() = 3.
 func (m model) renderTabContentWithFooter(tabContent string, tabType TabType) string {
 	// Render footer using the footer system
 	footer := m.footerManager.RenderWithSeparator(tabType)

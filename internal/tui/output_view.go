@@ -10,7 +10,22 @@ import (
 	"github.com/jbrinkman/kiro-krew/internal/agent"
 )
 
-// OutputView displays agent output in a scrollable view
+// OutputView displays agent output in a scrollable view.
+//
+// Footer System Integration (Issue #211):
+// OutputView is used by agent tabs and must coordinate with the unified footer
+// rendering system. When agent tabs are rendered, the flow is:
+//  1. AgentTab.View() calls OutputView.View() to get viewport content
+//  2. The parent model (tui.go) wraps this content with renderTabContentWithFooter()
+//  3. The footer system (FooterManager) appends a 3-line footer:
+//     - Line 1: Separator (─────)
+//     - Line 2: Input row (kiro-krew> prompt)
+//     - Line 3: Status row (theme: <name>)
+//
+// To prevent the footer from being pushed off-screen, OutputView must reserve
+// space by subtracting the footer height (3 lines) from the viewport height.
+// This ensures the total rendered content (viewport + footer) fits within the
+// allocated screen space without overflow or layout issues.
 type OutputView struct {
 	viewport     viewport.Model
 	manager      *agent.Manager
@@ -60,7 +75,15 @@ func (ov *OutputView) Update(msg tea.Msg) (*OutputView, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		ov.width = msg.Width
 		ov.height = msg.Height
-		ov.viewport = viewport.New(viewport.WithWidth(msg.Width), viewport.WithHeight(msg.Height))
+
+		// Reserve space for the footer system (separator + input row + status row = 3 lines)
+		footerHeight := 3
+		viewportHeight := msg.Height - footerHeight
+		if viewportHeight < 1 {
+			viewportHeight = 1 // Minimum viewport height
+		}
+
+		ov.viewport = viewport.New(viewport.WithWidth(msg.Width), viewport.WithHeight(viewportHeight))
 		ov.refreshContent()
 	case tea.KeyPressMsg:
 		switch msg.String() {
@@ -99,10 +122,21 @@ func (ov *OutputView) View() string {
 }
 
 // Resize updates the output view dimensions
+// Note: height should be the total available height including footer space.
+// The viewport height will be adjusted to leave room for the footer (3 lines).
 func (ov *OutputView) Resize(width, height int) {
 	ov.width = width
 	ov.height = height
-	ov.viewport = viewport.New(viewport.WithWidth(width), viewport.WithHeight(height))
+
+	// Reserve space for the footer system (separator + input row + status row = 3 lines)
+	// This ensures the footer rendered by renderTabContentWithFooter() doesn't overflow
+	footerHeight := 3
+	viewportHeight := height - footerHeight
+	if viewportHeight < 1 {
+		viewportHeight = 1 // Minimum viewport height
+	}
+
+	ov.viewport = viewport.New(viewport.WithWidth(width), viewport.WithHeight(viewportHeight))
 	ov.lastGen = 0 // Force refresh on next View()
 	ov.refreshContent()
 }
