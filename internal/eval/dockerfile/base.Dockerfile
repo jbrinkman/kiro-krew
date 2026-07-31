@@ -10,6 +10,13 @@ RUN apk add --no-cache \
 # Create non-root user for security
 RUN adduser -D -s /bin/bash sandbox
 
+# Create directories for embedded files with proper ownership
+RUN mkdir -p /workspace/.kiro/agents && \
+    mkdir -p /workspace/.kiro/skills/github-cli && \
+    mkdir -p /workspace/.kiro-krew/evals && \
+    chown -R sandbox:sandbox /workspace/.kiro && \
+    chown -R sandbox:sandbox /workspace/.kiro-krew
+
 # Set working directory
 WORKDIR /workspace
 

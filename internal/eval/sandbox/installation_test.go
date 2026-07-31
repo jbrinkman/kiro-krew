@@ -27,6 +27,15 @@ func TestDockerfileGeneration_IncludesKiroCLI(t *testing.T) {
 				"kirocli-x86_64-linux-musl.zip",
 				"chmod 755 kirocli/bin/kiro-cli",
 				"mv kirocli/bin/kiro-cli /usr/local/bin/kiro-cli",
+				"# Copy kiro-krew binary from build context",
+				"COPY --chown=sandbox:sandbox kiro-krew /usr/local/bin/kiro-krew",
+				"# Copy agent configurations",
+				"COPY --chown=sandbox:sandbox .kiro/agents/ /workspace/.kiro/agents/",
+				"# Copy GitHub CLI mock files",
+				"COPY --chown=sandbox:sandbox github-cli-mock/ /workspace/.kiro/skills/github-cli/",
+				"# Copy evaluation files",
+				"COPY --chown=sandbox:sandbox .kiro-krew/evals/ /workspace/.kiro-krew/evals/",
+				"ENV PATH=\"/workspace/.kiro/skills/github-cli:$PATH\"",
 			},
 		},
 		{
@@ -37,6 +46,15 @@ func TestDockerfileGeneration_IncludesKiroCLI(t *testing.T) {
 				"kirocli-aarch64-linux-musl.zip",
 				"chmod 755 kirocli/bin/kiro-cli",
 				"mv kirocli/bin/kiro-cli /usr/local/bin/kiro-cli",
+				"# Copy kiro-krew binary from build context",
+				"COPY --chown=sandbox:sandbox kiro-krew /usr/local/bin/kiro-krew",
+				"# Copy agent configurations",
+				"COPY --chown=sandbox:sandbox .kiro/agents/ /workspace/.kiro/agents/",
+				"# Copy GitHub CLI mock files",
+				"COPY --chown=sandbox:sandbox github-cli-mock/ /workspace/.kiro/skills/github-cli/",
+				"# Copy evaluation files",
+				"COPY --chown=sandbox:sandbox .kiro-krew/evals/ /workspace/.kiro-krew/evals/",
+				"ENV PATH=\"/workspace/.kiro/skills/github-cli:$PATH\"",
 			},
 		},
 	}
@@ -238,6 +256,57 @@ func TestDockerfileGeneration_ProjectDetection(t *testing.T) {
 	assert.Contains(t, dockerfile, "USER sandbox")
 }
 
+func TestBuildContext_Preparation(t *testing.T) {
+	t.Run("PrepareBuildContext", func(t *testing.T) {
+		// Create a minimal build context without actual kiro-krew binary
+		tempDir := t.TempDir()
+
+		// Create mock kiro-krew binary
+		mockBinary := filepath.Join(tempDir, "kiro-krew")
+		err := os.WriteFile(mockBinary, []byte("mock binary"), 0755)
+		require.NoError(t, err)
+
+		buildContext, err := PrepareBuildContext(mockBinary)
+		require.NoError(t, err)
+		defer buildContext.Cleanup()
+
+		// Verify build context structure
+		assert.NotEmpty(t, buildContext.TempDir)
+		assert.Equal(t, mockBinary, buildContext.KrewBinary)
+		assert.NotEmpty(t, buildContext.Files)
+
+		// Verify kiro-krew binary is in files map
+		_, exists := buildContext.Files["kiro-krew"]
+		assert.True(t, exists, "kiro-krew binary should be in build context")
+	})
+
+	t.Run("AddMockFiles", func(t *testing.T) {
+		tempDir := t.TempDir()
+		bc := &BuildContext{
+			TempDir: tempDir,
+			Files:   make(map[string][]byte),
+		}
+
+		err := bc.AddMockFiles()
+		require.NoError(t, err)
+
+		// Verify mock files were added
+		foundMockFiles := false
+		for path := range bc.Files {
+			if strings.Contains(path, "github-cli-mock") {
+				foundMockFiles = true
+				break
+			}
+		}
+		assert.True(t, foundMockFiles, "Mock files should be added to build context")
+
+		// Verify mock directory exists in temp dir
+		mockDir := filepath.Join(tempDir, "github-cli-mock")
+		_, err = os.Stat(mockDir)
+		assert.NoError(t, err, "Mock directory should exist in build context")
+	})
+}
+
 func TestBuildTimeVsRuntime_Installation(t *testing.T) {
 	t.Run("BuildTimeInstallation", func(t *testing.T) {
 		// Test that Dockerfile generation includes build-time installation
@@ -271,6 +340,28 @@ func TestBuildTimeVsRuntime_Installation(t *testing.T) {
 		err = c.ValidateKiroCLI(ctx, "linux/amd64")
 		// Expect error since we don't have a running container with kiro-cli
 		assert.Error(t, err, "Should fail verification when kiro-cli not installed")
+	})
+
+	t.Run("BuildTimeFileEmbedding", func(t *testing.T) {
+		// Test that Dockerfile includes all required COPY commands
+		tempDir := t.TempDir()
+		c := &Container{}
+		platform, err := DetectHostArchitecture()
+		require.NoError(t, err)
+		dockerfile, err := c.GenerateDockerfileWithPlatform(tempDir, platform)
+		require.NoError(t, err)
+
+		// Verify build-time file copying commands are present
+		assert.Contains(t, dockerfile, "COPY --chown=sandbox:sandbox kiro-krew /usr/local/bin/kiro-krew")
+		assert.Contains(t, dockerfile, "COPY --chown=sandbox:sandbox .kiro/agents/ /workspace/.kiro/agents/")
+		assert.Contains(t, dockerfile, "COPY --chown=sandbox:sandbox github-cli-mock/ /workspace/.kiro/skills/github-cli/")
+		assert.Contains(t, dockerfile, "COPY --chown=sandbox:sandbox .kiro-krew/evals/ /workspace/.kiro-krew/evals/")
+		assert.Contains(t, dockerfile, "ENV PATH=\"/workspace/.kiro/skills/github-cli:$PATH\"")
+
+		// Verify directory creation commands
+		assert.Contains(t, dockerfile, "mkdir -p /workspace/.kiro/agents")
+		assert.Contains(t, dockerfile, "mkdir -p /workspace/.kiro/skills/github-cli")
+		assert.Contains(t, dockerfile, "mkdir -p /workspace/.kiro-krew/evals")
 	})
 }
 
@@ -423,32 +514,8 @@ func TestGenerateDockerfile_ErrorHandling(t *testing.T) {
 	assert.Contains(t, err.Error(), "unsupported platform")
 }
 
-func TestMockGitHub_Functions(t *testing.T) {
-	// Test mock functions for coverage even though they're not installation-related
-	skipIfNoDocker(t)
-
-	c, err := NewContainer("alpine:3.19")
-	require.NoError(t, err)
-	defer c.Close()
-
-	ctx := context.Background()
-
-	config := &container.Config{
-		Image: "alpine:3.19",
-		Cmd:   []string{"sleep", "30"},
-	}
-	err = c.Create(ctx, config, &container.HostConfig{})
-	require.NoError(t, err)
-
-	err = c.Start(ctx)
-	require.NoError(t, err)
-	defer c.Cleanup(ctx)
-
-	err = c.SetupGitHubMocking(ctx, "/workspace")
-	assert.NoError(t, err, "SetupGitHubMocking should not fail")
-
-	// Test ConfigureMockGitHubPath (requires running container)
-	// This would need a running container to work properly
+func TestMockGitHub_SimulateResponse(t *testing.T) {
+	// Test mock response simulation functions that are still present
 
 	// Test SimulateGitHubResponse
 	response := SimulateGitHubResponse("issue", []string{"create"})
@@ -459,6 +526,45 @@ func TestMockGitHub_Functions(t *testing.T) {
 
 	response = SimulateGitHubResponse("unknown", []string{})
 	assert.Equal(t, "success", response.Status)
+}
+
+func TestContainer_CreateBuildContextTar(t *testing.T) {
+	c, err := NewContainer("alpine:3.19")
+	require.NoError(t, err)
+	defer c.Close()
+
+	// Create a build context with some test files
+	tempDir := t.TempDir()
+
+	// Create test files in build context
+	testFile1 := filepath.Join(tempDir, "test1.txt")
+	testFile2 := filepath.Join(tempDir, "subdir", "test2.txt")
+
+	err = os.WriteFile(testFile1, []byte("content1"), 0644)
+	require.NoError(t, err)
+
+	err = os.MkdirAll(filepath.Dir(testFile2), 0755)
+	require.NoError(t, err)
+
+	err = os.WriteFile(testFile2, []byte("content2"), 0644)
+	require.NoError(t, err)
+
+	buildContext := &BuildContext{
+		TempDir: tempDir,
+		Files: map[string][]byte{
+			"test1.txt":        []byte("content1"),
+			"subdir/test2.txt": []byte("content2"),
+		},
+	}
+
+	dockerfile := "FROM alpine:3.19\nRUN echo test"
+
+	tarReader, err := c.createBuildContextTar(dockerfile, buildContext)
+	require.NoError(t, err)
+	assert.NotNil(t, tarReader)
+
+	// The tar should contain the dockerfile and build context files
+	// We don't need to verify the tar contents in detail for this test
 }
 
 func TestContainer_CompleteInstallationFlow(t *testing.T) {

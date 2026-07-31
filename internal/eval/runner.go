@@ -699,16 +699,8 @@ func invokeAgentInContainer(agent, prompt string, cConfig *ContainerConfig) (str
 		return "", CostInfo{}, nil, fmt.Errorf("validating kiro-cli: %w", err)
 	}
 
-	// Setup GitHub mocking if enabled
-	if cConfig.MockGitHub {
-		if err := c.SetupGitHubMocking(ctx, cConfig.WorkspaceDir); err != nil {
-			return "", CostInfo{}, nil, fmt.Errorf("setting up GitHub mocking: %w", err)
-		}
-
-		if err := c.ConfigureMockGitHubPath(ctx); err != nil {
-			return "", CostInfo{}, nil, fmt.Errorf("configuring mock GitHub PATH: %w", err)
-		}
-	}
+	// GitHub mocking is now configured at build time through environment variables
+	// and embedded files in the container image
 
 	fmt.Printf("  Container setup: %v\n", time.Since(setupStart))
 
