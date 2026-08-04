@@ -43,6 +43,11 @@ func checkDockerAvailability() error {
 
 // RunWithOptions executes evaluation with extended CLI options.
 func RunWithOptions(agent string, testcase string, options RunOptions) error {
+	// Handle baseline setting operation early
+	if options.SetBaseline != "" {
+		return SetBaseline(options.SetBaseline)
+	}
+
 	// Handle cleanup operation early
 	if options.Cleanup {
 		return RunCleanup()
@@ -1554,6 +1559,14 @@ func updateIncrementalSummary(summaryFile string, agentResult AgentResult, gitHa
 		summary.GitHash = gitHash
 	}
 
+	// Load baseline if set
+	if summary.BaselineCommit == "" {
+		baselineHash := LoadBaseline()
+		if baselineHash != "" {
+			summary.BaselineCommit = baselineHash
+		}
+	}
+
 	// Calculate and update agent score
 	var totalScore, totalMax float64
 	var agentCost CostInfo
@@ -1580,6 +1593,14 @@ func updateIncrementalSummary(summaryFile string, agentResult AgentResult, gitHa
 
 	// Update total cost (this is cumulative across all agents)
 	summary.TotalCost = agentCost
+
+	// Calculate improvements if baseline is set
+	if summary.BaselineCommit != "" {
+		improvements, err := CalculateImprovements(summary, summary.BaselineCommit)
+		if err == nil {
+			summary.ImprovementData = improvements
+		}
+	}
 
 	// Write updated summary
 	data, err := json.MarshalIndent(summary, "", "  ")
@@ -1770,4 +1791,53 @@ func saveDebugContainerInfo(containerID, imageName, customImageName, platform, a
 
 	fmt.Printf("🔧 Debug: Container info saved to %s\n", infoFile)
 	return nil
+}
+
+// SetBaseline designates a commit as the baseline for improvement tracking
+func SetBaseline(commitHash string) error {
+	// Validate commit exists in results
+	_, err := FindBaselineRun(commitHash)
+	if err != nil {
+		return fmt.Errorf("invalid baseline commit: %w", err)
+	}
+
+	// Create evals directory if it doesn't exist
+	evalsDir := filepath.Join(".kiro-krew", "evals")
+	if err := os.MkdirAll(evalsDir, 0755); err != nil {
+		return fmt.Errorf("failed to create evals directory: %w", err)
+	}
+
+	// Write baseline to metadata file
+	baselineFile := filepath.Join(evalsDir, ".baseline")
+	if err := os.WriteFile(baselineFile, []byte(commitHash), 0644); err != nil {
+		return fmt.Errorf("failed to write baseline: %w", err)
+	}
+
+	fmt.Printf("✓ Baseline set to commit %s\n", commitHash)
+	return nil
+}
+
+// LoadBaseline reads the current baseline commit hash
+func LoadBaseline() string {
+	baselineFile := filepath.Join(".kiro-krew", "evals", ".baseline")
+	data, err := os.ReadFile(baselineFile)
+	if err != nil {
+		return "" // No baseline set
+	}
+	return strings.TrimSpace(string(data))
+}
+
+// buildSummaryWithImprovements creates summary with improvement metrics
+func buildSummaryWithImprovements(results []AgentResult, gitHash, baselineHash string) Summary {
+	summary := buildSummary(results, gitHash) // Existing function
+	summary.BaselineCommit = baselineHash
+
+	if baselineHash != "" {
+		improvements, err := CalculateImprovements(summary, baselineHash)
+		if err == nil {
+			summary.ImprovementData = improvements
+		}
+	}
+
+	return summary
 }
