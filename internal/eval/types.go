@@ -95,13 +95,34 @@ type RunOptions struct {
 	ResourceLimit map[string]string // Resource limit overrides (cpu, memory, timeout)
 	Debug         bool              // Enable debug mode with verbose logging
 	Cleanup       bool              // Stop and remove tracked containers
+	SetBaseline   string            // Set baseline commit hash for improvement tracking
 }
 
 // Summary holds aggregate results for an eval run.
 type Summary struct {
-	GitHash     string             `json:"git_hash"`
-	TotalCost   CostInfo           `json:"total_cost"`
-	AgentScores map[string]float64 `json:"agent_scores"` // agent -> average score
+	GitHash         string              `json:"git_hash"`
+	TotalCost       CostInfo            `json:"total_cost"`
+	AgentScores     map[string]float64  `json:"agent_scores"`               // agent -> average score
+	BaselineCommit  string              `json:"baseline_commit,omitempty"`  // NEW: Reference commit for comparison
+	ImprovementData *ImprovementMetrics `json:"improvement_data,omitempty"` // NEW: Improvement metrics
+}
+
+// ImprovementMetrics tracks quantified improvements from baseline
+type ImprovementMetrics struct {
+	BaselineHash       string               `json:"baseline_hash"`
+	AccuracyChange     map[string]float64   `json:"accuracy_change"`     // Agent -> % change
+	ErrorRateChange    map[string]int       `json:"error_rate_change"`   // Agent -> error count delta
+	CriterionTrends    map[string][]float64 `json:"criterion_trends"`    // Criterion -> score history
+	OverallImprovement float64              `json:"overall_improvement"` // Average % improvement
+	SignificantChanges []string             `json:"significant_changes"` // List of notable improvements
+}
+
+// TrendPoint represents a single point in evaluation history
+type TrendPoint struct {
+	GitHash   string             `json:"git_hash"`
+	Timestamp string             `json:"timestamp"`
+	Scores    map[string]float64 `json:"scores"` // Agent -> score
+	TotalCost float64            `json:"total_cost"`
 }
 
 // ContainerConfig configures containerized execution

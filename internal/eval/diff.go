@@ -73,6 +73,12 @@ func Diff(runA, runB string) error {
 	fmt.Printf("Eval Diff: %s → %s\n", runA, runB)
 	fmt.Println(strings.Repeat("─", 60))
 
+	// Display improvement metrics if available
+	if summaryB.BaselineCommit != "" && summaryB.ImprovementData != nil {
+		displayImprovementSummary(summaryB)
+		fmt.Println(strings.Repeat("─", 60))
+	}
+
 	// Per-agent, per-criterion deltas
 	allAgents := mergeKeys(summaryA.AgentScores, summaryB.AgentScores)
 	for _, agent := range allAgents {
@@ -88,7 +94,15 @@ func Diff(runA, runB string) error {
 		} else if delta < -0.001 {
 			indicator = "↓"
 		}
-		fmt.Printf("\n%s: %.3f → %.3f  %s %+.3f\n", agent, scoreA, scoreB, indicator, delta)
+
+		// Display with improvement indicator if available
+		improvementIndicator := ""
+		if summaryB.ImprovementData != nil {
+			if change, exists := summaryB.ImprovementData.AccuracyChange[agent]; exists {
+				improvementIndicator = fmt.Sprintf(" %s (%.1f%%)", determineImprovementIndicator(change), change)
+			}
+		}
+		fmt.Printf("\n%s: %.3f → %.3f  %s %+.3f%s\n", agent, scoreA, scoreB, indicator, delta, improvementIndicator)
 
 		if errA != nil || errB != nil {
 			continue
@@ -302,4 +316,67 @@ func calculateAgentJudgeCosts(runDir, resultsDir string) (CostInfo, CostInfo) {
 	}
 
 	return agentCost, judgeCost
+}
+
+// displayImprovementSummary shows improvement metrics when baseline is set
+func displayImprovementSummary(summary Summary) {
+	if summary.ImprovementData == nil {
+		return
+	}
+
+	data := summary.ImprovementData
+	baselineShort := summary.BaselineCommit
+	if len(baselineShort) > 7 {
+		baselineShort = baselineShort[:7]
+	}
+
+	fmt.Printf("\nImprovement vs Baseline (%s):\n", baselineShort)
+	fmt.Printf("  Overall: %+.1f%%\n", data.OverallImprovement)
+
+	if len(data.AccuracyChange) > 0 {
+		fmt.Printf("\n  Per-Agent Accuracy Changes:\n")
+		for agent, change := range data.AccuracyChange {
+			indicator := determineImprovementIndicator(change)
+			fmt.Printf("    %s %s: %+.1f%%\n", indicator, agent, change)
+		}
+	}
+
+	if len(data.ErrorRateChange) > 0 {
+		fmt.Printf("\n  Error Rate Changes:\n")
+		for agent, delta := range data.ErrorRateChange {
+			indicator := "→"
+			if delta < 0 {
+				indicator = "↓" // Fewer errors is good
+			} else if delta > 0 {
+				indicator = "↑" // More errors is bad
+			}
+			fmt.Printf("    %s %s: %+d errors\n", indicator, agent, delta)
+		}
+	}
+
+	if len(data.SignificantChanges) > 0 {
+		fmt.Printf("\n  Significant Changes:\n")
+		for _, change := range data.SignificantChanges {
+			fmt.Printf("    • %s\n", change)
+		}
+	}
+}
+
+// determineImprovementIndicator returns a visual indicator based on percentage change
+// ✓ = significant improvement (>5%)
+// ↑ = improvement (>0%)
+// → = no change
+// ↓ = regression (<0%)
+// ✗ = significant regression (<-3%)
+func determineImprovementIndicator(changePercent float64) string {
+	if changePercent > 5.0 {
+		return "✓"
+	} else if changePercent > 0.001 {
+		return "↑"
+	} else if changePercent < -3.0 {
+		return "✗"
+	} else if changePercent < -0.001 {
+		return "↓"
+	}
+	return "→"
 }
