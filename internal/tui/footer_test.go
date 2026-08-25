@@ -17,7 +17,7 @@ func TestFooterRendersExactly3Lines(t *testing.T) {
 	autocomplete := NewAutocompleteInput(registry, styles)
 	tabManager := NewTabManager()
 
-	fm := NewFooterManager(styles, cfg, autocomplete, tabManager)
+	fm := NewFooterManager(styles, cfg, autocomplete, tabManager, manager)
 	fm.Resize(80, 24)
 
 	tests := []struct {
@@ -50,7 +50,7 @@ func TestFooterDropdownRendersExactly3LinesWithoutDropdown(t *testing.T) {
 	autocomplete := NewAutocompleteInput(registry, styles)
 	tabManager := NewTabManager()
 
-	fm := NewFooterManager(styles, cfg, autocomplete, tabManager)
+	fm := NewFooterManager(styles, cfg, autocomplete, tabManager, manager)
 	fm.Resize(80, 24)
 
 	tests := []struct {
