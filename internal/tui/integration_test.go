@@ -303,12 +303,20 @@ func TestTask8Integration(t *testing.T) {
 				t.Error("Expected new planning tab to have no messages")
 			}
 
-			// Test textinput starts empty (no placeholder artifact like "T")
+			// Test textinput starts empty with placeholder and virtual cursor disabled
 			if planningTab.textinput.Value() != "" {
 				t.Errorf("Expected empty textinput value, got %q", planningTab.textinput.Value())
 			}
-			if planningTab.textinput.Placeholder != "" {
-				t.Errorf("Expected empty placeholder to avoid virtual cursor artifact, got %q", planningTab.textinput.Placeholder)
+
+			// Verify placeholder is set with virtual cursor disabled to avoid artifact
+			expectedPlaceholder := "ask a question or describe a task"
+			if planningTab.textinput.Placeholder != expectedPlaceholder {
+				t.Errorf("Expected placeholder %q, got %q", expectedPlaceholder, planningTab.textinput.Placeholder)
+			}
+
+			// Verify virtual cursor is disabled
+			if planningTab.textinput.VirtualCursor() {
+				t.Error("Expected virtual cursor to be disabled to prevent placeholder artifact")
 			}
 
 			// Test adding messages
