@@ -3,7 +3,9 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 
+	"github.com/jbrinkman/kiro-krew/internal/agent"
 	"github.com/jbrinkman/kiro-krew/internal/config"
 	"github.com/jbrinkman/kiro-krew/internal/session"
 )
@@ -15,6 +17,7 @@ type FooterManager struct {
 	contextTracker    *ContextTracker
 	autocompleteInput *AutocompleteInput
 	tabManager        *TabManager
+	agentManager      *agent.Manager
 	width             int
 	height            int
 }
@@ -26,13 +29,14 @@ type FooterContent struct {
 }
 
 // NewFooterManager creates a new footer manager
-func NewFooterManager(styles *Styles, config *config.Config, autocompleteInput *AutocompleteInput, tabManager *TabManager) *FooterManager {
+func NewFooterManager(styles *Styles, config *config.Config, autocompleteInput *AutocompleteInput, tabManager *TabManager, agentManager *agent.Manager) *FooterManager {
 	return &FooterManager{
 		styles:            styles,
 		config:            config,
 		contextTracker:    NewContextTracker(),
 		autocompleteInput: autocompleteInput,
 		tabManager:        tabManager,
+		agentManager:      agentManager,
 	}
 }
 
@@ -116,6 +120,14 @@ func (fm *FooterManager) renderStatusRow(activeTabType TabType) string {
 		if len(planningInfoParts) > 0 {
 			combinedPlanningInfo := strings.Join(planningInfoParts, " | ")
 			return fm.joinStatusInfo(baseInfo, combinedPlanningInfo)
+		}
+	}
+
+	// Enhanced information for agent tabs
+	if activeTabType == TabTypeAgent {
+		agentInfo := fm.renderAgentInfo()
+		if agentInfo != "" {
+			return fm.joinStatusInfo(baseInfo, agentInfo)
 		}
 	}
 
@@ -240,6 +252,105 @@ func (fm *FooterManager) renderPlanningACPInfo() string {
 	}
 
 	return strings.Join(parts, " | ")
+}
+
+// renderAgentInfo renders agent-specific information for agent tabs
+func (fm *FooterManager) renderAgentInfo() string {
+	// Verify we have the necessary components
+	if fm.tabManager == nil || fm.agentManager == nil {
+		return ""
+	}
+
+	// Get the active tab and verify it's an agent tab
+	activeTab := fm.tabManager.GetActiveTab()
+	if activeTab == nil || activeTab.Type() != TabTypeAgent {
+		return ""
+	}
+
+	// Cast to AgentTab to access agent ID
+	agentTab, ok := activeTab.(*AgentTab)
+	if !ok {
+		return ""
+	}
+
+	// Retrieve agent metadata from manager
+	agentData := fm.agentManager.GetAgent(agentTab.agentID)
+	if agentData == nil {
+		return ""
+	}
+
+	var parts []string
+
+	// Priority 1: Issue number (critical)
+	if agentData.IssueNumber > 0 {
+		parts = append(parts, fmt.Sprintf("issue: #%d", agentData.IssueNumber))
+	}
+
+	// Priority 2: Status with visual indicator (critical)
+	statusText := fm.formatAgentStatus(agentData.Status)
+	if statusText != "" {
+		parts = append(parts, statusText)
+	}
+
+	// Priority 3: Elapsed time (important)
+	elapsedText := fm.formatElapsedTime(agentData.StartTime)
+	if elapsedText != "" {
+		parts = append(parts, elapsedText)
+	}
+
+	// Priority 4: Agent ID (reference)
+	if agentData.ID != "" {
+		// Shorten agent ID for display (e.g., "agent-123-1234567890" -> "agent-123")
+		shortID := agentData.ID
+		if len(shortID) > 15 {
+			// Extract just the agent-<issue> part
+			if strings.HasPrefix(shortID, "agent-") {
+				parts := strings.SplitN(shortID[6:], "-", 2)
+				if len(parts) > 0 {
+					shortID = "agent-" + parts[0]
+				}
+			}
+		}
+		parts = append(parts, fmt.Sprintf("agent: %s", shortID))
+	}
+
+	return strings.Join(parts, " | ")
+}
+
+// formatAgentStatus formats the agent status with appropriate visual indicators
+func (fm *FooterManager) formatAgentStatus(status agent.Status) string {
+	switch status {
+	case agent.StatusRunning:
+		return "status: ● running"
+	case agent.StatusCompleted:
+		return "status: ✓ completed"
+	case agent.StatusFailed:
+		return "status: ✗ failed"
+	default:
+		return "status: unknown"
+	}
+}
+
+// formatElapsedTime formats the elapsed time since agent start
+func (fm *FooterManager) formatElapsedTime(startTime time.Time) string {
+	if startTime.IsZero() {
+		return ""
+	}
+
+	elapsed := time.Since(startTime)
+
+	// Format based on duration
+	hours := int(elapsed.Hours())
+	minutes := int(elapsed.Minutes()) % 60
+	seconds := int(elapsed.Seconds()) % 60
+
+	if hours > 0 {
+		return fmt.Sprintf("elapsed: %dh %dm", hours, minutes)
+	} else if minutes > 0 {
+		return fmt.Sprintf("elapsed: %dm %ds", minutes, seconds)
+	} else {
+		return fmt.Sprintf("elapsed: %ds", seconds)
+	}
 }
 
 // joinStatusInfo combines base and additional status information
