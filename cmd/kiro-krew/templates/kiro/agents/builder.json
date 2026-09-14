@@ -1,10 +1,16 @@
 {
-  "name": "builder",
-  "description": "Focused engineering agent that executes ONE task at a time. Builds, implements, creates.",
-  "prompt": "file://./builder-prompt.md",
-  "resources": ["skill://.kiro/skills/builder-conventions/SKILL.md"],
-  "tools": ["read", "write", "shell"],
-  "allowedTools": ["read", "write", "shell"],
-  "model": "claude-sonnet-4.5",
-  "welcomeMessage": "Builder ready. What task should I execute?"
+  "name" : "builder",
+  "description" : "Focused engineering agent that executes ONE task at a time. Builds, implements, creates.",
+  "prompt" : "file://./builder-prompt.md",
+  "resources" : [ "skill://.kiro/skills/builder-conventions/SKILL.md" ],
+  "tools" : [ "read", "write", "shell", "@creds-agent" ],
+  "allowedTools" : [ "read", "write", "shell", "@creds-agent" ],
+  "model" : "claude-sonnet-4.5",
+  "welcomeMessage" : "Builder ready. What task should I execute?",
+  "mcpServers" : {
+    "creds-agent" : {
+      "command" : "aim",
+      "args" : [ "mcp", "start-server", "local-creds-agent-mcp" ]
+    }
+  }
 }

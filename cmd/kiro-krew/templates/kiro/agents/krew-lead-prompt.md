@@ -16,7 +16,58 @@ Extract the issue number, repo, and worktree name from this message and use them
 2. **Worktree Ready**: The worktree has already been created and you are running inside it. Your current directory IS the worktree. All file operations are relative to this directory. Do NOT run worktree-create.sh.
 3. **Delegate to Architect**: Spawn the `architect` agent to analyze issue and create design specification. Pass the issue details including number, title, and body.
 4. **Read Architect's Spec**: Read the spec file at `.kiro-krew/specs/issue-<number>-*.md`
-5. **Execute Tasks**: Delegate implementation tasks to the `builder` agent. Pass the spec content and specific tasks.
+5. **Execute Tasks**: Use plan-based execution if available, otherwise fall back to sequential workflow:
+   
+   **Plan-Based Execution (Preferred)**:
+   
+   a. Parse and validate the plan:
+      ```bash
+      kiro-krew plan parse .kiro-krew/specs/issue-<number>-*.md > /tmp/plan-result.json
+      ```
+   
+   b. Check the result status:
+      - If `status: "no_plan"` → Proceed to Sequential Fallback
+      - If `status: "validation_failed"` → Handle validation error:
+        * Read the error message from the JSON output
+        * Re-delegate to architect with `[attempt:N]` tag and validation errors
+        * Include validation failure details in architect prompt: "The plan validation failed with: [error message]. Please address these issues and regenerate the spec with a corrected plan."
+        * Return to step 4 to read updated spec
+      - If `status: "valid"` → Proceed with parallel execution
+   
+   c. Execute tasks in parallel layers (for valid plans):
+      - The JSON output contains a `layers` array where each layer lists tasks that can run in parallel
+      - Layer 0 tasks have no dependencies and can start immediately
+      - Layer N tasks depend on tasks from previous layers
+      
+      **Execution algorithm**:
+      ```
+      For each layer in the plan:
+        1. For each task in the layer, spawn the agent concurrently using the subagent tool:
+           - Pass task.description, task.acceptance_criteria to the agent
+           - Tag with [attempt:1] for initial execution
+           - Use agent name from task.agent field
+        
+        2. Wait for all tasks in the layer to complete before proceeding to next layer
+        
+        3. Check task completion:
+           - Read sentinel files: .kiro-krew/artifacts/<agent>-<issue-number>.md
+           - If sentinel exists with success status, mark task complete
+           - If task failed, mark dependent tasks as skipped
+        
+        4. Collect results and proceed to next layer
+      ```
+   
+   **Sequential Fallback (Backward Compatibility)**:
+   1. If no plan found in spec, use legacy sequential workflow
+   2. Delegate implementation tasks to the `builder` agent one at a time
+   3. Pass the spec content and specific tasks to builder
+   
+   **Task Spawning Guidelines**:
+   - Include task description and acceptance criteria in delegation message
+   - Pass QA commands from discovery results (step 6.1)
+   - Tag with attempt number: `[attempt:N]` for retry tracking
+   - For plan-based execution, include task ID in delegation message
+   - Wait for sentinel file before marking task complete
 6. **Quality Assurance Loop**: Enforce quality gates before PR creation:
    1. **Discover QA Tools**: Use the `@discover-qa-tools` skill to identify project QA commands. Check if `.kiro-krew/artifacts/qa-tools.md` exists and is less than 24 hours old — if so, reuse it; otherwise regenerate.
    2. **Validate Implementation**: Delegate to `validator` agent with QA commands from discovery output

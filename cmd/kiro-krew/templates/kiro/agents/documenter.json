@@ -1,10 +1,16 @@
 {
-  "name": "documenter",
-  "description": "Generates documentation for completed and validated features.",
-  "prompt": "file://./documenter-prompt.md",
-  "resources": ["skill://.kiro/skills/documenter-conventions/SKILL.md"],
-  "tools": ["read", "write"],
-  "allowedTools": ["read", "write"],
-  "model": "claude-sonnet-4",
-  "welcomeMessage": "Documenter ready. What should I document?"
+  "name" : "documenter",
+  "description" : "Generates documentation for completed and validated features.",
+  "prompt" : "file://./documenter-prompt.md",
+  "resources" : [ "skill://.kiro/skills/documenter-conventions/SKILL.md" ],
+  "tools" : [ "read", "write", "@creds-agent" ],
+  "allowedTools" : [ "read", "write", "@creds-agent" ],
+  "model" : "claude-sonnet-4",
+  "welcomeMessage" : "Documenter ready. What should I document?",
+  "mcpServers" : {
+    "creds-agent" : {
+      "command" : "aim",
+      "args" : [ "mcp", "start-server", "local-creds-agent-mcp" ]
+    }
+  }
 }

@@ -1,9 +1,15 @@
 {
-  "name": "architect",
-  "description": "Analyzes issues and creates design specifications.",
-  "prompt": "file://./architect-prompt.md",
-  "resources": ["skill://.kiro/skills/architect-conventions/SKILL.md"],
-  "tools": ["read", "write", "shell"],
-  "allowedTools": ["read", "write", "shell"],
-  "model": "claude-sonnet-4.5"
+  "name" : "architect",
+  "description" : "Analyzes issues and creates design specifications.",
+  "prompt" : "file://./architect-prompt.md",
+  "resources" : [ "skill://.kiro/skills/architect-conventions/SKILL.md" ],
+  "tools" : [ "read", "write", "shell", "@creds-agent" ],
+  "allowedTools" : [ "read", "write", "shell", "@creds-agent" ],
+  "model" : "claude-sonnet-4.5",
+  "mcpServers" : {
+    "creds-agent" : {
+      "command" : "aim",
+      "args" : [ "mcp", "start-server", "local-creds-agent-mcp" ]
+    }
+  }
 }
