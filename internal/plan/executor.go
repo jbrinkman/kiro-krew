@@ -2,6 +2,7 @@ package plan
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 )
 
@@ -238,6 +239,8 @@ func TopologicalSort(plan *Plan) ([][]Task, error) {
 			currentLayer = append(currentLayer, taskID)
 		}
 	}
+	// Sort for deterministic, stable ordering (map iteration order is random)
+	sort.Strings(currentLayer)
 
 	processed := 0
 
@@ -265,6 +268,8 @@ func TopologicalSort(plan *Plan) ([][]Task, error) {
 			}
 		}
 
+		// Sort for deterministic, stable ordering across runs
+		sort.Strings(nextLayer)
 		currentLayer = nextLayer
 	}
 

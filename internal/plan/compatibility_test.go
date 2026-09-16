@@ -508,6 +508,12 @@ func TestCompatibility_TopologicalSortStability(t *testing.T) {
 			t.Errorf("Layer 0: expected 2 tasks, got %d", len(layers[0]))
 		}
 
+		// Layer 0 must be in a stable, deterministic order (sorted by task ID)
+		if layers[0][0].ID != "task-a" || layers[0][1].ID != "task-b" {
+			t.Errorf("Layer 0: expected exact order [task-a, task-b], got [%s, %s]",
+				layers[0][0].ID, layers[0][1].ID)
+		}
+
 		// Layer 1 should contain task-c
 		if len(layers[1]) != 1 {
 			t.Errorf("Layer 1: expected 1 task, got %d", len(layers[1]))
