@@ -341,3 +341,71 @@ This file has no plan.
 		t.Error("expected nil plan when no plan block exists")
 	}
 }
+
+// TestParsePlanFromMarkdown_TildeFence verifies a ~~~kiro-plan block is parsed
+// (previously the backtick-only opening regex silently skipped it).
+func TestParsePlanFromMarkdown_TildeFence(t *testing.T) {
+	markdown := []byte(`
+# Design Specification
+
+~~~kiro-plan
+version: "1.0"
+tasks:
+  - id: "task-1"
+    agent: "builder"
+    description: "Tilde-fenced plan"
+    dependencies: []
+    acceptance_criteria:
+      - "works"
+    validation_commands:
+      - "go test"
+~~~
+`)
+
+	plan, err := ParsePlanFromMarkdown(markdown)
+	if err != nil {
+		t.Fatalf("expected successful parse of tilde fence, got error: %v", err)
+	}
+	if plan == nil {
+		t.Fatal("expected non-nil plan from tilde fence")
+	}
+	if len(plan.Tasks) != 1 || plan.Tasks[0].ID != "task-1" {
+		t.Errorf("expected one task 'task-1', got %+v", plan.Tasks)
+	}
+}
+
+// TestParsePlanFromMarkdown_ClosingFenceBoundary verifies that a shorter inner
+// backtick fence does NOT prematurely close a longer (4-backtick) opening fence.
+func TestParsePlanFromMarkdown_ClosingFenceBoundary(t *testing.T) {
+	markdown := []byte(`
+# Design Specification
+
+` + "````kiro-plan" + `
+version: "1.0"
+tasks:
+  - id: "task-1"
+    agent: "builder"
+    description: |
+      An inner shorter fence should not close the block:
+      ` + "```" + `
+      still inside the plan
+      ` + "```" + `
+    dependencies: []
+    acceptance_criteria:
+      - "works"
+    validation_commands:
+      - "go test"
+` + "````" + `
+`)
+
+	plan, err := ParsePlanFromMarkdown(markdown)
+	if err != nil {
+		t.Fatalf("expected successful parse, got error: %v", err)
+	}
+	if plan == nil {
+		t.Fatal("expected non-nil plan")
+	}
+	if len(plan.Tasks) != 1 || plan.Tasks[0].ID != "task-1" {
+		t.Errorf("expected one task 'task-1' (block not closed early), got %+v", plan.Tasks)
+	}
+}

@@ -18,10 +18,12 @@ import (
 //   - (nil, nil) if no plan block is found (backward compatibility)
 //   - (nil, error) if a plan block is found but is invalid or multiple blocks exist
 func ParsePlanFromMarkdown(content []byte) (*Plan, error) {
-	// Regex pattern to match fenced code blocks with 'kiro-plan' language identifier
-	// Matches both ```kiro-plan and ~~~kiro-plan with optional whitespace
-	pattern := regexp.MustCompile("(?m)^```+\\s*kiro-plan\\s*$")
-	matches := pattern.FindAllIndex(content, -1)
+	// Regex to match the opening fence with the 'kiro-plan' language identifier.
+	// Per CommonMark, a fence is a run of at least three backticks or at least
+	// three tildes; capture the exact fence so the closing fence can be paired
+	// to it (same character, length >= opener).
+	pattern := regexp.MustCompile("(?m)^([`~]{3,})\\s*kiro-plan\\s*$")
+	matches := pattern.FindAllSubmatchIndex(content, -1)
 
 	if len(matches) == 0 {
 		// No plan block found - this is okay for backward compatibility
@@ -32,11 +34,17 @@ func ParsePlanFromMarkdown(content []byte) (*Plan, error) {
 		return nil, fmt.Errorf("multiple plan blocks found (expected at most 1, found %d)", len(matches))
 	}
 
-	// Extract the YAML content between the opening and closing fence
-	startIdx := matches[0][1] // End of opening fence marker
+	// Capture the opening fence string (group 1) to pair the closing fence.
+	openFence := string(content[matches[0][2]:matches[0][3]])
+	fenceChar := openFence[0]
+	fenceLen := len(openFence)
 
-	// Find the closing fence (any line starting with ``` or ~~~)
-	closingPattern := regexp.MustCompile("(?m)^```+\\s*$")
+	// Extract the YAML content between the opening and closing fence
+	startIdx := matches[0][1] // End of opening fence marker line
+
+	// The closing fence must use the SAME character as the opener and be at
+	// least as long (CommonMark). A shorter or different fence does not close.
+	closingPattern := regexp.MustCompile(fmt.Sprintf("(?m)^%c{%d,}\\s*$", fenceChar, fenceLen))
 	remaining := content[startIdx:]
 	closingMatch := closingPattern.FindIndex(remaining)
 
