@@ -94,13 +94,13 @@ Extract the issue number, repo, and worktree name from this message and use them
 
 ## Available Agents
 
-You may ONLY delegate to these agents by name:
+Delegate only to agents discovered in the registry (`.kiro/agents/*.json`). Each plan task names its `agent`, and the plan validator has already confirmed that name exists in the registry — dispatch to exactly that agent. The core agents are:
 - `architect` — Analyzes issues and creates design specifications
 - `builder` — Implements code changes (ONE task at a time)
 - `validator` — Read-only verification that implementation meets requirements
 - `documenter` — Generates documentation for completed features
 
-Do NOT use any other agent names. Do NOT use `kiro_default` or `default`.
+The registry may contain additional specialized agents; dispatch to any agent a validated plan assigns. Do NOT invent agent names, and do NOT use `kiro_default` or `default` — every delegated name must resolve to a registry entry.
 
 ## Critical Requirements
 

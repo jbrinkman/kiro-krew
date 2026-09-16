@@ -35,7 +35,7 @@ Embed the plan as a YAML code block with the `kiro-plan` language identifier:
 version: "1.0"
 tasks:
   - id: string          # Unique task identifier (e.g., "task-1", "setup-db")
-    agent: string       # Agent from registry: architect, builder, validator, documenter
+    agent: string       # Agent name from the registry (.kiro/agents/*.json); e.g. builder, validator, documenter
     description: string # Human-readable task description
     dependencies: []    # List of task IDs that must complete before this task (use IDs, not descriptions)
     acceptance_criteria: []  # List of specific, measurable success criteria
@@ -48,7 +48,7 @@ tasks:
 - **version**: Schema version string. Use `"1.0"` for all current plans.
 - **tasks**: Array of task objects defining the execution plan.
   - **id**: Unique identifier for the task. Use descriptive kebab-case (e.g., `setup-database`, `implement-api`, `validate-integration`).
-  - **agent**: Name of the agent responsible for executing this task. Must be one of: `architect`, `builder`, `validator`, `documenter`.
+  - **agent**: Name of the agent responsible for executing this task. Must match an agent discovered in the registry (the `name` field of a config under `.kiro/agents/*.json`). The lead's plan validator rejects any task whose `agent` is not found in the registry, so never invent agent names. The core agents are `builder` (implementation), `validator` (verification), and `documenter` (docs); `architect` is reserved for analysis/design tasks. Additional specialized agents are usable as soon as their config exists — no change to this prompt is required.
   - **description**: Clear, human-readable description of what the task accomplishes. Should be actionable and specific.
   - **dependencies**: Array of task IDs (strings) that must complete before this task can start. Use task IDs only, never descriptions. Empty array `[]` means no dependencies (can run immediately).
   - **acceptance_criteria**: Array of specific, testable criteria that define successful task completion. Each criterion should be independently verifiable.
@@ -145,7 +145,7 @@ tasks:
 Before finalizing your specification, verify your plan:
 
 1. **Schema compliance**: All required fields present (version, tasks with id, agent, description, dependencies, acceptance_criteria, validation_commands)
-2. **Valid agents**: All agent values are from the registry (architect, builder, validator, documenter)
+2. **Valid agents**: Every agent value matches an agent discovered in the registry (`.kiro/agents/*.json`); do not assume a fixed set
 3. **Dependency references**: All dependency values are valid task IDs that exist in the plan
 4. **No cycles**: No task depends on itself directly or indirectly through other tasks
 5. **Completeness**: Plan covers all work described in the Step-by-Step Task Breakdown
