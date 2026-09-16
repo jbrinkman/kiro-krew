@@ -54,14 +54,22 @@ Extract the issue number, repo, and worktree name from this message and use them
         For each task in the layer, ONE AT A TIME:
           1. Spawn the assigned agent using the subagent tool and wait for it
              to finish before starting the next task:
-             - Pass task.description, task.acceptance_criteria to the agent
+             - Pass task.description, task.acceptance_criteria, and
+               task.validation_commands to the agent
              - Tag with [attempt:1] for initial execution
              - Use agent name from task.agent field
-          2. Check task completion:
+          2. Run the task-level validation gate:
+             - Require the agent to run task.validation_commands and report
+               their results; a non-zero exit from any command is a task
+               failure. These task-level commands are distinct from the
+               spec-level QA commands in step 6 and do not replace them.
+          3. Check task completion:
              - Read sentinel file: .kiro-krew/artifacts/<agent>-<issue-number>.md
-             - If sentinel exists with success status, mark task complete
-             - If task failed, mark dependent tasks as skipped
-          3. Proceed to the next task only after the current one completes
+             - Mark the task complete only if the sentinel reports success AND
+               all task.validation_commands passed
+             - If the task failed (agent failure or a failing validation
+               command), mark dependent tasks as skipped
+          4. Proceed to the next task only after the current one completes
         Proceed to the next layer only after every task in this layer completes
       ```
 
@@ -79,6 +87,7 @@ Extract the issue number, repo, and worktree name from this message and use them
    
    **Task Spawning Guidelines**:
    - Include task description and acceptance criteria in delegation message
+   - Include the task's own `validation_commands` and require the agent to run them; the task is not complete until they pass (distinct from the step-6 spec-level QA commands)
    - Pass QA commands from discovery results (step 6.1)
    - Tag with attempt number: `[attempt:N]` for retry tracking
    - For plan-based execution, include task ID in delegation message
