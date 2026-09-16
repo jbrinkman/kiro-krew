@@ -34,30 +34,43 @@ Extract the issue number, repo, and worktree name from this message and use them
           - Include validation failure details in architect prompt: "The plan validation failed with: [error message]. Please address these issues and regenerate the spec with a corrected plan."
           - Return to step 4 to read the updated spec
         * If N would reach 4 (architect retries exhausted with persistent validation failure): STOP retrying. Create an incident report (see the incident convention below), apply the `<label>-failed` label to the issue, and halt execution. Do not fall back to sequential execution for a plan that repeatedly fails validation — this is the same terminal escalation the QA feedback loop uses.
-      - If `status: "valid"` → Proceed with parallel execution
+      - If `status: "valid"` → Proceed with sequential execution (see below)
    
-   c. Execute tasks in parallel layers (for valid plans):
-      - The JSON output contains a `layers` array where each layer lists tasks that can run in parallel
+   c. Execute tasks sequentially in dependency-layer order (for valid plans):
+      - The JSON output contains a `layers` array giving a correct execution order; tasks are run one at a time (concurrency is disabled — see the NOTE below)
       - Layer 0 tasks have no dependencies and can start immediately
       - Layer N tasks depend on tasks from previous layers
       
       **Execution algorithm**:
       ```
-      For each layer in the plan:
-        1. For each task in the layer, spawn the agent concurrently using the subagent tool:
-           - Pass task.description, task.acceptance_criteria to the agent
-           - Tag with [attempt:1] for initial execution
-           - Use agent name from task.agent field
-        
-        2. Wait for all tasks in the layer to complete before proceeding to next layer
-        
-        3. Check task completion:
-           - Read sentinel files: .kiro-krew/artifacts/<agent>-<issue-number>.md
-           - If sentinel exists with success status, mark task complete
-           - If task failed, mark dependent tasks as skipped
-        
-        4. Collect results and proceed to next layer
+      Execute tasks SEQUENTIALLY in dependency order. Do NOT spawn agents
+      concurrently — concurrent execution in the shared issue worktree is
+      unsafe (agents mutate shared files, including sentinel/artifact files,
+      so a parallel agent can corrupt another's work or read stale state).
+      The topological layering below is used only to determine a correct
+      execution ORDER, not to run tasks in parallel.
+
+      For each layer in the plan, in order:
+        For each task in the layer, ONE AT A TIME:
+          1. Spawn the assigned agent using the subagent tool and wait for it
+             to finish before starting the next task:
+             - Pass task.description, task.acceptance_criteria to the agent
+             - Tag with [attempt:1] for initial execution
+             - Use agent name from task.agent field
+          2. Check task completion:
+             - Read sentinel file: .kiro-krew/artifacts/<agent>-<issue-number>.md
+             - If sentinel exists with success status, mark task complete
+             - If task failed, mark dependent tasks as skipped
+          3. Proceed to the next task only after the current one completes
+        Proceed to the next layer only after every task in this layer completes
       ```
+
+      > NOTE: Parallel execution is intentionally disabled. Running independent
+      > tasks concurrently requires a concurrency model that isolates each
+      > task's filesystem/git state and redesigns the shared sentinel/artifact
+      > protocol; that work is deferred. Until then, execute strictly
+      > sequentially. Dependency ordering (topological layers) is still honored
+      > so results are identical to a correct parallel run, only slower.
    
    **Sequential Fallback (Backward Compatibility)**:
    1. If no plan found in spec, use legacy sequential workflow
