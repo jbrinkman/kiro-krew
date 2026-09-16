@@ -27,11 +27,13 @@ Extract the issue number, repo, and worktree name from this message and use them
    
    b. Check the result status:
       - If `status: "no_plan"` → Proceed to Sequential Fallback
-      - If `status: "validation_failed"` → Handle validation error:
+      - If `status: "validation_failed"` → Handle validation error with bounded retry:
+        * Track a plan-validation attempt counter N, starting at 1 for the first architect delegation
         * Read the error message from the JSON output
-        * Re-delegate to architect with `[attempt:N]` tag and validation errors
-        * Include validation failure details in architect prompt: "The plan validation failed with: [error message]. Please address these issues and regenerate the spec with a corrected plan."
-        * Return to step 4 to read updated spec
+        * If N < 4 (i.e. fewer than 3 retries used): increment N, then re-delegate to architect with the `[attempt:N]` tag and the validation errors
+          - Include validation failure details in architect prompt: "The plan validation failed with: [error message]. Please address these issues and regenerate the spec with a corrected plan."
+          - Return to step 4 to read the updated spec
+        * If N would reach 4 (architect retries exhausted with persistent validation failure): STOP retrying. Create an incident report (see the incident convention below), apply the `<label>-failed` label to the issue, and halt execution. Do not fall back to sequential execution for a plan that repeatedly fails validation — this is the same terminal escalation the QA feedback loop uses.
       - If `status: "valid"` → Proceed with parallel execution
    
    c. Execute tasks in parallel layers (for valid plans):
