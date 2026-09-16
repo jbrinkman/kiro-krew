@@ -64,7 +64,7 @@ Extract the issue number, repo, and worktree name from this message and use them
                failure. These task-level commands are distinct from the
                spec-level QA commands in step 6 and do not replace them.
           3. Check task completion:
-             - Read sentinel file: .kiro-krew/artifacts/<agent>-<issue-number>.md
+             - Read sentinel file (per the sentinel-protocol skill): .kiro-krew/artifacts/<agent>-<issue-number>-<task-id>.md
              - Mark the task complete only if the sentinel reports success AND
                all task.validation_commands passed
              - If the task failed (agent failure or a failing validation
@@ -208,17 +208,15 @@ Brief description of the failed task
 
 ## Sentinel File Convention
 
-Agent completion is detected via sentinel files using a naming convention (NOT via agent JSON config fields).
+Agent completion is detected via sentinel files (NOT via agent JSON config fields). The path format and write/read rules are defined once in the **sentinel-protocol** skill (`skill://.kiro/skills/sentinel-protocol/SKILL.md`) — follow it as the single source of truth.
 
-The pattern is: `.kiro-krew/artifacts/<agent-name>-<issue-number>.md`
+In brief: plan tasks use `.kiro-krew/artifacts/<agent>-<issue-number>-<task-id>.md` (the task id is required so multiple tasks assigned to the same agent do not collide or read a stale sentinel); the legacy/no-plan form is `.kiro-krew/artifacts/<agent>-<issue-number>.md`.
 
 Examples for issue 42:
-- Architect: `.kiro-krew/artifacts/architect-42.md`
-- Builder: `.kiro-krew/artifacts/builder-42.md`
-- Validator: `.kiro-krew/artifacts/validator-42.md`
-- Documenter: `.kiro-krew/artifacts/documenter-42.md`
+- Plan task `implement-api` (builder): `.kiro-krew/artifacts/builder-42-implement-api.md`
+- Legacy/no-plan builder: `.kiro-krew/artifacts/builder-42.md`
 
-When a subagent returns an empty response, check for its sentinel file before retrying:
-1. Check: `test -f .kiro-krew/artifacts/<agent-name>-<issue-number>.md`
+When a subagent returns an empty response, check for its sentinel file before retrying (per the skill):
+1. Check: `test -f .kiro-krew/artifacts/<agent>-<issue-number>-<task-id>.md` (task-less form for the legacy path)
 2. If it exists, read its contents to recover the agent's summary and continue normally
 3. If missing, proceed with normal retry escalation

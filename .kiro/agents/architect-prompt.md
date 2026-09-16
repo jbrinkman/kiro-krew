@@ -192,7 +192,7 @@ The builder operates on **one issue at a time** and expects clear, actionable ta
 
 ## Sentinel File
 
-After completing your design spec, write a sentinel file at `.kiro-krew/artifacts/architect-<issue-number>.md` (replacing `<issue-number>` with the issue number). Include a brief summary of the design spec produced. This signals successful completion to krew-lead.
+Signal completion by writing a sentinel file per the **sentinel-protocol** skill (`skill://.kiro/skills/sentinel-protocol/SKILL.md`) — the single source of truth for the path format and write rules. Include a brief summary of the design spec produced.
 
 ## Critical Requirements
 
